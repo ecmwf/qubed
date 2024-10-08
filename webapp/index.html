@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STAC Viewer</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div id="viewer">
+        <div id="catalog-list">
+            <h2>STAC Items</h2>
+            <p>Select one or more items and then click next iteratively build up a full request.</p>
+
+            <div class="sidebar-header">
+                <button id="previous-btn">Previous</button>
+                <a id="stac-anchor"><button id="stac-btn">Raw STAC</button></a>
+                <button id="next-btn">Next</button>
+            </div>
+            
+            <div id="items">
+                <!-- Items from the STAC catalog will be rendered here -->
+            </div>
+        </div>
+        <div id="details">
+            <h2>Raw STAC</h2>
+            <pre id="item-details"></pre>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
