@@ -1,4 +1,4 @@
-# Structued STAC
+# STAC Generalized Datacubes Extension
 
 # Template Extension Specification
 
