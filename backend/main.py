@@ -1,10 +1,21 @@
 from collections import defaultdict
 from typing import Any, Dict
+import yaml
+import os
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fdb_schema import FDBSchemaFile
+from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
+
+import os
+os.environ["FDB5_CONFIG_FILE"] = "/home/eouser/destine_remoteFDB_config.yaml"
+
+import pyfdb
+
+fdb = pyfdb.FDB()
 
 app = FastAPI()
 app.add_middleware(
@@ -16,17 +27,30 @@ app.add_middleware(
 )
 
 app.mount("/app", StaticFiles(directory="../webapp"), name="static")
+templates = Jinja2Templates(directory="../webapp")
+
+config = {
+    "message": "",
+    "fdb_schema": "standard_fdb_schema",
+    "mars_language": "language.yaml"
+} 
+if os.path.exists("../config.yaml"):
+    with open("../config.yaml", "r") as f:
+        config = config | yaml.safe_load(f)
 
 
-language_yaml = "./language.yaml"
+@app.get("/")
+async def redirect_to_app(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request, "config": config})
+
+
 import yaml
 
-with open(language_yaml, "r") as f:
+with open(config["mars_language"], "r") as f:
     mars_language = yaml.safe_load(f)["_field"]
 
 ###### Load FDB Schema
-schema = FDBSchemaFile("./standard_fdb_schema")
-# schema = FDBSchemaFile("./test_schema")
+schema = FDBSchemaFile(config["fdb_schema"])
 
 def request_to_dict(request: Request) -> Dict[str, Any]:
     # Convert query parameters to dictionary format
@@ -36,42 +60,6 @@ def request_to_dict(request: Request) -> Dict[str, Any]:
         if "," in value:
             request_dict[key] = value.split(",")
     return request_dict
-
-@app.get("/simple")
-async def get_tree(request: Request):
-    request_dict = request_to_dict(request)
-    print(request_dict)
-    target = next((k for k,v in request_dict.items() if v == "????"), None)
-    if not target:
-        return {"error": "No target found in request, there must be one key with value '????'"}
-
-    current_query_params = "&".join(f"{k}={v}" for k, v in request_dict.items() if k != target)
-    if len(current_query_params) > 1:
-        current_query_params += "&"
-
-    stac_collection = {
-        "type": "Collection",
-        "stac_version": "1.0.0",
-        "id": target,
-        "title" : target.capitalize(),
-        "key_type": mars_language.get(target, {}).get("type", ""),
-        "description": mars_language.get(target, {}).get("description", ""),
-        "values": mars_language.get(target, {}).get("values", ""),
-        "links": [
-            {
-                "title": str(value[-1] if isinstance(value, list) else value),
-                "href": f"/tree?{current_query_params}{target}={value[0] if isinstance(value, list) else value}",
-                "rel": "child",
-                "type": "application/json",
-
-            }
-
-            for value in mars_language.get(target, {}).get("values", [])
-        ]
-    }
-
-    return stac_collection
-    
 
 @app.get("/tree")
 async def get_tree(request: Request):
@@ -97,23 +85,52 @@ async def get_tree(request: Request):
     def make_link(key_name, paths):
         """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
         first_path = [str(p) for p in paths[0]]
-        href = f"/simple?{'&'.join(first_path)}{'&' if first_path else ''}{key_name}=????"
+        href_template = f"/tree?{'&'.join(first_path)}{'&' if first_path else ''}{key_name}={{}}"
         optional = [p[-1].key_spec.is_optional() for p in paths if len(p) > 0]
         optional_str = "Yes" if all(optional) and len(optional) > 0 else ("Sometimes" if any(optional) else "No")
+        values_from_mars_language = mars_language.get(key_name, {}).get("values", [])
+        values = [v[0] if isinstance(v, list) else v for v in values_from_mars_language]
+        
+        if all(isinstance(v, list) for v in values_from_mars_language):
+            value_descriptions = [v[-1] if len(v) > 1 else "" for v in values_from_mars_language]
+        else:
+            value_descriptions = [""] * len(values)
 
         return {
                 "title": key_name,
-                "optional": optional_str,
-                # "optional_by_path": optional,
-                "href": href,
+                "generalized_datacube:href_template": href_template,
                 "rel": "child",
                 "type": "application/json",
-                "paths": set(tuple(f"{m.key}={m.value}" for m in p) for p in paths),
-                # "description": mars_language.get(key_name, {}).get("description", ""),
-                # "values": mars_language.get(key_name, {}).get("values", "")
+                "generalized_datacube:dimension" : {
+                    "type" : mars_language.get(key_name, {}).get("type", ""),
+                    "description": mars_language.get(key_name, {}).get("description", ""),
+                    "values" : values,
+                    "value_descriptions" : value_descriptions,
+                    "optional" : any(optional),
+                    "multiple": True,
+                }
+
+
+                # "paths": set(tuple(f"{m.key}={m.value}" for m in p) for p in paths),
 
             }
 
+
+    def value_descriptions(key, values):
+        return {
+            v[0] : v[-1] for v in mars_language.get(key, {}).get("values", [])
+            if len(v) > 1 and v[0] in values
+        }
+
+    descriptions = {
+        key : {
+            "key" : key,
+            "values" : values,
+            "description" : mars_language.get(key, {}).get("description", ""),
+            "value_descriptions" : value_descriptions(key,values),
+        }
+        for key, values in request_dict.items()
+    }
 
     # Format the response as a STAC collection
     stac_collection = {
@@ -124,7 +141,19 @@ async def get_tree(request: Request):
         "links": [
             make_link(key_name, paths)
             for key_name, paths in key_frontier.items()
-        ]
+        ],
+        "debug": {
+            "request": request_dict,
+            "descriptions": descriptions,
+            "matches" : matches,
+            # "paths" : [
+            #     {
+            #         "path" : {o.key : o.str_value() for o in path},
+            #         "list" : [i["keys"] for i in fdb.list({o.key : o.str_value() for o in path}, keys=True)], 
+            #         "key" : key,
+            #     } for key, paths in key_frontier.items() for path in paths 
+            # ]
+        }
     }
 
     return stac_collection

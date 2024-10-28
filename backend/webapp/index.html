@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>STAC Viewer</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="/app/styles.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
 </head>
 <body>
     <div id="viewer">
@@ -23,11 +27,18 @@
             </div>
         </div>
         <div id="details">
+            {{ config.get('message', '')}}
+            <h2>Request</h2>
+            Hover over a key or value for more info.
+            <pre><code id="request-breakdown" class="language-json">
+{
+}
+            </code></pre>
             <h2>Raw STAC</h2>
-            <pre id="item-details"></pre>
+            <pre><code id="raw-stac" class="language-json"></code></pre>
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="/app/app.js"></script>
 </body>
 </html>

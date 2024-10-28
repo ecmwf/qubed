@@ -65,26 +65,24 @@ function goToNextUrl() {
     const key_type = item.dataset.keyType;
     let values = [];
 
-    if (key === "date") {
-      const datePicker = item.querySelector("input[type='date']");
-      //format date as YYYYMMDD
+    const datePicker = item.querySelector("input[type='date']");
+    if (datePicker) {
       values.push(datePicker.value.replace(/-/g, ""));
-    } else if (key === "time") {
-      const timePicker = item.querySelector("input[type='time']");
-      //format time as HHMM
-      console.log("replace", timePicker.value.replace(":", ""));
+    }
+
+    const timePicker = item.querySelector("input[type='time']");
+    if (timePicker) {
       values.push(timePicker.value.replace(":", ""));
-    } else if (key_type === "enum") {
-      values.push(
-        ...Array.from(
-          item.querySelectorAll("input[type='checkbox']:checked")
-        ).map((checkbox) => checkbox.value)
-      );
-    } else {
-      const any = item.querySelector("input[type='text']");
-      if (any.value !== "") {
-        values.push(any.value);
-      }
+    }
+
+    const enum_checkboxes = item.querySelectorAll("input[type='checkbox']:checked");
+    if (enum_checkboxes.length > 0) {
+      values.push(...Array.from(enum_checkboxes).map((checkbox) => checkbox.value));
+    }
+
+    const any = item.querySelector("input[type='text']");
+    if (any && any.value !== "") {
+      values.push(any.value);
     }
 
     // Keep track of whether any new keys are selected
@@ -127,53 +125,27 @@ async function createCatalogItem(link, itemsContainer) {
   itemsContainer.appendChild(itemDiv);
 
   try {
-    // Fetch details for each item/collection asynchronously
-    let base_url = new URL(window.location.href);
-    base_url.pathname = "/tree";
-    let url = new URL(link.href, base_url);
-    console.log("Fetching item details:", url);
-    const response = await fetch(url);
-    const itemData = await response.json();
 
     // Update the item div with real content
     itemDiv.classList.remove("loading");
-    itemDiv.innerHTML = ""; // Clear "Loading..." text
+
+    const dimension = link["generalized_datacube:dimension"];
 
     // add data-key attribute to the itemDiv
-    itemDiv.dataset.key = itemData.id;
-    itemDiv.dataset.keyType = itemData.key_type;
+    itemDiv.dataset.key = link.title;
+    itemDiv.dataset.keyType = dimension.type;
+    
+    itemDiv.innerHTML = `
+      <h3 class="item-title">${link.title || "No title available"}</h3>
+      <p class="item-type">Key Type: ${itemDiv.dataset.keyType || "Unknown"}</p>
+      <p class="item-type">Optional: ${dimension.optional ? "Yes" : "No"}</p>
+      <p class="item-description">${dimension.description ? dimension.description.slice(0, 100) : "No description available"}...</p>
+    `;
 
-    const title = document.createElement("h3");
-    title.className = "item-title";
-    title.textContent = itemData.title || "No title available";
-    itemDiv.appendChild(title);
 
-    const key_type = document.createElement("p");
-    key_type.className = "item-type";
-    key_type.textContent = `Key Type: ${itemData.key_type || "Unknown"}`;
-    itemDiv.appendChild(key_type);
-
-    const optional = document.createElement("p");
-    optional.className = "item-type";
-    optional.textContent = `Optional: ${link.optional || "Unknown"}`;
-    itemDiv.appendChild(optional);
-
-    // const id = document.createElement("p");
-    // id.className = "item-id";
-    // id.textContent = `ID: ${itemData.id || link.href.split("/").pop()}`;
-    // itemDiv.appendChild(id);
-
-    const description = document.createElement("p");
-    description.className = "item-description";
-    const descText = itemData.description
-      ? itemData.description.slice(0, 100)
-      : "No description available";
-    description.textContent = `${descText}...`;
-    itemDiv.appendChild(description);
-
-    if (itemData.key_type === "date" || itemData.key_type === "time") {
+    if (dimension.type === "date" || dimension.type === "time") {
       // Render a date picker for the "date" key
-      const picker = `<input type="${itemData.id}" name="${itemData.id}">`;
+      const picker = `<input type="${link.title}" name="${link.title}">`;
       //convert picker to HTML node
       const pickerNode = document
         .createRange()
@@ -182,24 +154,48 @@ async function createCatalogItem(link, itemsContainer) {
     }
     // Otherwise create a scrollable list with checkboxes for values if available
     else if (
-      itemData.key_type === "enum" &&
-      itemData.values &&
-      itemData.values.length > 0
+    //   dimension.type === "enum" &&
+      dimension.values &&
+      dimension.values.length > 0
     ) {
-      const listContainer = renderCheckboxList(itemData);
+      const listContainer = renderCheckboxList(link);
       itemDiv.appendChild(listContainer);
     } else {
-      const any = `<input type="text" name="${itemData.id}">`;
+      const any = `<input type="text" name="${link.title}">`;
       const anyNode = document.createRange().createContextualFragment(any);
       itemDiv.appendChild(anyNode);
     }
   } catch (error) {
     console.error("Error loading item data:", error);
-
-    // In case of an error, display an error message
-    itemDiv.innerHTML = "<p>Error loading item details</p>";
+    itemDiv.innerHTML = `<p>Error loading item details: ${error}</p>`;
   }
 }
+
+function renderCheckboxList(link) {
+    const dimension = link["generalized_datacube:dimension"];
+    const value_descriptions = dimension.value_descriptions;
+  
+    const listContainerHTML = `
+      <div class="item-list-container">
+        <label class="list-label">Select one or more values:</label>
+        <div class="scrollable-list">
+          ${dimension.values
+            .map((value, index) => {
+              const labelText = value_descriptions[index] ? `${value} - ${value_descriptions[index]}` : value;
+              return `
+                <div class="checkbox-container">
+                  <input type="checkbox" class="item-checkbox" value="${value}" ${dimension.values.length === 1? 'checked' : ''}>
+                  <label class="checkbox-label">${labelText}</label>
+                </div>
+              `;
+            })
+            .join("")}
+        </div>
+      </div>
+    `;
+  
+    return document.createRange().createContextualFragment(listContainerHTML).firstElementChild;
+  }
 
 // Render catalog items in the sidebar
 function renderCatalogItems(links) {
@@ -217,39 +213,57 @@ function renderCatalogItems(links) {
   });
 }
 
-// Fetch and display item details
-async function loadItemDetails(url) {
-  try {
-    const resolved_url = new URL(url, API_BASE_URL);
-    const response = await fetch(resolved_url);
-    const item = await response.json();
-
-    // Show details in the 'details' panel
-    const itemDetails = document.getElementById("item-details");
-    itemDetails.textContent = JSON.stringify(item, null, 2);
-  } catch (error) {
-    console.error("Error loading item details:", error);
+function renderRequestBreakdown(request, descriptions) {
+    const container = document.getElementById("request-breakdown");
+    const format_value = (key, value) => {
+      return `<span class="value" title="${descriptions[key]['value_descriptions'][value]}">"${value}"</span>`;
+    };
+    
+    const format_values = (key, values) => {
+      if (values.length === 1) {
+        return format_value(key, values[0]);
+      }
+      return `[${values.map((v) => 
+        format_value(key, v)
+    ).join(", ")}]`;
+    };
+  
+    let html = `{\n` +
+      request
+        .map(
+          ([key, values]) =>
+            `    <span class="key" title="${descriptions[key]['description']}">"${key}"</span>: ${format_values(key, values)},`
+        )
+        .join("\n") +
+      `\n}`;
+    container.innerHTML = html;
   }
-}
 
-function show_resp_in_sidebar(catalog) {
-  const itemDetails = document.getElementById("item-details");
+function renderRawSTACResponse(catalog) {
+  const itemDetails = document.getElementById("raw-stac");
   itemDetails.textContent = JSON.stringify(catalog, null, 2);
 }
 
 // Fetch STAC catalog and display items
-async function fetchCatalog(stacUrl) {
+async function fetchCatalog(request, stacUrl) {
   try {
     const response = await fetch(stacUrl);
     const catalog = await response.json();
-    // Always load the most recently clicked item on the right-hand side
-    show_resp_in_sidebar(catalog);
+
+    // Render the request breakdown in the sidebar
+    renderRequestBreakdown(request, catalog.debug.descriptions);
+
+    // Show the raw STAC in the sidebar
+    renderRawSTACResponse(catalog);
 
     // Render the items from the catalog
     if (catalog.links) {
       console.log("Fetched STAC catalog:", stacUrl, catalog.links);
       renderCatalogItems(catalog.links);
     }
+
+    // Highlight the request and raw STAC
+    hljs.highlightElement(document.getElementById("raw-stac"));
   } catch (error) {
     console.error("Error fetching STAC catalog:", error);
   }
@@ -258,10 +272,11 @@ async function fetchCatalog(stacUrl) {
 // Initialize the viewer by fetching the STAC catalog
 function initializeViewer() {
   const stacUrl = getSTACUrlFromQuery();
+  const request = get_request_from_url();
 
   if (stacUrl) {
     console.log("Fetching STAC catalog from query string URL:", stacUrl);
-    fetchCatalog(stacUrl);
+    fetchCatalog(request, stacUrl);
   } else {
     console.error("No STAC URL provided in the query string.");
   }
@@ -280,36 +295,3 @@ function initializeViewer() {
 
 // Call initializeViewer on page load
 initializeViewer();
-
-function renderCheckboxList(itemData) {
-  const listContainer = document.createElement("div");
-  listContainer.className = "item-list-container";
-
-  const listLabel = document.createElement("label");
-  listLabel.textContent = "Select values:";
-  listLabel.className = "list-label";
-
-  const scrollableList = document.createElement("div");
-  scrollableList.className = "scrollable-list";
-
-  const checkboxesHtml = itemData.values
-    .map((valueArray) => {
-      const value = Array.isArray(valueArray) ? valueArray[0] : valueArray;
-      const labelText = Array.isArray(valueArray)
-        ? valueArray.join(" - ")
-        : valueArray;
-      return `
-        <div class="checkbox-container">
-          <input type="checkbox" class="item-checkbox" value="${value}">
-          <label class="checkbox-label">${labelText}</label>
-        </div>
-      `;
-    })
-    .join("");
-
-  scrollableList.innerHTML = checkboxesHtml;
-
-  listContainer.appendChild(listLabel);
-  listContainer.appendChild(scrollableList);
-  return listContainer;
-}

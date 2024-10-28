@@ -85,7 +85,7 @@ canvas {
     border-color: #003399;      /* Keep the original ECMWF blue for the border */
 }
 
-#item-details {
+#raw-stac {
     white-space: pre-wrap;
     background-color: #f9f9f9;
     padding: 10px;
@@ -147,7 +147,20 @@ button:hover {
 
 .list-label {
     font-weight: bold;
-    margin-bottom: 5px;
+    margin-bottom: 0.5em;
     display: block;
     color: #003399;
+}
+
+span.key, span.value {
+    color: #ba2121;;
+}
+
+span.key {
+    font-weight: bold;
+}
+
+span.key:hover, span.value:hover {
+    color: #ff2a2a;
+    cursor: pointer;
 }

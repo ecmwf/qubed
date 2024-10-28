@@ -111,9 +111,10 @@ fdb_schema = pe.compile(
     KeySpec <- key:String (flag:Flag)? (type:Type)? (values:Values)? ([ ]* comment:Comment)?
     Flag <- ~("?" / "-" / "*")
     Type <- ":" [ ]* String
-    Values <- "=" String ("/" String)*
+    Values <- "=" Value ("/" Value)*
 
     # Low level stuff 
+    Value   <- ~([-a-zA-Z0-9_]+)
     String   <- ~([a-zA-Z0-9_]+)
     EOF  <- !.
     empty <- ""
@@ -161,6 +162,9 @@ class Key:
     key_spec: KeySpec
     reason: str
 
+    def str_value(self):
+        return self.key_spec.type.format(self.value)
+
     def __bool__(self):
         return self.reason in {"Matches", "Skipped", "Select All"}
 
@@ -178,7 +182,7 @@ class Key:
     def as_json(self):
         return dict(
             key=self.key,
-            value=self.as_string(),
+            value=self.str_value(),
             reason=self.reason,
         )
 
