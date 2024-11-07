@@ -1,0 +1,1 @@
+{"class=d1": {"dataset=climate-dt": {"activity=cmip6": {"experiment=hist": {"generation=1": {"model=icon": {"realization=1": {"expver=0001": {"stream=clte": {"date=19910410": {"resolution=high": {"type=fc": {"levtype=sfc": {"time=0000": {"param=130": {}}}}}}}}}}}}}}}}

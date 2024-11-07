@@ -9,6 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from fdb_schema import FDBSchemaFile
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+import json
+import yaml
 
 import os
 os.environ["FDB5_CONFIG_FILE"] = "/home/eouser/destine_remoteFDB_config.yaml"
@@ -26,8 +28,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/app", StaticFiles(directory="../webapp"), name="static")
-templates = Jinja2Templates(directory="../webapp")
+app.mount("/app", StaticFiles(directory="./webapp"), name="static")
+templates = Jinja2Templates(directory="./webapp")
 
 config = {
     "message": "",
@@ -38,13 +40,14 @@ if os.path.exists("../config.yaml"):
     with open("../config.yaml", "r") as f:
         config = config | yaml.safe_load(f)
 
+print("Loading compressed_cache.json")
+with open("../cache/compressed_cache.json", "r") as f:
+    list_cache = json.load(f)
+
 
 @app.get("/")
 async def redirect_to_app(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "config": config})
-
-
-import yaml
 
 with open(config["mars_language"], "r") as f:
     mars_language = yaml.safe_load(f)["_field"]

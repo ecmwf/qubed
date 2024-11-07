@@ -42,7 +42,7 @@ def compress_tree(tree, max_level = 5):
     top_level = {k : cache_tree(cache, v) for k, v in tree.items() if k != "_count"}
     return expand_tree_but_collapsed(cache, top_level, max_level = max_level)
 
-def print_schema_tree(tree):
+def pretty_schema_tree(tree):
     
     name_cache = {}
     names = set()
@@ -77,11 +77,5 @@ def print_schema_tree(tree):
         return out
     
     schema_tree = tree_as_schema(tree)
-    
-    for k, v in sorted(name_cache.items()):
-        # print(f"{k} : {','.join(sorted(v.split(","), key = int))}")
-        print(f"{v} : {k}")
-    
-    print()
-    
-    print(schema_tree)
+    groups = "\n".join(f"{v} : {k}" for k, v in sorted(name_cache.items()))
+    return groups + "\n" + schema_tree
