@@ -4,7 +4,7 @@
 ![Static Badge](https://img.shields.io/badge/ESEE-Foundation-orange?style=flat&label=ESEE&link=github.com%2Fecmwf)
 
 
-# Q<sup>3</sup>: Quick Querying of Qubes
+# Q<sup>3</sup> Quick Querying of Qubes
 
 
 ## How this works
