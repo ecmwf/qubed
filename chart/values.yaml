@@ -1,0 +1,25 @@
+# values.yaml
+
+redis:
+  servicePort: 6379
+  pvc:
+    enabled: true
+    storageClassName: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 1Gi
+  service:
+    port: 6379
+
+# See https://eccr.ecmwf.int/harbor/projects/258/repositories
+stacServer:
+  image:
+    repository: "eccr.ecmwf.int/stac_server/stac_server"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  servicePort: 8080
+  environment:
+    REDIS_HOST: "redis"
+  ingress:
+    enabled: True
+    hostname: "stac-server.lumi-vip.apps.dte.destination-earth.eu "

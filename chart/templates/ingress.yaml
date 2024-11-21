@@ -1,0 +1,18 @@
+{{- if .Values.stacServer.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stac-server-ingress
+spec:
+  rules:
+    - host: {{ .Values.stacServer.ingress.hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stac-server
+                port:
+                  number: {{ .Values.stacServer.servicePort }}
+{{- end }}

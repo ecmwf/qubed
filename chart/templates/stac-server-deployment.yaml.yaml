@@ -1,0 +1,33 @@
+# templates/stac-server-deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stac-server
+spec:
+  replicas: 1  # Adjust as needed
+  selector:
+    matchLabels:
+      app: stac-server
+  template:
+    metadata:
+      labels:
+        app: stac-server
+    spec:
+      initContainers:
+        - name: wait-for-redis
+          image: busybox
+          command:
+            [
+              'sh', '-c',
+              'until nc -z -v -w30 {{ .Values.stacServer.environment.REDIS_HOST }} {{ .Values.redis.service.port }}; do echo "Waiting for Redis..."; sleep 5; done;'
+            ]
+      containers:
+        - name: stac-server
+          image: "{{ .Values.stacServer.image.repository }}:{{ .Values.stacServer.image.tag }}"
+          imagePullPolicy: {{ .Values.stacServer.image.pullPolicy }}
+          env:
+            - name: REDIS_HOST
+              value: "{{ .Values.stacServer.environment.REDIS_HOST }}"
+          ports:
+            - containerPort: {{ .Values.stacServer.servicePort }}

@@ -1,0 +1,28 @@
+# templates/redis-deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: "redis:alpine"
+          command: ["redis-server", "--appendonly", "yes"]
+          ports:
+            - containerPort: {{ .Values.redis.servicePort }}
+          # volumeMounts:
+          #   - mountPath: /data
+          #     name: redis-data
+      # volumes:
+      #   - name: redis-data
+      #     persistentVolumeClaim:
+      #       claimName: redis-data
