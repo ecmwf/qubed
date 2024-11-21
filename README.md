@@ -6,16 +6,50 @@
 
 # Q<sup>3</sup> Quick Querying of Qubes
 
+This repostitory contains a collection of components designed to deliver user friendly cataloging for ecmwf's data. The STAC Server, Frontend and a periodic job to do tree compression can be deployed together to kubernetes using the [helm chart](./helm_chart). Thise deployment can then be accessed either via the Query Builder Web interface or the python client.
 
-## How this works
+## 📦 Components Overview
 
-All valid MARS requests start with `class=something` so at the root of this viewer you are presented with options for what class to choose. **You are allowed to choose multiple values.** After you have selected values, click `next`. At each subsequent step the backend checks any possible match between the values you have chosen and the fdb schema, sometimes this will mean that multiple keys can be selected such as [here](http://136.156.129.226/app/index.html?class=od&expver=0001&stream=enfo,oper&date=20241004&time=1226&domain=d,g&type=fc,pf&levtype=pl,sfc&step=1) where both `levellist` and `quantile` are valid keys to continue the query, again you can select both.
+### 🌲 [Tree Compressor](./tree_compresser)
+> **Python/Rust Package**
 
-This is not implemented yet but the idea is that you will be able to generate a polytope query from this tool.
- 
+📋 Lists the datasets in an **FDB** and converts the output into a **compressed tree representation** for fast querying.
 
-## [Test instance 1](http://136.156.129.226/app/index.html)
+---
 
-This one is not actually looking at any data, it just looks at the default `fdb_schema_file` from fdb and the mars `language.yaml` in metkit. The former provides a way to determine roughly what requests are valid while the later allows us to fill in suggested values for keys such as `class`, `expverr`, `stream` etc.
+### 🚀 [STAC Server](./stac_server)
+> **FastAPI STAC Server Backend**
 
-<img width="1179" alt="image" src="https://github.com/user-attachments/assets/83ffe097-8526-4e94-b8ea-6ac630821233">
+- 🌟 Implements our proposed [Datacube STAC Extension](./structured_stac.md).
+- 🛠️ Allows efficient traversal of ECMWF's datacubes.
+- 🔗 **[Live Example](http://catalogue.lumi.apps.dte.destination-earth.eu/stac?class=d1&dataset=extremes-dt&expver=0001&stream=oper)**.
+
+---
+
+### 🌐 [Query Builder Web](./frontend)
+> **Web Frontend**
+
+- 👀 Displays data from the **STAC Server** in an intuitive user interface.
+- 🌍 **[Try the Live Demo](http://catalogue.lumi.apps.dte.destination-earth.eu/)**.
+
+---
+
+### 🐍 [Query Builder Python](./query_builder)
+> **Python Frontend**
+
+- 🤖 A Python client for the **STAC Server**.
+- 📘 Reference implementation of the [Datacube STAC Extension](./structured_stac.md).
+
+---
+
+## 🚀 Deployment Instructions
+
+Deploy all components to **Kubernetes** using the provided [Helm Chart](./helm_chart).
+
+---
+
+### 🛠️ Future Enhancements
+- Intgration **Query Builder Web** with Polytope to contruct a full polytope query.
+- A JS polytope client implementation to allow performing the polytope query and getting the result all in the browser.
+
+---
