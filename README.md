@@ -34,7 +34,7 @@ This repostitory contains a collection of components designed to deliver user fr
 
 ---
 
-### 🐍 [Query Builder Python](./query_builder)
+### TODO: 🐍 [Query Builder Python](./query_builder) 
 > **Python Frontend**
 
 - 🤖 A Python client for the **STAC Server**.
