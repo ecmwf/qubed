@@ -26,7 +26,7 @@ This repostitory contains a collection of components designed to deliver user fr
 
 ---
 
-### 🌐 [Query Builder Web](./frontend)
+### 🌐 [Web Query Builder](./web_query_builder)
 > **Web Frontend**
 
 - 👀 Displays data from the **STAC Server** in an intuitive user interface.
@@ -34,8 +34,8 @@ This repostitory contains a collection of components designed to deliver user fr
 
 ---
 
-### TODO: 🐍 [Query Builder Python](./query_builder) 
-> **Python Frontend**
+### TODO: 🐍 [Python Query Builder](./python_query_builder) 
+> **Python Client**
 
 - 🤖 A Python client for the **STAC Server**.
 - 📘 Reference implementation of the [Datacube STAC Extension](./structured_stac.md).
