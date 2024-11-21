@@ -1,20 +1,46 @@
-services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
 
-  web:
-    image: nginx
-    ports:
-    - "8123:80"
-    environment:
-      - NGINX_HOST=localhost
-      - NGINX_PORT=80
+services:
+  # redis server holds the catalog data blob
+  redis:
+    image: redis:alpine
+    container_name: redis
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
-    - ./webapp:/usr/share/nginx/html
-      
+      - ./redis-data:/data
+    ports:
+      - "6379:6379"
+    restart: always
+
+  # STAC Server
+  stac_server:
+    # image: stac-server:latest
+    container_name: stac_server
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: stac_server
+    ports:
+      - "8124:8080"
+    environment:
+      - REDIS_HOST=redis
+      - CONFIG_DIR=/config
+    volumes:
+      - ./stac_server:/code/stac_server
+      - ./TreeTraverser:/code/TreeTraverser
+    # restart: always
+
+  # web_query_builder:
+  #   # image: web_query_builder:latest
+  #   container_name: web_query_builder
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     target: web_query_builder
+  #   ports:
+  #     - "8125:8080"
+  #   environment:
+  #     - CONFIG_DIR=/config
+  #   volumes:
+  #     - ./web_query_builder:/code/web_query_builder
+    # restart: always
+

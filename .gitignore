@@ -4,3 +4,4 @@ config.yaml
 .venv
 *.json
 raw_list
+*.egg-info/
