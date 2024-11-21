@@ -1,0 +1,7 @@
+flask==3
+pyyaml
+flask_dance
+python-dotenv
+flask-login
+flask-cors
+cachetools
