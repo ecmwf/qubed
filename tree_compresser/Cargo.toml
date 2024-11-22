@@ -1,0 +1,17 @@
+[package]
+name = "qubed_tree"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rsfdb = {git = "https://github.com/ecmwf/rsfdb", branch = "develop"}
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+pyo3 = "0.23.1"
+
+
+[lib]
+name = "tree_traverser"
+crate-type = ["cdylib"]
+path = "./rust_src/lib.rs"
+
