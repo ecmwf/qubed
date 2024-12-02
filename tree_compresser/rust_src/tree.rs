@@ -1,7 +1,12 @@
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
+use rsfdb::listiterator::KeyValueLevel;
+use serde_json::Value;
+
 #[derive(Debug)]
 pub struct TreeNode {
-    key: KeyValueLevel,
-    children: Vec<TreeNode>,
+    pub key: KeyValueLevel,
+    pub children: Vec<TreeNode>,
 }
 
 impl TreeNode {
@@ -62,5 +67,24 @@ impl TreeNode {
 
         // Combine the formatted key with children
         serde_json::json!({ formatted_key: children_json })
+    }
+
+    pub fn to_py_dict(&self, py: Python) -> PyResult<PyObject> {
+        let py_dict = PyDict::new(py);
+
+        let formatted_key = format!("{}={}", self.key.key, self.key.value);
+
+        if self.children.is_empty() {
+            py_dict.set_item(formatted_key, PyDict::new(py))?;
+        } else {
+            let children_dict = PyDict::new(py);
+            for child in &self.children {
+                let child_key = format!("{}={}", child.key.key, child.key.value);
+                children_dict.set_item(child_key, child.to_py_dict(py)?)?;
+            }
+            py_dict.set_item(formatted_key, children_dict)?;
+        }
+
+        Ok(py_dict.to_object(py))
     }
 }

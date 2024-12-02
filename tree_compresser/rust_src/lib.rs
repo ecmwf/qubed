@@ -4,85 +4,79 @@
 
 use rsfdb::listiterator::KeyValueLevel;
 use rsfdb::request::Request;
-use rsfdb::FDB; // Make sure the `fdb` crate is correctly specified in the dependencies
+use rsfdb::FDB;
 
 use serde_json::{json, Value};
 use std::time::Instant;
 
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyString};
+use pyo3::types::{PyDict, PyInt, PyList, PyString};
 
-use crate::tree::TreeNode;
 use std::collections::HashMap;
 
-/// Formats the sum of two numbers as string.
-#[pyfunction]
-#[pyo3(signature = (request, fdb_config = None))]
-fn traverse_fdb(
-    request: HashMap<String, Vec<String>>,
-    fdb_config: Option<&str>,
-) -> PyResult<String> {
-    let start_time = Instant::now();
-    let fdb = FDB::new(fdb_config).unwrap();
+pub mod tree;
+use std::sync::Arc;
+use std::sync::Mutex;
+use tree::TreeNode;
 
-    let list_request =
-        Request::from_json(json!(request)).expect("Failed to create request from python dict");
+#[pyclass(unsendable)]
+pub struct PyFDB {
+    pub fdb: FDB,
+}
 
-    let list = fdb.list(&list_request, true, true).unwrap();
-
-    // for item in list {
-    //     for kvl in item.request {
-    //         println!("{:?}", kvl);
-    //     }
-    // }
-
-    let mut root = TreeNode::new(KeyValueLevel {
-        key: "root".to_string(),
-        value: "root".to_string(),
-        level: 0,
-    });
-
-    for item in list {
-        if let Some(request) = &item.request {
-            root.insert(&request);
-        }
+#[pymethods]
+impl PyFDB {
+    #[new]
+    #[pyo3(signature = (fdb_config=None))]
+    pub fn new(fdb_config: Option<&str>) -> PyResult<Self> {
+        let fdb = FDB::new(fdb_config)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        Ok(PyFDB { fdb })
     }
 
-    // Traverse and print the tree
-    root.traverse(0, &|node, level| {
-        let indent = "  ".repeat(level);
-        println!("{}{}={}", indent, node.key.key, node.key.value);
-    });
+    /// Traverse the FDB with the given request.
+    pub fn traverse_fdb(
+        &self,
+        py: Python<'_>,
+        request: HashMap<String, Vec<String>>,
+    ) -> PyResult<PyObject> {
+        let start_time = Instant::now();
 
-    // Convert the tree to JSON
-    // let json_output = root.to_json();
+        let list_request = Request::from_json(json!(request))
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
 
-    // // Print the JSON output
-    // // println!("{}", serde_json::to_string_pretty(&json_output).unwrap());
-    // std::fs::write(
-    //     "output.json",
-    //     serde_json::to_string_pretty(&json_output).unwrap(),
-    // )
-    // .expect("Unable to write file");
+        // Use `fdb_guard` instead of `self.fdb`
+        let list = self
+            .fdb
+            .list(&list_request, true, true)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
-    // let duration = start_time.elapsed();
-    // println!("Total runtime: {:?}", duration);
+        let mut root = TreeNode::new(KeyValueLevel {
+            key: "root".to_string(),
+            value: "root".to_string(),
+            level: 0,
+        });
 
-    Ok(("test").to_string())
+        for item in list {
+            py.check_signals()?;
+
+            if let Some(request) = &item.request {
+                root.insert(&request);
+            }
+        }
+
+        let duration = start_time.elapsed();
+        println!("Total runtime: {:?}", duration);
+
+        let py_dict = root.to_py_dict(py)?;
+        Ok(py_dict)
+    }
 }
 
 use pyo3::prelude::*;
 
-/// Formats the sum of two numbers as string.
-#[pyfunction]
-fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
-    Ok((a + b + 2).to_string())
-}
-
-/// A Python module implemented in Rust. The name of this function must match
-/// the `lib.name` setting in the `Cargo.toml`, else Python will not be able to
-/// import the module.
 #[pymodule]
 fn rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(traverse_fdb, m)?)
+    m.add_class::<PyFDB>()?;
+    Ok(())
 }
