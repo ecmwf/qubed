@@ -22,4 +22,4 @@ stacServer:
     REDIS_HOST: "redis"
   ingress:
     enabled: True
-    hostname: "stac-server.lumi-vip.apps.dte.destination-earth.eu "
+    hostname: "climate.catalogue.lumi.apps.dte.destination-earth.eu"

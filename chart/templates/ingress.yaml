@@ -4,6 +4,7 @@ kind: Ingress
 metadata:
   name: stac-server-ingress
 spec:
+  ingressClassName: nginx
   rules:
     - host: {{ .Values.stacServer.ingress.hostname }}
       http:
@@ -15,4 +16,12 @@ spec:
                 name: stac-server
                 port:
                   number: {{ .Values.stacServer.servicePort }}
+  tls:
+    - hosts:
+        - {{ .Values.stacServer.ingress.hostname }}
+      secretName: lumi-wildcard-tls
 {{- end }}
+
+
+
+
