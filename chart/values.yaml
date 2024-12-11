@@ -14,7 +14,7 @@ redis:
 # See https://eccr.ecmwf.int/harbor/projects/258/repositories
 stacServer:
   image:
-    repository: "eccr.ecmwf.int/stac_server/stac_server"
+    repository: "eccr.ecmwf.int/qubed/stac_server"
     tag: "latest"
     pullPolicy: IfNotPresent
   servicePort: 8080
@@ -22,4 +22,4 @@ stacServer:
     REDIS_HOST: "redis"
   ingress:
     enabled: True
-    hostname: "climate.catalogue.lumi.apps.dte.destination-earth.eu"
+    hostname: "climate-catalogue.lumi.apps.dte.destination-earth.eu"
