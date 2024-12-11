@@ -1,8 +1,9 @@
-from tree_traverser import backend, CompressedTree
-from pathlib import Path
 import json
+from pathlib import Path
 
-data_path = Path("data/compressed_tree_climate_dt.json")
+from tree_traverser import CompressedTree
+
+data_path = Path("data/compressed_tree_climate_dt_ecmwf_style.json")
 # Print size of file
 print(f"climate dt compressed tree: {data_path.stat().st_size // 1e6:.1f} MB")
 
