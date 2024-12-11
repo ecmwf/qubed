@@ -38,13 +38,14 @@ print("Getting cache from redis")
 r = redis.Redis(host=os.environ.get("REDIS_HOST", "localhost"), port=6379, db=0)
 json_data = r.get('compressed_catalog')
 if not json_data:
-    raise ValueError("No compressed catalog found in Redis")
+    print("Didn't find compressed tree in redis using empty tree")
+    c_tree = CompressedTree({})
 else:
-    print("Found compressed catalog in Redis")
+    print("Loading tree to json")
+    compressed_tree_json = json.loads(json_data)
+    c_tree = CompressedTree.from_json(compressed_tree_json)
 
-print("Loading tree to json")
-compressed_tree_json = json.loads(json_data)
-c_tree = CompressedTree.from_json(compressed_tree_json)
+
 
 print("Partialy decompressing tree, shoud be able to skip this step in future.")
 tree = c_tree.reconstruct_compressed_ecmwf_style()
