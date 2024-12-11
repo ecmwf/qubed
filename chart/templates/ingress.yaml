@@ -1,4 +1,4 @@
-{{- if .Values.stacServer.ingress.enabled }}
+{{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -6,20 +6,31 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: {{ .Values.stacServer.ingress.hostname }}
+    - host: {{ .Values.ingress.hostname }}
       http:
         paths:
-          - path: /
+        {{- if .Values.stacServer.enabled }}
+          - path: /api
             pathType: Prefix
             backend:
               service:
                 name: stac-server
                 port:
                   number: {{ .Values.stacServer.servicePort }}
+        {{- end }}
+        {{- if .Values.webQueryBuilder.enabled }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-query-builder
+                port:
+                  number: {{ .Values.webQueryBuilder.servicePort }}
+        {{- end }}
   tls:
     - hosts:
-        - {{ .Values.stacServer.ingress.hostname }}
-      secretName: lumi-wildcard-tls
+        - {{ .Values.ingress.hostname }}
+      secretName: {{ .Values.ingress.tlsSecretName }}
 {{- end }}
 
 

@@ -2,6 +2,7 @@ import json
 import os
 from collections import defaultdict
 from typing import Any, Dict
+from pathlib import Path
 
 import redis
 import yaml
@@ -23,39 +24,32 @@ app.add_middleware(
 async def favicon():
     return FileResponse("favicon.ico")
 
-with open(os.environ.get("CONFIG_DIR", ".") + "/config.yaml", "r") as f:
-    config = yaml.safe_load(f)
 
-if "local_cache" in config:
-    print("Getting cache from local file")
-    with open(config["local_cache"], "r") as f:
-        json_data = f.read()
-    print("Found compressed catalog in local file")
+if "LOCAL_CACHE" in os.environ:
+    print("Getting data from local file")
+
+    base = Path(os.environ["LOCAL_CACHE"])
+    with open(base / "compressed_tree.json", "r") as f:
+        json_tree = f.read()
+
+
+    with open(base / "language.yaml", "r") as f:
+        mars_language = yaml.safe_load(f)["_field"]
+    
 else:
     print("Getting cache from redis")
-    r = redis.Redis(host=os.environ.get("REDIS_HOST", "localhost"), port=6379, db=0)
-    json_data = r.get('compressed_catalog')
+    r = redis.Redis(host="redis", port=6379, db=0)
+    json_tree = r.get('compressed_catalog')
+    assert json_tree, "No compressed tree found in redis"
+    mars_language = json.loads(r.get('mars_language'))
 
-print("Loading tree to json")
-if not json_data:
-    c_tree = CompressedTree.from_json({})
-else:
-    compressed_tree_json = json.loads(json_data)
-    c_tree = CompressedTree.from_json(compressed_tree_json)
+print("Loading tree from json")
+c_tree = CompressedTree.from_json(json.loads(json_tree))
 
 print("Partialy decompressing tree, shoud be able to skip this step in future.")
 tree = c_tree.reconstruct_compressed_ecmwf_style()
 
 print("Ready to serve requests!")
-
-base = os.environ.get("CONFIG_DIR", ".")
-config = {
-    "fdb_schema": f"{base}/schema",
-    "mars_language": f"{base}/language.yaml",
-} 
-
-with open(config["mars_language"], "r") as f:
-    mars_language = yaml.safe_load(f)["_field"]
 
 def request_to_dict(request: Request) -> Dict[str, Any]:
     # Convert query parameters to dictionary format
@@ -114,7 +108,7 @@ def get_leaves(tree):
             for leaf in get_leaves(v):
                 yield leaf
 
-@app.get("/match")
+@app.get("/api/match")
 async def get_match(request: Request):
     # Convert query parameters to dictionary format
     request_dict = request_to_dict(request)
@@ -130,7 +124,7 @@ async def get_match(request: Request):
 
     return match_tree
 
-@app.get("/paths")
+@app.get("/api/paths")
 async def api_paths(request: Request):
     request_dict = request_to_dict(request)
     match_tree = match_against_cache(request_dict, tree)
@@ -155,7 +149,7 @@ async def api_paths(request: Request):
             "values": sorted(v["values"], reverse=True),
     } for key, v in by_path.items()]
 
-@app.get("/stac")
+@app.get("/api/stac")
 async def get_STAC(request: Request):
     request_dict = request_to_dict(request)
     paths = await api_paths(request)

@@ -1,5 +1,3 @@
-# values.yaml
-
 redis:
   servicePort: 6379
   pvc:
@@ -11,15 +9,25 @@ redis:
   service:
     port: 6379
 
-# See https://eccr.ecmwf.int/harbor/projects/258/repositories
 stacServer:
+  enabled: true
   image:
     repository: "eccr.ecmwf.int/qubed/stac_server"
     tag: "latest"
-    pullPolicy: IfNotPresent
-  servicePort: 8080
+    pullPolicy: Always
+  servicePort: 80
   environment:
     REDIS_HOST: "redis"
-  ingress:
-    enabled: True
-    hostname: "climate-catalogue.lumi.apps.dte.destination-earth.eu"
+
+webQueryBuilder:
+  enabled: true
+  image:
+    repository: "eccr.ecmwf.int/qubed/web_query_builder"
+    tag: "latest"
+    pullPolicy: Always
+  servicePort: 80
+
+ingress:
+  enabled: True
+  tlsSecretName: "lumi-wildcard-tls"
+  hostname: "climate-catalogue.lumi.apps.dte.destination-earth.eu"

@@ -6,7 +6,7 @@ function getSTACUrlFromQuery() {
 
   // get current window url and remove path part
   let api_url = new URL(window.location.href);
-  api_url.pathname = "/stac";
+  api_url.pathname = "/api/stac";
 
   for (const [key, value] of params.entries()) {
     api_url.searchParams.set(key, value);

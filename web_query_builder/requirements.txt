@@ -5,3 +5,4 @@ python-dotenv
 flask-login
 flask-cors
 cachetools
+uvicorn
