@@ -1,2 +1,2 @@
 from . import rust as backend
-from .CompressedTree import CompressedTree
+from .CompressedTree import CompressedTree, RefcountedDict

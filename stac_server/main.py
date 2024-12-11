@@ -1,24 +1,14 @@
 import json
-import yaml
-from pathlib import Path
 import os
-from datetime import datetime
 from collections import defaultdict
 from typing import Any, Dict
-import yaml
-import os
-
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse, FileResponse
-from fastapi.templating import Jinja2Templates
-
-
-from TreeTraverser.fdb_schema import FDBSchemaFile 
-from TreeTraverser.CompressedTree import CompressedTree
 
 import redis
+import yaml
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from tree_traverser import CompressedTree
 
 app = FastAPI()
 app.add_middleware(
@@ -33,19 +23,25 @@ app.add_middleware(
 async def favicon():
     return FileResponse("favicon.ico")
 
+with open(os.environ.get("CONFIG_DIR", ".") + "/config.yaml", "r") as f:
+    config = yaml.safe_load(f)
 
-print("Getting cache from redis")
-r = redis.Redis(host=os.environ.get("REDIS_HOST", "localhost"), port=6379, db=0)
-json_data = r.get('compressed_catalog')
-if not json_data:
-    print("Didn't find compressed tree in redis using empty tree")
-    c_tree = CompressedTree({})
+if "local_cache" in config:
+    print("Getting cache from local file")
+    with open(config["local_cache"], "r") as f:
+        json_data = f.read()
+    print("Found compressed catalog in local file")
 else:
-    print("Loading tree to json")
+    print("Getting cache from redis")
+    r = redis.Redis(host=os.environ.get("REDIS_HOST", "localhost"), port=6379, db=0)
+    json_data = r.get('compressed_catalog')
+
+print("Loading tree to json")
+if not json_data:
+    c_tree = CompressedTree.from_json({})
+else:
     compressed_tree_json = json.loads(json_data)
     c_tree = CompressedTree.from_json(compressed_tree_json)
-
-
 
 print("Partialy decompressing tree, shoud be able to skip this step in future.")
 tree = c_tree.reconstruct_compressed_ecmwf_style()
@@ -60,9 +56,6 @@ config = {
 
 with open(config["mars_language"], "r") as f:
     mars_language = yaml.safe_load(f)["_field"]
-
-###### Load FDB Schema
-schema = FDBSchemaFile(config["fdb_schema"])
 
 def request_to_dict(request: Request) -> Dict[str, Any]:
     # Convert query parameters to dictionary format
@@ -167,20 +160,6 @@ async def get_STAC(request: Request):
     request_dict = request_to_dict(request)
     paths = await api_paths(request)
 
-    # # Run the schema matching logic
-    # matches = schema.match_all(dict(v.split("=") for v in path))
-
-    # # Only take the longest matches
-    # max_len = max(len(m) for m in matches)
-    # matches = [m for m in matches if len(m) == max_len]
-
-    # # Take the ends of all partial matches, ignore those that are full matches
-    # # Full matches are indicated by the last key having boolean value True
-    # key_frontier = defaultdict(list)
-    # for match in matches:
-    #     if not match[-1]:
-    #         key_frontier[match[-1].key].append([m for m in match[:-1]])
-
 
     def make_link(key_name, paths, values):
         """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
@@ -221,7 +200,7 @@ async def get_STAC(request: Request):
     def value_descriptions(key, values):
         return {
             v[0] : v[-1] for v in mars_language.get(key, {}).get("values", [])
-            if len(v) > 1 and v[0] in values
+            if len(v) > 1 and v[0] in list(values)
         }
 
     descriptions = {

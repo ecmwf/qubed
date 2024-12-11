@@ -1,6 +1,5 @@
 import json
 from collections import defaultdict
-from typing import TypeVar
 from pathlib import Path
 
 Tree = dict[str, "Tree"]
@@ -71,11 +70,13 @@ class CompressedTree():
         k, *rest = path
         return self._add_to_cache(RefcountedDict({k : self._cache_path(rest)}))
     
-    def reconstruct(self) -> dict[str, dict]:
+    def reconstruct(self, max_depth = None) -> dict[str, dict]:
         "Reconstruct the tree as a normal nested dictionary"
-        def reconstruct_node(h : int) -> dict[str, dict]:
-            return {k : reconstruct_node(v) for k, v in self.cache[h].items()}
-        return reconstruct_node(self.root_hash)
+        def reconstruct_node(h : int, depth : int) -> dict[str, dict]:
+            if max_depth is not None and depth > max_depth:
+                return {}
+            return {k : reconstruct_node(v, depth+1) for k, v in self.cache[h].items()}
+        return reconstruct_node(self.root_hash, 0)
     
     def reconstruct_compressed(self) -> dict[str, dict]:
         "Reconstruct the tree as a normal nested dictionary"
@@ -87,18 +88,18 @@ class CompressedTree():
             return {"/".join(keys) : reconstruct_node(h) for h, keys in dedup.items()}
         return reconstruct_node(self.root_hash)
     
-    def reconstruct_compressed_ecmwf_style(self) -> dict[str, dict]:
+    def reconstruct_compressed_ecmwf_style(self, max_depth=None, from_node=None) -> dict[str, dict]:
         "Reconstruct the tree as a normal nested dictionary"
-        def reconstruct_node(h : int) -> dict[str, dict]:
+        def reconstruct_node(h : int, depth : int) -> dict[str, dict]:
+            if max_depth is not None and depth > max_depth: 
+                return {}
             dedup : dict[tuple[int, str], set[str]] = defaultdict(set)
             for k, h2 in self.cache[h].items():
                 key, value = k.split("=")
                 dedup[(h2, key)].add(value)
 
-            
-
-            return {f"{key}={','.join(values)}" : reconstruct_node(h) for (h, key), values in dedup.items()}
-        return reconstruct_node(self.root_hash)
+            return {f"{key}={','.join(values)}" : reconstruct_node(h, depth=depth+1) for (h, key), values in dedup.items()}
+        return reconstruct_node(from_node or self.root_hash, depth=0)
     
     def __init__(self, tree : Tree):
         self.cache = {}
@@ -124,8 +125,8 @@ class CompressedTree():
                 h = loc[key] # get the hash of the subtree
                 loc = self.cache[h] # get the subtree
             else:
-                return False, keys[:i]
-        return True, keys
+                return False, keys[:i], h
+        return True, keys, h
 
     def keys(self, keys : tuple[str, ...] = ()) -> list[str] | None:
         loc = self.tree

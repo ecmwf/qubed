@@ -73,9 +73,13 @@ function goToNextUrl() {
       values.push(timePicker.value.replace(":", ""));
     }
 
-    const enum_checkboxes = item.querySelectorAll("input[type='checkbox']:checked");
+    const enum_checkboxes = item.querySelectorAll(
+      "input[type='checkbox']:checked"
+    );
     if (enum_checkboxes.length > 0) {
-      values.push(...Array.from(enum_checkboxes).map((checkbox) => checkbox.value));
+      values.push(
+        ...Array.from(enum_checkboxes).map((checkbox) => checkbox.value)
+      );
     }
 
     const any = item.querySelector("input[type='text']");
@@ -104,7 +108,7 @@ function goToNextUrl() {
     );
 
     if (existingIndex !== -1) {
-      // If the key already exists, 
+      // If the key already exists,
       // and the values aren't already in there,
       // append the values
       request[existingIndex][1] = [...request[existingIndex][1], ...values];
@@ -125,7 +129,6 @@ async function createCatalogItem(link, itemsContainer) {
   itemsContainer.appendChild(itemDiv);
 
   try {
-
     // Update the item div with real content
     itemDiv.classList.remove("loading");
 
@@ -134,15 +137,18 @@ async function createCatalogItem(link, itemsContainer) {
     // add data-key attribute to the itemDiv
     itemDiv.dataset.key = link.title;
     itemDiv.dataset.keyType = dimension.type;
-    
+
     itemDiv.innerHTML = `
       <h3 class="item-title">${link.title || "No title available"}</h3>
       <p class="item-type">Key Type: ${itemDiv.dataset.keyType || "Unknown"}</p>
       <!-- <p class="item-type">Paths: ${dimension.paths}</p> -->
       <p class="item-type">Optional: ${dimension.optional ? "Yes" : "No"}</p>
-      <p class="item-description">${dimension.description ? dimension.description.slice(0, 100) : "No description available"}...</p>
+      <p class="item-description">${
+        dimension.description
+          ? dimension.description.slice(0, 100)
+          : "No description available"
+      }...</p>
     `;
-
 
     // if (dimension.type === "date" || dimension.type === "time") {
     //   // Render a date picker for the "date" key
@@ -155,7 +161,7 @@ async function createCatalogItem(link, itemsContainer) {
     // }
     // Otherwise create a scrollable list with checkboxes for values if available
     if (
-    //   dimension.type === "enum" &&
+      //   dimension.type === "enum" &&
       dimension.values &&
       dimension.values.length > 0
     ) {
@@ -173,20 +179,24 @@ async function createCatalogItem(link, itemsContainer) {
 }
 
 function renderCheckboxList(link) {
-    const dimension = link["generalized_datacube:dimension"];
-    const value_descriptions = dimension.value_descriptions || [];
-  
-    const listContainerHTML = `
+  const dimension = link["generalized_datacube:dimension"];
+  const value_descriptions = dimension.value_descriptions || [];
+
+  const listContainerHTML = `
       <div class="item-list-container">
         <label class="list-label">Select one or more values:</label>
         <div class="scrollable-list">
           ${dimension.values
             .map((value, index) => {
-              const labelText = value_descriptions[index] ? `${value} - ${value_descriptions[index]}` : value;
+              const labelText = value_descriptions[index]
+                ? `${value} - ${value_descriptions[index]}`
+                : value;
               return `
                 <div class="checkbox-container">
                   <label class="checkbox-label">
-                  <input type="checkbox" class="item-checkbox" value="${value}" ${dimension.values.length === 1? 'checked' : ''}>
+                  <input type="checkbox" class="item-checkbox" value="${value}" ${
+                dimension.values.length === 1 ? "checked" : ""
+              }>
                   ${labelText}
                   </label>
                 </div>
@@ -196,9 +206,10 @@ function renderCheckboxList(link) {
         </div>
       </div>
     `;
-  
-    return document.createRange().createContextualFragment(listContainerHTML).firstElementChild;
-  }
+
+  return document.createRange().createContextualFragment(listContainerHTML)
+    .firstElementChild;
+}
 
 // Render catalog items in the sidebar
 function renderCatalogItems(links) {
@@ -217,36 +228,37 @@ function renderCatalogItems(links) {
 }
 
 function renderRequestBreakdown(request, descriptions) {
-    const container = document.getElementById("request-breakdown");
-    const format_value = (key, value) => {
-      return `<span class="value" title="${descriptions[key]['value_descriptions'][value]}">"${value}"</span>`;
-    };
-    
-    const format_values = (key, values) => {
-      if (values.length === 1) {
-        return format_value(key, values[0]);
-      }
-      return `[${values.map((v) => 
-        format_value(key, v)
-    ).join(", ")}]`;
-    };
-  
-    let html = `{\n` +
-      request
-        .map(
-          ([key, values]) =>
-            `    <span class="key" title="${descriptions[key]['description']}">"${key}"</span>: ${format_values(key, values)},`
-        )
-        .join("\n") +
-      `\n}`;
-    container.innerHTML = html;
-  }
+  const container = document.getElementById("request-breakdown");
+  const format_value = (key, value) => {
+    return `<span class="value" title="${descriptions[key]["value_descriptions"][value]}">"${value}"</span>`;
+  };
+
+  const format_values = (key, values) => {
+    if (values.length === 1) {
+      return format_value(key, values[0]);
+    }
+    return `[${values.map((v) => format_value(key, v)).join(", ")}]`;
+  };
+
+  let html =
+    `{\n` +
+    request
+      .map(
+        ([key, values]) =>
+          `    <span class="key" title="${
+            descriptions[key]["description"]
+          }">"${key}"</span>: ${format_values(key, values)},`
+      )
+      .join("\n") +
+    `\n}`;
+  container.innerHTML = html;
+}
 
 function renderRawSTACResponse(catalog) {
   const itemDetails = document.getElementById("raw-stac");
   // create new object without debug key
-    let just_stac = Object.assign({}, catalog);
-    delete just_stac.debug;
+  let just_stac = Object.assign({}, catalog);
+  delete just_stac.debug;
   itemDetails.textContent = JSON.stringify(just_stac, null, 2);
 
   const debug_container = document.getElementById("debug");
