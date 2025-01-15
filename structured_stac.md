@@ -1,7 +1,5 @@
 # STAC Generalized Datacubes Extension
 
-# Template Extension Specification
-
 - **Title:** Generalized Datacubes
 - **Identifier:** <https://stac-extensions.github.io/template/v1.0.0/schema.json>
 - **Field Name Prefix:** generalized_datacube
