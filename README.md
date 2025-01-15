@@ -18,7 +18,7 @@ This repostitory contains a collection of components designed to deliver user fr
 - 🌟 Implements our proposed [Datacube STAC Extension](./structured_stac.md).
 - 🛠️ Allows efficient traversal of ECMWF's datacubes.
 - Part of the implementation of this is [🌲 Tree Compressor](./tree_compresser), a **compressed tree representation** optimised for storing trees with many duplicated subtress. 
-- 🔗 **[Live Example]()**.
+- 🔗 **[Live Example](https://climate-catalogue.lumi.apps.dte.destination-earth.eu/api/stac?root=root&activity=story-nudging%2Cscenariomip&class=d1)**.
 
 ---
 
