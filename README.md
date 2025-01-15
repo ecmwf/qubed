@@ -1,6 +1,6 @@
 # Q<sup>3</sup> Quick Querying of Qubes
 
-This repostitory contains a collection of components designed to deliver user friendly cataloging for ecmwf's data. The STAC Server, Frontend and a periodic job to do tree compression can be deployed together to kubernetes using the [helm chart](./helm_chart). Thise deployment can then be accessed either via the Query Builder Web interface or the python client.
+This repostitory contains a collection of components designed to deliver user friendly cataloging for datacube data. The STAC Server, Frontend and a periodic job to do tree compression can be deployed together to kubernetes using the [helm chart](./helm_chart). Thise deployment can then be accessed either via the Query Builder Web interface or the python client.
 
 ## 📦 Components Overview
 
