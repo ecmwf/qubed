@@ -1,3 +1,10 @@
+
+> [!WARNING]
+> This project is under development and not yet feature complete or tested.
+
+> [!WARNING]
+> This project is BETA and will be experimental for the forseable future. Interfaces and functionality are likely to change, and the project itself may be scrapped. DO NOT use this software in any project/software that is operational.
+
 # Q<sup>3</sup> Quick Querying of Qubes
 
 This repostitory contains a collection of components designed to deliver user friendly cataloging for datacube data. The STAC Server, Frontend and a periodic job to do tree compression can be deployed together to kubernetes using the [helm chart](./helm_chart). Thise deployment can then be accessed either via the Query Builder Web interface or the python client.
