@@ -19,7 +19,7 @@ This repostitory contains a collection of components designed to deliver user fr
 > **Web Frontend**
 
 - 👀 Displays data from the **STAC Server** in an intuitive user interface.
-- 🌍 **[Try the Live Demo](http://catalogue.lumi.apps.dte.destination-earth.eu/)**.
+- 🌍 **[Try the Live Demo](https://climate-catalogue.lumi.apps.dte.destination-earth.eu/)**.
 
 ---
 
