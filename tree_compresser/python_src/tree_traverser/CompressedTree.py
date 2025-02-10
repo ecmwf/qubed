@@ -1,5 +1,6 @@
 import json
 from collections import defaultdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 Tree = dict[str, "Tree"]
@@ -13,6 +14,11 @@ class RefcountedDict(dict[str, int]):
     def __hash__(self):
         return hash(tuple(sorted(self.items())))
 
+@dataclass
+class JSONNode:
+    key: str
+    values: list[str]
+    children: list["JSONNode"]
 
 class CompressedTree():
     """
@@ -101,6 +107,23 @@ class CompressedTree():
             return {f"{key}={','.join(values)}" : reconstruct_node(h, depth=depth+1) for (h, key), values in dedup.items()}
         return reconstruct_node(from_node or self.root_hash, depth=0)
     
+    def to_json(self, max_depth=None, from_node=None) -> dict:
+        def reconstruct_node(h : int, depth : int) -> list[JSONNode]:
+            if max_depth is not None and depth > max_depth: 
+                return {}
+            dedup : dict[tuple[int, str], set[str]] = defaultdict(set)
+            for k, h2 in self.cache[h].items():
+                key, value = k.split("=")
+                dedup[(h2, key)].add(value)
+
+            return [JSONNode(
+                key = key,
+                values = list(values),
+                children = reconstruct_node(h, depth=depth+1),
+            ) for (h, key), values in dedup.items()]
+        
+        return asdict(reconstruct_node(from_node or self.root_hash, depth=0)[0])
+    
     def __init__(self, tree : Tree):
         self.cache = {}
         self.empty_hash = hash(RefcountedDict({}))
@@ -139,8 +162,8 @@ class CompressedTree():
         return list(loc.keys())
     
     def multi_match(self, request : dict[str, list[str]], loc = None):
-        if not loc: return {"_END_" : {}}
         if loc is None: loc = self.tree
+        if loc == {}: return {"_END_" : {}}
         matches = {}
         for request_key, request_values in request.items():
             for request_value in request_values:

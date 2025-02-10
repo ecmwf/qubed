@@ -1,7 +1,8 @@
 [package]
-name = "qubed_tree"
-version = "0.1.0"
+name = "qubed"
+version = "0.1.2"
 edition = "2021"
+repository = "https://github.com/ecmwf/qubed"
 
 [dependencies]
 rsfdb = {git = "https://github.com/ecmwf/rsfdb", branch = "develop"}
@@ -16,7 +17,7 @@ crate-type = ["cdylib"]
 path = "./rust_src/lib.rs"
 
 [patch.'https://github.com/ecmwf/rsfdb']
-rsfdb = { path = "../rsfdb" }
+rsfdb = { path = "../../rsfdb" }
 
 [patch.'https://github.com/ecmwf-projects/rsfindlibs']
-rsfindlibs = { path = "../rsfindlibs" }
+rsfindlibs = { path = "../../rsfindlibs" }
