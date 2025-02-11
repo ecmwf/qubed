@@ -87,7 +87,7 @@ Qubed will provide a core compressed tree data structure called a Qube  with:
 
 Methods to convert to and from:
 - [x] A human readable representation like those seen above.
-- [x] An HTML version where subtrees can be collapsed.
+- [x] An HTML version where subtrees can be collapsed [see here](https://confluence.ecmwf.int/display/~math/Qubed+Test+Page).
 - [ ] An compact protobuf-based binary format
 - [x] Nested python dictionaries or JSON
 - [ ] The output of [fdb list](https://confluence.ecmwf.int/display/FDB/fdb-list)
