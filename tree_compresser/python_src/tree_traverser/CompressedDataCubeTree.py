@@ -112,8 +112,10 @@ class CompressedTree:
         root = cache_tree(tree)
         return cls(cache = cache, root = cache[root])
     
-    def __str__(self):
-        return "".join(node_tree_to_string(self.root))
+    def __str__(self, depth=None) -> str:
+        return "".join(node_tree_to_string(self.root, depth = depth))
+    
+    def print(self, depth = None): print(self.__str__(depth = depth))
     
     def html(self, depth = 2, debug = False) -> HTML:
         return HTML(node_tree_to_html(self.root, depth = depth, debug = debug))

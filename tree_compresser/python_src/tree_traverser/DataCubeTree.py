@@ -89,14 +89,17 @@ class Tree:
         return cls.make("root", Enum(("root",)), [])
 
     
-    def __str__(self):
-        return "".join(node_tree_to_string(node=self))
+    def __str__(self, depth = None) -> str:
+        return "".join(node_tree_to_string(node=self, depth = depth))
+    
+    def print(self, depth = None): print(self.__str__(depth = depth))
     
     def html(self, depth = 2, collapse = True) -> HTML:
         return HTML(node_tree_to_html(self, depth = depth, collapse = collapse))
     
     def _repr_html_(self) -> str:
         return node_tree_to_html(self, depth = 2, collapse = True)
+
     
     def __getitem__(self, args) -> 'Tree':
         key, value = args
@@ -107,8 +110,6 @@ class Tree:
         raise KeyError(f"Key {key} not found in children of {self.key}")
 
     
-    def print(self, depth = None):
-        print("".join(cc for c in self.children for cc in node_tree_to_string(node=c, depth = depth)))
 
     def transform(self, func: 'Callable[[Tree], Tree | list[Tree]]') -> 'Tree':
         """
@@ -206,49 +207,44 @@ class Tree:
 
         Finally we return the node with all these new children.
         """
-        if not identifier:
-            return position
+        pass
+        # if not identifier:
+        #     return position
 
-        key, values = identifier.pop(0)
-        # print(f"Inserting {key}={values} into {position.summary()}")
+        # key, values = identifier.pop(0)
+        # # print(f"Inserting {key}={values} into {position.summary()}")
 
-        # Determine which children have this key
-        possible_children = {c : [] for c in position.children if c.key == key}
-        entirely_new_values = []
+        # # Only the children with the matching key are relevant.
+        # source_children = {c : [] for c in position.children if c.key == key}
+        # new_children = []
 
-        # For each value check it is already in one of the children
-        for v in values:
-            for c in possible_children:
-                if v in c.values:
-                    possible_children[c].append(v)
-                    break
-            else: # only executed if the loop did not break
-                # If none of the children have this value, add it to the new child pile
-                entirely_new_values.append(v)
+        # values = set(values)
+        # for c in source_children:
+        #     values_set = set(c.values)
+        #     group_1 = values_set - values
+        #     group_2 = values_set & values
+        #     values = values - values_set # At the end of this loop values will contain only the new values
 
-        # d = {p.summary() : v for p, v in possible_children.items()}
-        # print(f"  {d} new_values={entirely_new_values}")
+        #     if group_1:
+        #         group_1_node = Tree.make(c.key, Enum(tuple(group_1)), c.children)
+        #         new_children.append(group_1_node) # Add the unaffected part of this child
+            
+        #     if group_2:
+        #         new_node = Tree.make(key, Enum(tuple(affected)), [])
+        #         new_node = Tree._insert(new_node, identifier)
+        #         new_children.append(new_node) # Add the affected part of this child
 
-        new_children = []
-        for c, affected in possible_children.items():
-            if not affected:
-                new_children.append(c)
-                continue
 
-            unaffected = [x for x in c.values if x not in affected]
-            if unaffected:
-                unaffected_node = Tree.make(c.key, Enum(tuple(unaffected)), c.children)
-                new_children.append(unaffected_node) # Add the unaffected part of this child
+        #     unaffected = [x for x in c.values if x not in affected]
 
-            if affected: # This check is not technically necessary, but it makes the code more readable
-                new_node = Tree.make(key, Enum(tuple(affected)), [])
-                new_node = Tree._insert(new_node, identifier)
-                new_children.append(new_node) # Add the affected part of this child
 
-        # If there are any values not in any of the existing children, add them as a new child
-        if entirely_new_values:
-            new_node = Tree.make(key, Enum(tuple(entirely_new_values)), [])
-            new_children.append(Tree._insert(new_node, identifier))
+        #     if affected: # This check is not technically necessary, but it makes the code more readable
+
+
+        # # If there are any values not in any of the existing children, add them as a new child
+        # if entirely_new_values:
+        #     new_node = Tree.make(key, Enum(tuple(entirely_new_values)), [])
+        #     new_children.append(Tree._insert(new_node, identifier))
 
         return Tree.make(position.key, position.values, new_children)
 
