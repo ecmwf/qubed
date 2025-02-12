@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 from frozendict import frozendict
 
-from .DataCubeTree import Enum, NodeData, Tree
+from .Qube import Enum, NodeData, Tree
 from .tree_formatters import HTML, node_tree_to_html, node_tree_to_string
 
 NodeId = int

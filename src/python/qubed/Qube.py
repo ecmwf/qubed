@@ -1,5 +1,7 @@
 import dataclasses
+from collections import defaultdict
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Any, Callable, Hashable, Literal, Mapping
 
 from frozendict import frozendict
@@ -31,9 +33,9 @@ class NodeData:
         return f"{self.key}={self.values.summary()}" if self.key != "root" else "root"
 
 @dataclass(frozen=True, eq=True, order=True)
-class Tree:
+class Qube:
     data: NodeData
-    children: tuple['Tree', ...]
+    children: tuple['Qube', ...]
 
     @property
     def key(self) -> str:
@@ -52,7 +54,7 @@ class Tree:
         return self.data.summary()
     
     @classmethod
-    def make(cls, key : str, values : Values, children, **kwargs) -> 'Tree':
+    def make(cls, key : str, values : Values, children, **kwargs) -> 'Qube':
         return cls(
             data = NodeData(key, values,  metadata = kwargs.get("metadata", frozendict())
             ),
@@ -61,9 +63,9 @@ class Tree:
 
 
     @classmethod
-    def from_json(cls, json: dict) -> 'Tree':
-        def from_json(json: dict) -> Tree:
-            return Tree.make(
+    def from_json(cls, json: dict) -> 'Qube':
+        def from_json(json: dict) -> Qube:
+            return Qube.make(
                 key=json["key"],
                 values=values_from_json(json["values"]),
                 metadata=json["metadata"] if "metadata" in json else {},
@@ -72,20 +74,20 @@ class Tree:
         return from_json(json)
     
     @classmethod
-    def from_dict(cls, d: dict) -> 'Tree':
-        def from_dict(d: dict) -> tuple[Tree, ...]:
-            return tuple(Tree.make(
+    def from_dict(cls, d: dict) -> 'Qube':
+        def from_dict(d: dict) -> tuple[Qube, ...]:
+            return tuple(Qube.make(
                 key=k.split("=")[0],
                 values=Enum(tuple(k.split("=")[1].split("/"))),
                 children=from_dict(children)
             ) for k, children in d.items())
         
-        return Tree.make(key = "root",
+        return Qube.make(key = "root",
                               values=Enum(("root",)),
                               children = from_dict(d))
     
     @classmethod
-    def empty(cls) -> 'Tree':
+    def empty(cls) -> 'Qube':
         return cls.make("root", Enum(("root",)), [])
 
     
@@ -101,7 +103,7 @@ class Tree:
         return node_tree_to_html(self, depth = 2, collapse = True)
 
     
-    def __getitem__(self, args) -> 'Tree':
+    def __getitem__(self, args) -> 'Qube':
         key, value = args
         for c in self.children:
             if c.key == key and value in c.values:
@@ -111,16 +113,16 @@ class Tree:
 
     
 
-    def transform(self, func: 'Callable[[Tree], Tree | list[Tree]]') -> 'Tree':
+    def transform(self, func: 'Callable[[Qube], Qube | list[Qube]]') -> 'Qube':
         """
-        Call a function on every node of the tree, return one or more nodes.
+        Call a function on every node of the Qube, return one or more nodes.
         If multiple nodes are returned they each get a copy of the (transformed) children of the original node.
         Any changes to the children of a node will be ignored.
         """
-        def transform(node: Tree) -> list[Tree]:
+        def transform(node: Qube) -> list[Qube]:
             children = [cc for c in node.children for cc in transform(c)]
             new_nodes = func(node)
-            if isinstance(new_nodes, Tree):
+            if isinstance(new_nodes, Qube):
                 new_nodes = [new_nodes]
 
             return [dataclasses.replace(new_node, children = children)
@@ -129,35 +131,14 @@ class Tree:
         children = tuple(cc for c in self.children for cc in transform(c))
         return dataclasses.replace(self, children = children)
 
-    def guess_datatypes(self) -> 'Tree':
-        def guess_datatypes(node: Tree) -> list[Tree]:
-            # Try to convert enum values into more structured types
-            children = tuple(cc for c in node.children for cc in guess_datatypes(c))
-
-            if isinstance(node.values, Enum):
-                match node.key:
-                    case "time": range_class = TimeRange
-                    case "date": range_class = DateRange
-                    case _: range_class = None
-
-                if range_class is not None:
-                    return [
-                        dataclasses.replace(node, values = range, children = children)
-                        for range in range_class.from_strings(node.values.values)
-                    ]
-            return [dataclasses.replace(node, children = children)]
-
-        children = tuple(cc for c in self.children for cc in guess_datatypes(c))
-        return dataclasses.replace(self, children = children)
-
     
-    def select(self, selection : dict[str, str | list[str]], mode: Literal["strict", "relaxed"] = "relaxed") -> 'Tree':
+    def select(self, selection : dict[str, str | list[str]], mode: Literal["strict", "relaxed"] = "relaxed") -> 'Qube':
         # make all values lists
         selection = {k : v if isinstance(v, list) else [v] for k,v in selection.items()}
 
         def not_none(xs): return tuple(x for x in xs if x is not None)
 
-        def select(node: Tree) -> Tree | None: 
+        def select(node: Qube) -> Qube | None: 
             # Check if the key is specified in the selection
             if node.key not in selection: 
                 if mode == "strict":
@@ -176,10 +157,10 @@ class Tree:
     
 
     @staticmethod
-    def _insert(position: "Tree", identifier : list[tuple[str, list[str]]]):
+    def _insert(position: "Qube", identifier : list[tuple[str, list[str]]]):
         """
         This algorithm goes as follows:
-        We're at a particular node in the tree, and we have a list of key-values pairs that we want to insert.
+        We're at a particular node in the Qube, and we have a list of key-values pairs that we want to insert.
         We take the first key values pair
         key, values = identifier.pop(0)
 
@@ -226,12 +207,12 @@ class Tree:
         #     values = values - values_set # At the end of this loop values will contain only the new values
 
         #     if group_1:
-        #         group_1_node = Tree.make(c.key, Enum(tuple(group_1)), c.children)
+        #         group_1_node = Qube.make(c.key, Enum(tuple(group_1)), c.children)
         #         new_children.append(group_1_node) # Add the unaffected part of this child
             
         #     if group_2:
-        #         new_node = Tree.make(key, Enum(tuple(affected)), [])
-        #         new_node = Tree._insert(new_node, identifier)
+        #         new_node = Qube.make(key, Enum(tuple(affected)), [])
+        #         new_node = Qube._insert(new_node, identifier)
         #         new_children.append(new_node) # Add the affected part of this child
 
 
@@ -243,17 +224,17 @@ class Tree:
 
         # # If there are any values not in any of the existing children, add them as a new child
         # if entirely_new_values:
-        #     new_node = Tree.make(key, Enum(tuple(entirely_new_values)), [])
-        #     new_children.append(Tree._insert(new_node, identifier))
+        #     new_node = Qube.make(key, Enum(tuple(entirely_new_values)), [])
+        #     new_children.append(Qube._insert(new_node, identifier))
 
-        return Tree.make(position.key, position.values, new_children)
+        return Qube.make(position.key, position.values, new_children)
 
-    def insert(self, identifier : dict[str, list[str]]) -> 'Tree':
+    def insert(self, identifier : dict[str, list[str]]) -> 'Qube':
         insertion = [(k, v) for k, v in identifier.items()]
-        return Tree._insert(self, insertion)
+        return Qube._insert(self, insertion)
     
     def to_list_of_cubes(self):
-        def to_list_of_cubes(node: Tree) -> list[list[Tree]]:
+        def to_list_of_cubes(node: Qube) -> list[list[Qube]]:
             return [[node] + sub_cube for c in node.children for sub_cube in to_list_of_cubes(c)]
 
         return to_list_of_cubes(self)
@@ -261,3 +242,53 @@ class Tree:
     def info(self):
         cubes = self.to_list_of_cubes()
         print(f"Number of distinct paths: {len(cubes)}")
+
+    @cached_property
+    def structural_hash(self) -> int:
+        """
+        This hash takes into account the key, values and children's key values recursively.
+        Because nodes are immutable, we only need to compute this once.
+        """
+        def hash_node(node: Qube) -> int:
+            return hash((node.key, node.values, tuple(c.structural_hash for c in node.children)))
+
+        return hash_node(self)
+
+    def compress(self) -> "Qube":
+        # First compress the children
+        new_children = [child.compress() for child in self.children]
+
+        # Now take the set of new children and see if any have identical key, metadata and children
+        # the values may different and will be collapsed into a single node
+        identical_children = defaultdict(set)
+        for child in new_children:
+            # only care about the key and children of each node, ignore values
+            key = hash((child.key, tuple((cc.structural_hash for cc in child.children))))
+            identical_children[key].add(child)
+        
+        # Now go through and create new compressed nodes for any groups that need collapsing
+        new_children = []
+        for child_set in identical_children.values():
+            if len(child_set) > 1:
+                child_set = list(child_set)
+                key = child_set[0].key
+
+                # Compress the children into a single node
+                assert all(isinstance(child.data.values, Enum) for child in child_set), "All children must have Enum values"
+                
+                node_data = NodeData(
+                    key = key,
+                    metadata = frozendict(), # Todo: Implement metadata compression
+                    values = Enum(tuple(v for child in child_set for v in child.data.values.values)),
+                )
+                new_child = Qube(data = node_data, children = child_set[0].children)
+            else:
+                # If the group is size one just keep it
+                new_child = child_set.pop()
+            
+            new_children.append(new_child)
+
+        return Qube(
+            data = self.data,
+            children = tuple(sorted(new_children))
+        )

@@ -14,10 +14,10 @@ pyo3 = "0.23"
 [lib]
 name = "tree_traverser"
 crate-type = ["cdylib"]
-path = "./rust_src/lib.rs"
+path = "./src/rust/lib.rs"
 
 [patch.'https://github.com/ecmwf/rsfdb']
-rsfdb = { path = "../../rsfdb" }
+rsfdb = { path = "../rsfdb" }
 
 [patch.'https://github.com/ecmwf-projects/rsfindlibs']
-rsfindlibs = { path = "../../rsfindlibs" }
+rsfindlibs = { path = "../rsfindlibs" }

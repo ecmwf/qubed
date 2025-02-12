@@ -3,8 +3,8 @@ requires = ["maturin>=1.7,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "tree_traverser"
-description = "Tools to work with compressed Datacubes and Trees"
+name = "qubed"
+description = "A library that provides a tree of datacubes called Qube."
 readme = "README.md"
 authors = [
   {name = "Tom Hodson", email = "thomas.hodson@ecmwf.int"},
@@ -21,10 +21,9 @@ dependencies = [
 ]
 
 [tool.maturin]
-python-source = "python_src"
-module-name = "tree_traverser.rust"
+python-source = "src/python"
+module-name = "qubed.rust"
 features = ["pyo3/extension-module"]
-
 
 
 [project.optional-dependencies]
@@ -32,6 +31,6 @@ features = ["pyo3/extension-module"]
 docs = [
     "sphinx",
     "sphinx-rtd-theme",
-    "myst-parser",
+    "myst_nb",
     "sphinx-autobuild"
 ]

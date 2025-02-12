@@ -17,17 +17,15 @@ release = '0.1.0'
 extensions = [
     "sphinx.ext.autodoc",  # for generating documentation from the docstrings in our code
     "sphinx.ext.napoleon",  # for parsing Numpy and Google stye docstrings
-    "myst_parser",  # For parsing markdown
+    "myst_nb",  # For parsing markdown
 ]
 
 templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', "jupyter_execute"]
 
 
 source_suffix = {
     ".rst": "restructuredtext",
-    ".txt": "markdown",
-    ".md": "markdown",
 }
 
 # -- Options for HTML output -------------------------------------------------

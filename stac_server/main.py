@@ -1,8 +1,8 @@
 import json
 import os
 from collections import defaultdict
-from typing import Any, Dict
 from pathlib import Path
+from typing import Any, Dict
 
 import redis
 import yaml
@@ -107,6 +107,12 @@ def get_leaves(tree):
         else: 
             for leaf in get_leaves(v):
                 yield leaf
+
+@app.get("/api/tree")
+async def get_tree(request: Request):
+    request_dict = request_to_dict(request)
+    print(c_tree.multi_match(request_dict))
+    return c_tree.multi_match(request_dict)
 
 @app.get("/api/match")
 async def get_match(request: Request):
