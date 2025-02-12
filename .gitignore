@@ -6,3 +6,4 @@ config.yaml
 raw_list
 *.egg-info/
 deps/
+docs/_build/
