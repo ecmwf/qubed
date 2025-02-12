@@ -20,6 +20,9 @@ dependencies = [
     "frozendict",
 ]
 
+[project.scripts]
+qubed = "qubed.__main__:main"
+
 [tool.maturin]
 python-source = "src/python"
 module-name = "qubed.rust"

@@ -29,6 +29,7 @@ def main():
     # Read from standard input
     l = 0
     for line in sys.stdin.readlines():
+        l += 1
         
     
     # Process data (For now, just echoing the input)
