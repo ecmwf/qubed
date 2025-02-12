@@ -9,3 +9,4 @@ deps/
 docs/_build/
 docs/jupyter_execute
 target/
+*.so
