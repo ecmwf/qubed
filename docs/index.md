@@ -66,7 +66,8 @@ q = Qube.from_dict({
     },
 })
 
-q.print()
+# depth controls how much of the tree is open when rendered as html.
+q.html(depth=100)
 ```
 
 But it's clear that the above tree contains a lot of redundant information. Many of the subtrees are identical for example. Indeed in practice a lot of our data turns out to be 'nearly dense' in that it contains many dense datacubes within it.
@@ -74,7 +75,7 @@ But it's clear that the above tree contains a lot of redundant information. Many
 There are many valid ways one could compress this tree. If we add the restriction that no identical key=value pairs can be adjacent then here is the compressed tree we might get:
 
 ```{code-cell} python3
-q.compress().print()
+q.compress()
 ````
 
 Without the above restriction we could, for example, have:
@@ -91,7 +92,7 @@ but we do not allow this because it would mean we would have to take multiple br
 
 What we have now is a tree of dense datacubes which represents a single larger sparse datacube in a more compact manner. For want of a better word we'll call it a Qube.
 
-### HTML Output
+### HTML Output
 
 ```{code-cell} python3
 q.compress().html()

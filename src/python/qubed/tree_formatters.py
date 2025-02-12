@@ -79,6 +79,9 @@ def node_tree_to_html(node : TreeLike, depth = 1, **kwargs) -> str:
         .qubed-tree-view {
             font-family: monospace;
             white-space: pre;
+            font-family: SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,Courier,monospace;
+            font-size: 12px;
+            line-height: 1.4;
         }
         .qubed-tree-view details {
             # display: inline;
