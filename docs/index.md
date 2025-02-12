@@ -78,17 +78,17 @@ There are many valid ways one could compress this tree. If we add the restrictio
 q.compress()
 ````
 
+```{warning}
 Without the above restriction we could, for example, have:
 
-```
-root
-├── class=od, expver=0001/0002, param=1/2
-└── class=rd
-    ├── expver=0001, param=3
-    └── expver=0001/0002, param=1/2
-```
+    root
+    ├── class=od, expver=0001/0002, param=1/2
+    └── class=rd
+        ├── expver=0001, param=3
+        └── expver=0001/0002, param=1/2
 
 but we do not allow this because it would mean we would have to take multiple branches in order to find data with `expver=0001`.
+```
 
 What we have now is a tree of dense datacubes which represents a single larger sparse datacube in a more compact manner. For want of a better word we'll call it a Qube.
 
