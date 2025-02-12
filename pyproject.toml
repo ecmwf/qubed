@@ -17,7 +17,7 @@ classifiers = [
 requires-python = ">= 3.11"
 dynamic = ["version"]
 dependencies = [
-    "pe"
+    "frozendict",
 ]
 
 [tool.maturin]
@@ -27,11 +27,25 @@ features = ["pyo3/extension-module"]
 
 
 [project.optional-dependencies]
-rust-backend = ["maturin"]
+rust-backend = ["maturin", "pyo3"]
+
+stac_server = [
+    "fastapi",
+]
 
 docs = [
     "sphinx",
     "sphinx-rtd-theme",
     "myst_nb",
     "sphinx-autobuild"
+]
+
+dev = [
+    "pytest",
+    "black",
+    "ruff",
+    "flake8",
+    "pre-commit",
+    "isort",
+    "responses",
 ]
