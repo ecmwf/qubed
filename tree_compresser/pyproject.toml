@@ -25,3 +25,13 @@ python-source = "python_src"
 module-name = "tree_traverser.rust"
 features = ["pyo3/extension-module"]
 
+
+
+[project.optional-dependencies]
+
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+    "myst-parser",
+    "sphinx-autobuild"
+]
