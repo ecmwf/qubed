@@ -22,3 +22,9 @@ threshold:
     time: 
       - product could be specific to a particular time
       - could require at least a months worth of data
+
+
+make some fake models that have:
+ - fewer params
+ - continous times vs steps of 6 hours
+ - 
