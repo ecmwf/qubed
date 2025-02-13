@@ -10,3 +10,6 @@ docs/_build/
 docs/jupyter_execute
 target/
 *.so
+_build/
+build/
+.ipynb_checkpoints/
