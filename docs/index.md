@@ -10,6 +10,10 @@ jupytext:
 # Qubed
 
 ```{toctree}
+:maxdepth: 1
+quickstart.md
+api.md
+development.md
 algorithms.md
 ```
 

@@ -1,4 +1,12 @@
-# Qube Algorithms
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.4
+---
+# Under the Hood
 
 ## Set Operations
 
@@ -55,16 +63,17 @@ This structure means that node.values can take different types, the two most use
 
 Qube.fused_set_operations can dispatch on the two types given in order to efficiently compute set/set, set/range and range/range intersection operations.
 
-### Performance considerations
+### Performance considerations
 
 This algorithm is quadratic in the number of matching keys, this means that if we have a level with a huge number of nodes with key 'date' and range types (since range types are currently restricted to being contiguous) we could end up with a quadtratic slow down.
 
 There are some ways this can be sped up:
-    * Once we know any of just_A, intersection or just_B are empty we can discard them. Only for quite pathological inputs (many enums sparse enums with a lot of overlap) would you actually get quadratically many non-empty terms.
 
-    * For ranges intersected with ranges, we could speed the algorithm up significantly by sorting the ranges and walking the two lists in tandem which reduces it to linear in the number of ranges.
+* Once we know any of just_A, intersection or just_B are empty we can discard them. Only for quite pathological inputs (many enums sparse enums with a lot of overlap) would you actually get quadratically many non-empty terms.
 
-    * If we have N_A and N_B nodes to compare between the two trees we have N_A*N_B comparisons to do. However if at the end of the day we're just trying to determine for each value whether it's in A, B or both. If N_A*N_B >> M the number of value s we might be able to switch to an alternative algorithm.
+* For ranges intersected with ranges, we could speed the algorithm up significantly by sorting the ranges and walking the two lists in tandem which reduces it to linear in the number of ranges.
+
+* If we have N_A and N_B nodes to compare between the two trees we have N_A*N_B comparisons to do. However if at the end of the day we're just trying to determine for each value whether it's in A, B or both. If N_A*N_B >> M the number of value s we might be able to switch to an alternative algorithm.
 
 
 ## Compression
