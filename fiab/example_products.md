@@ -28,3 +28,10 @@ make some fake models that have:
  - fewer params
  - continous times vs steps of 6 hours
  - 
+
+
+Could also represent what data is currently cached on disk and be able to then tell the use what stuff they can generate really fast.
+
+API want:
+  - way to get axis span like what params exist
+  - 
