@@ -6,6 +6,7 @@ from typing import Any, Callable, Hashable, Literal, Mapping
 
 from frozendict import frozendict
 
+from . import set_operations
 from .tree_formatters import HTML, node_tree_to_html, node_tree_to_string
 from .value_types import DateRange, Enum, IntRange, TimeRange, Values
 
@@ -31,6 +32,12 @@ class NodeData:
 
     def summary(self) -> str:
         return f"{self.key}={self.values.summary()}" if self.key != "root" else "root"
+    
+@dataclass(frozen=True, eq=True, order=True)
+class RootNodeData(NodeData):
+    "Helper class to print a custom root name"
+    def summary(self) -> str:
+        return self.key
 
 @dataclass(frozen=True, eq=True, order=True)
 class Qube:
@@ -91,16 +98,21 @@ class Qube:
         return cls.make("root", Enum(("root",)), [])
 
     
-    def __str__(self, depth = None) -> str:
-        return "".join(node_tree_to_string(node=self, depth = depth))
+    def __str__(self, depth = None, name = None) -> str:
+        node = dataclasses.replace(self, data = RootNodeData(key = name, values=self.values, metadata=self.metadata)) if name is not None else self
+        return "".join(node_tree_to_string(node=node, depth = depth))
     
-    def print(self, depth = None): print(self.__str__(depth = depth))
+    def print(self, depth = None, name: str | None = None): 
+        print(self.__str__(depth = depth, name = name))
     
     def html(self, depth = 2, collapse = True) -> HTML:
         return HTML(node_tree_to_html(self, depth = depth, collapse = collapse))
     
     def _repr_html_(self) -> str:
         return node_tree_to_html(self, depth = 2, collapse = True)
+    
+    def __or__(self, other: "Qube") -> "Qube":
+        return set_operations.operation(self, other, set_operations.SetOperation.UNION)
 
     
     def __getitem__(self, args) -> 'Qube':
@@ -111,7 +123,13 @@ class Qube:
                 return dataclasses.replace(c, data = data)
         raise KeyError(f"Key {key} not found in children of {self.key}")
 
-    
+    @cached_property
+    def n_leaves(self) -> int:
+        return len(self.values) * (sum(c.n_leaves for c in self.children) if self.children else 1)
+
+    @cached_property
+    def n_nodes(self) -> int:
+        return 1 + sum(c.n_nodes for c in self.children)
 
     def transform(self, func: 'Callable[[Qube], Qube | list[Qube]]') -> 'Qube':
         """
