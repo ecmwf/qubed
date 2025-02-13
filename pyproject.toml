@@ -57,5 +57,5 @@ dev = [
     "flake8",
     "pre-commit",
     "isort",
-    "responses",
+
 ]
