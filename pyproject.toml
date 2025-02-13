@@ -20,6 +20,11 @@ dependencies = [
     "frozendict",
 ]
 
+# Because this is a mixed rust/python project the structure is src/python/qubed rather than the more typical src/qubed
+# Since this is slightly non-standard so we have to explicitly tell setuptools the python source is there.
+[tool.setuptools.packages.find]
+where = ["src/python"]
+
 [project.scripts]
 qubed = "qubed.__main__:main"
 
@@ -40,7 +45,9 @@ docs = [
     "sphinx",
     "sphinx-rtd-theme",
     "myst_nb",
-    "sphinx-autobuild"
+    "sphinx-autobuild",
+    "jupyterlab",
+    "ipykernel",
 ]
 
 dev = [
