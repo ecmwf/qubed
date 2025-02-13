@@ -5,12 +5,13 @@ jupytext:
     format_name: myst
     format_version: 0.13
     jupytext_version: 1.16.4
-kernelspec:
-  display_name: Python 3
-  language: python
-  name: python3
 ---
-## Qubed
+
+# Qubed
+
+```{toctree}
+algorithms.md
+```
 
 # Datacubes, Trees and Compressed trees
 
@@ -92,7 +93,7 @@ but we do not allow this because it would mean we would have to take multiple br
 
 What we have now is a tree of dense datacubes which represents a single larger sparse datacube in a more compact manner. For want of a better word we'll call it a Qube.
 
-### HTML Output
+## HTML Output
 
 ```{code-cell} python3
 q.compress().html()
@@ -111,7 +112,7 @@ Methods to convert to and from:
 - [ ] [mars list][mars list]
 - [ ] [constraints.json][constraints]
 
-[constraints]: (https://object-store.os-api.cci2.ecmwf.int/cci2-prod-catalogue/resources/reanalysis-era5-land/constraints_a0ae5b42d67869674e13fba9fd055640bcffc37c24578be1f465d7d5ab2c7ee5.json
+[constraints]: https://object-store.os-api.cci2.ecmwf.int/cci2-prod-catalogue/resources/reanalysis-era5-land/constraints_a0ae5b42d67869674e13fba9fd055640bcffc37c24578be1f465d7d5ab2c7ee5.json
 [mars list]: https://git.ecmwf.int/projects/CDS/repos/cads-forms-reanalysis/browse/reanalysis-era5-single-levels/gecko-config/mars.list?at=refs%2Fheads%2Fprod
 
 Useful algorithms:
