@@ -1,3 +1,4 @@
+import random
 from dataclasses import dataclass
 from typing import Iterable, Protocol, Sequence, runtime_checkable
 
@@ -74,46 +75,56 @@ def _node_tree_to_html(node : TreeLike, prefix : str = "", depth = 1, connector 
     yield "</details>"
 
 def node_tree_to_html(node : TreeLike, depth = 1, **kwargs) -> str:
-        css = """
+        css_id = f"qubed-tree-{random.randint(0, 1000000)}"
+        css = f"""
         <style>
-        .qubed-tree-view {
+        pre#{css_id} """ \
+        """{
             font-family: monospace;
             white-space: pre;
             font-family: SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,Courier,monospace;
             font-size: 12px;
             line-height: 1.4;
-        }
-        .qubed-tree-view details {
-            # display: inline;
-            margin-left: 0;
-        }
-        .qubed-tree-view summary {
-            list-style: none;
-            cursor: pointer;
-            text-overflow: ellipsis;
-            overflow: hidden;
-            text-wrap: nowrap;
-            display: block;
-        }
+            
+            details {
+                margin-left: 0;
+            }
 
-        .qubed-tree-view .leaf {
-            text-overflow: ellipsis;
-            overflow: hidden;
-            text-wrap: nowrap;
-            display: block;
-        }
+            summary {
+                list-style: none;
+                cursor: pointer;
+                text-overflow: ellipsis;
+                overflow: hidden;
+                text-wrap: nowrap;
+                display: block;
+            }
 
-        .qubed-tree-view summary:hover,span.leaf:hover {
-            background-color: #f0f0f0;
-        }
-        .qubed-tree-view details > summary::after {
-            content: ' ▲';
-        }
-        .qubed-tree-view details:not([open]) > summary::after {
-            content: " ▼";
+            summary:hover,span.leaf:hover {
+                background-color: #f0f0f0;
+            }
+
+            details > summary::after {
+                content: ' ▲';
+            }
+
+            details:not([open]) > summary::after {
+                content: " ▼";
+            }
+
+            .leaf {
+                text-overflow: ellipsis;
+                overflow: hidden;
+                text-wrap: nowrap;
+                display: block;
+            }
+
+            summary::-webkit-details-marker {
+              display: none; 
+              content: "";
+            }
+
         }
         </style>
-
         """
         nodes = "".join(_node_tree_to_html(node=node, depth=depth, **kwargs))
-        return f"{css}<pre class='qubed-tree-view'>{nodes}</pre>"
+        return f"{css}<pre class='qubed-tree' id='{css_id}'>{nodes}</pre>"

@@ -1,43 +1,16 @@
 import dataclasses
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Callable, Hashable, Literal, Mapping
+from typing import Any, Callable, Literal
 
 from frozendict import frozendict
 
 from . import set_operations
+from .node_types import NodeData, RootNodeData
 from .tree_formatters import HTML, node_tree_to_html, node_tree_to_string
-from .value_types import DateRange, Enum, IntRange, TimeRange, Values
+from .value_types import QEnum, Values, values_from_json
 
-
-def values_from_json(obj) -> Values:
-    if isinstance(obj, list): 
-        return Enum(tuple(obj))
-
-    match obj["dtype"]:
-        case "date": return DateRange(**obj)
-        case "time": return TimeRange(**obj)
-        case "int": return IntRange(**obj)
-        case _: raise ValueError(f"Unknown dtype {obj['dtype']}")
-
-# In practice use a frozendict
-Metadata = Mapping[str, str | int | float | bool]
-
-@dataclass(frozen=True, eq=True, order=True)
-class NodeData:
-    key: str
-    values: Values
-    metadata: dict[str, tuple[Hashable, ...]] = field(default_factory=frozendict, compare=False)
-
-    def summary(self) -> str:
-        return f"{self.key}={self.values.summary()}" if self.key != "root" else "root"
-    
-@dataclass(frozen=True, eq=True, order=True)
-class RootNodeData(NodeData):
-    "Helper class to print a custom root name"
-    def summary(self) -> str:
-        return self.key
 
 @dataclass(frozen=True, eq=True, order=True)
 class Qube:
@@ -85,17 +58,17 @@ class Qube:
         def from_dict(d: dict) -> tuple[Qube, ...]:
             return tuple(Qube.make(
                 key=k.split("=")[0],
-                values=Enum(tuple(k.split("=")[1].split("/"))),
+                values=QEnum((k.split("=")[1].split("/"))),
                 children=from_dict(children)
             ) for k, children in d.items())
         
         return Qube.make(key = "root",
-                              values=Enum(("root",)),
+                              values=QEnum(("root",)),
                               children = from_dict(d))
     
     @classmethod
     def empty(cls) -> 'Qube':
-        return cls.make("root", Enum(("root",)), [])
+        return cls.make("root", QEnum(("root",)), [])
 
     
     def __str__(self, depth = None, name = None) -> str:
@@ -119,7 +92,7 @@ class Qube:
         key, value = args
         for c in self.children:
             if c.key == key and value in c.values:
-                data = dataclasses.replace(c.data, values = Enum((value,)))
+                data = dataclasses.replace(c.data, values = QEnum((value,)))
                 return dataclasses.replace(c, data = data)
         raise KeyError(f"Key {key} not found in children of {self.key}")
 
@@ -164,7 +137,7 @@ class Qube:
                 return dataclasses.replace(node, children = not_none(select(c) for c in node.children))
             
             # If the key is specified, check if any of the values match
-            values = Enum(tuple(c for c in selection[node.key] if c in node.values))
+            values = QEnum((c for c in selection[node.key] if c in node.values))
 
             if not values: 
                 return None 
@@ -225,11 +198,11 @@ class Qube:
         #     values = values - values_set # At the end of this loop values will contain only the new values
 
         #     if group_1:
-        #         group_1_node = Qube.make(c.key, Enum(tuple(group_1)), c.children)
+        #         group_1_node = Qube.make(c.key, QEnum((group_1)), c.children)
         #         new_children.append(group_1_node) # Add the unaffected part of this child
             
         #     if group_2:
-        #         new_node = Qube.make(key, Enum(tuple(affected)), [])
+        #         new_node = Qube.make(key, QEnum((affected)), [])
         #         new_node = Qube._insert(new_node, identifier)
         #         new_children.append(new_node) # Add the affected part of this child
 
@@ -242,7 +215,7 @@ class Qube:
 
         # # If there are any values not in any of the existing children, add them as a new child
         # if entirely_new_values:
-        #     new_node = Qube.make(key, Enum(tuple(entirely_new_values)), [])
+        #     new_node = Qube.make(key, QEnum((entirely_new_values)), [])
         #     new_children.append(Qube._insert(new_node, identifier))
 
         return Qube.make(position.key, position.values, new_children)
@@ -292,12 +265,12 @@ class Qube:
                 key = child_set[0].key
 
                 # Compress the children into a single node
-                assert all(isinstance(child.data.values, Enum) for child in child_set), "All children must have Enum values"
+                assert all(isinstance(child.data.values, QEnum) for child in child_set), "All children must have QEnum values"
                 
                 node_data = NodeData(
                     key = key,
                     metadata = frozendict(), # Todo: Implement metadata compression
-                    values = Enum(tuple(v for child in child_set for v in child.data.values.values)),
+                    values = QEnum((v for child in child_set for v in child.data.values.values)),
                 )
                 new_child = Qube(data = node_data, children = child_set[0].children)
             else:

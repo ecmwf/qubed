@@ -97,11 +97,6 @@ but we do not allow this because it would mean we would have to take multiple br
 
 What we have now is a tree of dense datacubes which represents a single larger sparse datacube in a more compact manner. For want of a better word we'll call it a Qube.
 
-## HTML Output
-
-```{code-cell} python3
-q.compress().html()
-````
 
 ## API
 

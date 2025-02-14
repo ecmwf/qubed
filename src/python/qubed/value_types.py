@@ -2,7 +2,7 @@ import dataclasses
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any, Iterable, Literal
+from typing import Any, FrozenSet, Iterable, Literal, TypeVar
 
 
 @dataclass(frozen=True)
@@ -22,13 +22,19 @@ class Values(ABC):
     def from_strings(self, values: Iterable[str]) -> list['Values']:
         pass
 
+T = TypeVar("T")
+EnumValuesType = FrozenSet[T]
 @dataclass(frozen=True, order=True)
-class Enum(Values):
+
+class QEnum(Values):
     """
     The simplest kind of key value is just a list of strings.
     summary -> string1/string2/string....
     """
-    values: tuple[Any, ...]
+    values: EnumValuesType
+
+    def __init__(self, obj):
+       object.__setattr__(self, 'values', frozenset(obj))
 
     def __post_init__(self):
         assert isinstance(self.values, tuple)
@@ -43,7 +49,7 @@ class Enum(Values):
     def __contains__(self, value: Any) -> bool:
         return value in self.values
     def from_strings(self, values: Iterable[str]) -> list['Values']:
-        return [Enum(tuple(values))]
+        return [type(self)(tuple(values))]
 
 @dataclass(frozen=True)
 class Range(Values, ABC):
@@ -115,8 +121,6 @@ class TimeRange(Range):
 
     @classmethod
     def from_strings(self, values: Iterable[str]) -> list['TimeRange']:
-        if len(values) == 0: return []
-
         times = sorted([int(v) for v in values])
         if len(times) < 2:
             return [TimeRange(
@@ -181,7 +185,6 @@ class IntRange(Range):
     
     @classmethod
     def from_strings(self, values: Iterable[str]) -> list['IntRange']:
-        if len(values) == 0: return []
         ints = sorted([int(v) for v in values])
         if len(ints) < 2:
             return [IntRange(
@@ -212,3 +215,13 @@ class IntRange(Range):
                 ))
                 current_range = [ints.pop(0),]
         return ranges
+    
+def values_from_json(obj) -> Values:
+    if isinstance(obj, list): 
+        return QEnum(tuple(obj))
+
+    match obj["dtype"]:
+        case "date": return DateRange(**obj)
+        case "time": return TimeRange(**obj)
+        case "int": return IntRange(**obj)
+        case _: raise ValueError(f"Unknown dtype {obj['dtype']}")
