@@ -142,10 +142,28 @@ class Qube:
             if not values: 
                 return None 
             
-            return dataclasses.replace(node, values = values, children = not_none(select(c) for c in node.children))
+            data = dataclasses.replace(node.data, values = values)
+            return dataclasses.replace(node, data=data, children = not_none(select(c) for c in node.children))
             
         return dataclasses.replace(self, children = not_none(select(c) for c in self.children))
     
+    def span(self, key: str) -> list[str]:
+        """
+        Search the whole tree for any value that a given key takes anywhere.
+        """
+        this = set(self.values) if self.key == key else set() 
+        return sorted(this | set(v for c in self.children for v in c.span(key)))
+    
+    def axes(self) -> dict[str, set[str]]:
+        """
+        Return a dictionary of all the spans of the keys in the qube.
+        """
+        axes = defaultdict(set)
+        for c in self.children:
+            for k, v in c.axes().items():
+                axes[k].update(v)
+        axes[self.key].update(self.values)
+        return dict(axes)
 
     @staticmethod
     def _insert(position: "Qube", identifier : list[tuple[str, list[str]]]):

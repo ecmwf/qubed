@@ -45,18 +45,39 @@ cq
 Load a larger example qube (requires source checkout):
 
 ```{code-cell} python3
-from pathlib import Path
-import json
-data_path = Path("../tests/example_qubes/climate_dt.json")
-with data_path.open("r") as f:
-    climate_dt = Qube.from_json(json.loads(f.read()))
+import requests
+qube_json = requests.get("https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/climate_dt.json").json()
+climate_dt = Qube.from_json(qube_json)
 
 # Using the html or print methods is optional but lets you specify things like the depth of the tree to display.
 print(f"{climate_dt.n_leaves = }, {climate_dt.n_nodes = }")
 climate_dt.html(depth=1) # Limit how much is open initially, click leave to see more.
 ```
 
-### Set Operations
+Select a subset of the tree:
+
+```{code-cell} python3
+climate_dt.select({
+    "activity": "scenariomip"
+}).html(depth=1)
+```
+
+Use `.span("key")` to get the set of possibles values for a key, note this includes anywhere this key appears in the tree.
+
+```{code-cell} python3
+climate_dt.span("activity")
+```
+
+Use `.axes()` to get the span of every key in one go.
+
+```{code-cell} python3
+axes = climate_dt.axes()
+for key, values in axes.items():
+    print(f"{key} : {list(values)[:10]}")
+```
+
+
+<!-- ### Set Operations
 
 ```{code-cell} python3
 A = Qube.from_dict({
@@ -72,16 +93,27 @@ B = Qube.from_dict({
 A.print(name="A"), B.print(name="B");
 
 A | B
-```
+``` -->
 
-### Command Line Usage
+<!-- ### Command Line Usage
 
 ```bash 
 fdb list class=rd,expver=0001,... | qubed --from=fdblist --to=text
 ```
 
-`--from` options include: `fdblist`, `json`, `protobuf`, `marslist`, `constraints`.
-`--to` options include `text`, `html`, `json`, `datacubes` `constraints`.
+`--from` options include: 
+* `fdblist`
+* `json`
+* `protobuf`
+* `marslist`
+* `constraints`
 
-use `--input` and `--output` to specify input and output files respectively.
+`--to` options include:
+* `text`
+* `html`
+* `json`
+* `datacubes`
+* `constraints`
+
+use `--input` and `--output` to specify input and output files respectively. -->
 
