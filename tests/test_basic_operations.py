@@ -27,14 +27,42 @@ def test_n_leaves():
     assert q.n_leaves == 27 + 1
 
 
-# def test_union():
-#         q = Qube.from_dict({"a=1/2/3" : {"b=1" : {}},})
-#         r = Qube.from_dict({"a=2/3/4" : {"b=2" : {}},})
+def test_union():
+    q = Qube.from_dict({"a=1/2/3" : {"b=1" : {}},})
+    r = Qube.from_dict({"a=2/3/4" : {"b=2" : {}},})
 
-#         u = Qube.from_dict({
-#              "a=1" : {"b=1" : {}},
-#              "a=1/2/3" : {"b=1/2" : {}},
-#              "a=4" : {"b=2" : {}},
-#         })
+    u = Qube.from_dict({
+        "a=4" : {"b=2" : {}},
+        "a=1" : {"b=1" : {}},
+        "a=2/3" : {"b=1/2" : {}},
 
-#         assert q | r == u
+    })
+
+    assert q | r == u
+
+def test_difference():
+    q = Qube.from_dict({"a=1/2/3/5" : {"b=1" : {}},})
+    r = Qube.from_dict({"a=2/3/4" : {"b=1" : {}},})
+
+    i = Qube.from_dict({
+        "a=1/5" : {"b=1" : {}},
+
+    })
+
+    assert q - r == i
+
+def test_order_independence():
+    u = Qube.from_dict({
+            "a=4" : {"b=2" : {}},
+            "a=1" : {"b=2" : {}, "b=1" : {}},
+            "a=2/3" : {"b=1/2" : {}},
+
+        })
+
+    v = Qube.from_dict({
+        "a=2/3" : {"b=1/2" : {}},
+        "a=4" : {"b=2" : {}},
+        "a=1" : {"b=1" : {}, "b=2" : {}},
+    })
+
+    assert u == v

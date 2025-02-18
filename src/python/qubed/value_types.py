@@ -21,6 +21,10 @@ class Values(ABC):
     @abstractmethod
     def from_strings(self, values: Iterable[str]) -> list['Values']:
         pass
+    
+    @abstractmethod
+    def min(self):
+        pass
 
 T = TypeVar("T")
 EnumValuesType = FrozenSet[T]
@@ -50,6 +54,8 @@ class QEnum(Values):
         return value in self.values
     def from_strings(self, values: Iterable[str]) -> list['Values']:
         return [type(self)(tuple(values))]
+    def min(self):
+        return min(self.values)
 
 @dataclass(frozen=True)
 class Range(Values, ABC):

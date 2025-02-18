@@ -38,7 +38,9 @@ class Qube:
         return cls(
             data = NodeData(key, values,  metadata = kwargs.get("metadata", frozendict())
             ),
-            children = tuple(sorted(children)),
+            children = tuple(sorted(children, 
+                                    key = lambda n : ((n.key, n.values.min()))
+                                    )),
         )
 
 
@@ -49,18 +51,19 @@ class Qube:
                 key=json["key"],
                 values=values_from_json(json["values"]),
                 metadata=json["metadata"] if "metadata" in json else {},
-                children=tuple(from_json(c) for c in json["children"])
+                children=(from_json(c) for c in json["children"]),
             )
         return from_json(json)
     
     @classmethod
     def from_dict(cls, d: dict) -> 'Qube':
-        def from_dict(d: dict) -> tuple[Qube, ...]:
-            return tuple(Qube.make(
-                key=k.split("=")[0],
-                values=QEnum((k.split("=")[1].split("/"))),
-                children=from_dict(children)
-            ) for k, children in d.items())
+        def from_dict(d: dict) -> list[Qube]:
+            return [
+                Qube.make(
+                    key=k.split("=")[0],
+                    values=QEnum((k.split("=")[1].split("/"))),
+                    children=from_dict(children)
+                ) for k, children in d.items()]
         
         return Qube.make(key = "root",
                               values=QEnum(("root",)),
@@ -86,6 +89,15 @@ class Qube:
     
     def __or__(self, other: "Qube") -> "Qube":
         return set_operations.operation(self, other, set_operations.SetOperation.UNION)
+    
+    def __and__(self, other: "Qube") -> "Qube":
+        return set_operations.operation(self, other, set_operations.SetOperation.INTERSECTION)
+    
+    def __sub__(self, other: "Qube") -> "Qube":
+        return set_operations.operation(self, other, set_operations.SetOperation.DIFFERENCE)
+    
+    def __xor__(self, other: "Qube") -> "Qube":
+        return set_operations.operation(self, other, set_operations.SetOperation.SYMMETRIC_DIFFERENCE)
 
     
     def __getitem__(self, args) -> 'Qube':
@@ -264,39 +276,13 @@ class Qube:
         return hash_node(self)
 
     def compress(self) -> "Qube":
-        # First compress the children
+        # First compress the children (this recursively compresses all the way to the leaves)
         new_children = [child.compress() for child in self.children]
 
-        # Now take the set of new children and see if any have identical key, metadata and children
-        # the values may different and will be collapsed into a single node
-        identical_children = defaultdict(set)
-        for child in new_children:
-            # only care about the key and children of each node, ignore values
-            key = hash((child.key, tuple((cc.structural_hash for cc in child.children))))
-            identical_children[key].add(child)
-        
-        # Now go through and create new compressed nodes for any groups that need collapsing
-        new_children = []
-        for child_set in identical_children.values():
-            if len(child_set) > 1:
-                child_set = list(child_set)
-                key = child_set[0].key
+        # Now compress the set of children at this level
+        new_children = set_operations.compress_children(new_children)
 
-                # Compress the children into a single node
-                assert all(isinstance(child.data.values, QEnum) for child in child_set), "All children must have QEnum values"
-                
-                node_data = NodeData(
-                    key = key,
-                    metadata = frozendict(), # Todo: Implement metadata compression
-                    values = QEnum((v for child in child_set for v in child.data.values.values)),
-                )
-                new_child = Qube(data = node_data, children = child_set[0].children)
-            else:
-                # If the group is size one just keep it
-                new_child = child_set.pop()
-            
-            new_children.append(new_child)
-
+        # Return the now compressed node
         return Qube(
             data = self.data,
             children = tuple(sorted(new_children))
