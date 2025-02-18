@@ -40,6 +40,36 @@ def test_union():
 
     assert q | r == u
 
+def test_union_with_empty():
+    q = Qube.from_dict({"a=1/2/3" : {"b=1" : {}},})
+    assert q | Qube.empty()  == q
+
+def test_union_2():
+    q = Qube.from_datacube({
+        "class": "d1",
+        "dataset": ["climate-dt", "another-value"],
+        'generation': ['1', "2", "3"],
+    })
+
+    r  = Qube.from_datacube({
+        "class": "d1",
+        "dataset": ["weather-dt", "climate-dt"],
+        'generation': ['1', "2", "3", "4"],
+    })
+
+    u = Qube.from_dict({
+        "class=d1" : {
+            "dataset=climate-dt/weather-dt" : {
+                "generation=1/2/3/4" : {},
+            },
+            "dataset=another-value" : {
+                "generation=1/2/3" : {},
+            },
+        }
+    })
+
+    assert q | r == u
+
 def test_difference():
     q = Qube.from_dict({"a=1/2/3/5" : {"b=1" : {}},})
     r = Qube.from_dict({"a=2/3/4" : {"b=1" : {}},})

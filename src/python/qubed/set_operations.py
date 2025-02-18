@@ -31,7 +31,18 @@ def fused_set_operations(A: "Values", B: "Values") -> tuple[list[Values], list[V
     
     raise NotImplementedError("Fused set operations on values types other than QEnum are not yet implemented")
 
-def operation(A: "Qube", B : "Qube", operation_type: SetOperation) -> "Qube":
+def node_intersection(A: "Values", B: "Values") -> tuple[Values, Values, Values]:
+    if isinstance(A, QEnum) and isinstance(B, QEnum):
+        set_A, set_B = set(A), set(B)
+        intersection = set_A & set_B
+        just_A = set_A - intersection
+        just_B = set_B - intersection
+        return QEnum(just_A), QEnum(intersection), QEnum(just_B)
+                
+    
+    raise NotImplementedError("Fused set operations on values types other than QEnum are not yet implemented")
+
+def operation(A: "Qube", B : "Qube", operation_type: SetOperation, node_type) -> "Qube":
     assert A.key == B.key, "The two Qube root nodes must have the same key to perform set operations," \
                            f"would usually be two root nodes. They have {A.key} and {B.key} respectively"
     
@@ -48,7 +59,7 @@ def operation(A: "Qube", B : "Qube", operation_type: SetOperation) -> "Qube":
 
     # For every node group, perform the set operation
     for key, (A_nodes, B_nodes) in nodes_by_key.items():
-        new_children.extend(_operation(key, A_nodes, B_nodes, operation_type))
+        new_children.extend(_operation(key, A_nodes, B_nodes, operation_type, node_type))
 
     # Whenever we modify children we should recompress them
     # But since `operation` is already recursive, we only need to compress this level not all levels
@@ -60,36 +71,46 @@ def operation(A: "Qube", B : "Qube", operation_type: SetOperation) -> "Qube":
     
 
 # The root node is special so we need a helper method that we can recurse on
-def _operation(key: str, A: list["Qube"], B : list["Qube"], operation_type: SetOperation) -> Iterable["Qube"]:
+def _operation(key: str, A: list["Qube"], B : list["Qube"], operation_type: SetOperation, node_type) -> Iterable["Qube"]:
+    # We need to deal with the case where only one of the trees has this key.
+    # To do so we can insert a dummy node with no children and no values into both A and B
+    keep_just_A, keep_intersection, keep_just_B = operation_type.value
+
     # Iterate over all pairs (node_A, node_B)
+    values = {}
+    for node in A + B:
+        values[node] = node.values
+
     for node_a in A:
         for node_b in B:
 
             # Compute A - B, A & B, B - A
-            just_A, intersection, just_B = fused_set_operations(
-                node_a.values, 
-                node_b.values
+            # Update the values for the two source nodes to remove the intersection
+            just_a, intersection, just_b = node_intersection(
+                values[node_a], 
+                values[node_b], 
             )
-            keep_just_A, keep_intersection, keep_just_B = operation_type.value
 
-            # Values in just_A and just_B are simple because 
-            # we can just make new nodes that copy the children of node_A or node_B
-            if keep_just_A:
-                for group in just_A:
-                    data = NodeData(key, group, {})
-                    yield type(node_a)(data, node_a.children)
-
-            if keep_just_B:
-                for group in just_B:
-                    data = NodeData(key, group, {})
-                    yield type(node_a)(data, node_b.children)
+            # Remove the intersection from the source nodes
+            values[node_a] = just_a
+            values[node_b] = just_b
 
             if keep_intersection:
-                for group in intersection:
-                    if group:
-                        new_node_a = replace(node_a, data = replace(node_a.data, values = group))
-                        new_node_b = replace(node_b, data= replace(node_b.data, values = group))
-                        yield operation(new_node_a, new_node_b, operation_type)
+                if intersection:
+                    new_node_a = replace(node_a, data = replace(node_a.data, values = intersection))
+                    new_node_b = replace(node_b, data= replace(node_b.data, values = intersection))
+                    yield operation(new_node_a, new_node_b, operation_type, node_type)
+
+
+    # Now we've removed all the intersections we can yield the just_A and just_B parts if needed
+    if keep_just_A:
+        for node in A:
+            if values[node]:
+                yield node_type.make(key, values[node], node.children)
+    if keep_just_B:
+        for node in B:
+            if values[node]:
+                yield node_type.make(key, values[node], node.children)
 
 def compress_children(children: Iterable["Qube"]) -> tuple["Qube"]:
     """

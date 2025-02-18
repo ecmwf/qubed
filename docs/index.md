@@ -11,118 +11,54 @@ jupytext:
 
 ```{toctree}
 :maxdepth: 1
+background.md
 quickstart.md
 api.md
 development.md
 algorithms.md
 ```
 
-# Datacubes, Trees and Compressed trees
+Qubed provides a datastructure called a Qube which represents sets of data identified by multiple key value pairs as a tree of datacubes. To understand what that means go to [Background](background.md), to just start using the library skip straight to the [Quickstart](quickstart.md).
 
-This first part is essentially a abridged version of the [datacube spec](https://github.com/ecmwf/datacube-spec), see that document for more detail and the canonical source of truth on the matter.
-
-Qubed is primarily geared towards dealing with datafiles uniquely labeled by sets of key value pairs. We'll call a set of key value pairs that uniquely labels some data an `identifier`. Here's an example:
-
-```python
-{
- 'class': 'd1',
- 'dataset': 'climate-dt',
- 'generation': '1',
- 'date': '20241102',
- 'resolution': 'high',
- 'time': '0000',
-}
-```
-
-Unfortunately, we have more than one data file. If we are lucky, the set of identifiers that current exists might form a dense datacube that we could represent like this:
-
-```python
-{
- 'class': ['d1', 'd2'],
- 'dataset': 'climate-dt',
- 'generation': ['1','2','3'],
- 'model': 'icon',
- 'date': ['20241102','20241103'],
- 'resolution': ['high','low'],
- 'time': ['0000', '0600', '1200', '1800'],
-}
-```
-
-with the property that any particular choice for a value for any key will correspond to datafile that exists. So this object represents `2x1x3x1x2x2x4 = 96` different datafiles. 
-
-To save space I will also represent this same thing like this:
-```
-- class=d1/d2, dataset=climate-dt, generation=1/2/3, ..., time=0000/0600/1200/1800
-```
-
-Unfortunately, we are not lucky and our datacubes are not always dense. In this case we might instead represent which data exists using a tree:
+Here's a real world dataset from the [Climate DT](https://destine.ecmwf.int/climate-change-adaptation-digital-twin-climate-dt/):
 
 ```{code-cell} python3
+import requests
 from qubed import Qube
-
-q = Qube.from_dict({
-    "class=od" : {
-        "expver=0001": {"param=1":{}, "param=2":{}},
-        "expver=0002": {"param=1":{}, "param=2":{}},
-    },
-    "class=rd" : {
-        "expver=0001": {"param=1":{}, "param=2":{}, "param=3":{}},
-        "expver=0002": {"param=1":{}, "param=2":{}},
-    },
-})
-
-# depth controls how much of the tree is open when rendered as html.
-q.html(depth=100)
+climate_dt = Qube.from_json(requests.get("https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/climate_dt.json").json())
+climate_dt.html(depth=1)
 ```
 
-But it's clear that the above tree contains a lot of redundant information. Many of the subtrees are identical for example. Indeed in practice a lot of our data turns out to be 'nearly dense' in that it contains many dense datacubes within it.
-
-There are many valid ways one could compress this tree. If we add the restriction that no identical key=value pairs can be adjacent then here is the compressed tree we might get:
+Click the arrows to expand and drill down deeper into the data. Any particular dataset is uniquely identified by a set of key value pairs:
 
 ```{code-cell} python3
-q.compress()
-````
-
-```{warning}
-Without the above restriction we could, for example, have:
-
-    root
-    ├── class=od, expver=0001/0002, param=1/2
-    └── class=rd
-        ├── expver=0001, param=3
-        └── expver=0001/0002, param=1/2
-
-but we do not allow this because it would mean we would have to take multiple branches in order to find data with `expver=0001`.
+import json
+for i, identifier in enumerate(climate_dt.leaves()):
+    print(identifier)
+    break
 ```
 
-What we have now is a tree of dense datacubes which represents a single larger sparse datacube in a more compact manner. For want of a better word we'll call it a Qube.
+Here's an idea of the set of values each key can take:
+```{code-cell} python3
+axes = climate_dt.axes()
+for key, values in axes.items():
+    print(f"{key} : {list(sorted(values))[:10]}")
+```
+
+This dataset isn't dense, you can't choose any combination of the above key values pairs, but it does contain many dense datacubes. Hence it makes sense to store and process the set as a tree of dense datacubes, what we call a Qube. For a sense of scale, this dataset contains about 200 million distinct datasets but only contains a few thousand unique nodes.
+
+```{code-cell} python3
+print(f"""
+Distinct datasets: {climate_dt.n_leaves},
+Number of nodes in the tree: {climate_dt.n_nodes}
+""")
+```
 
 
-## API
 
-Qubed will provide a core compressed tree data structure called a Qube  with:
 
-Methods to convert to and from:
-- [x] A human readable representation like those seen above.
-- [x] An HTML version where subtrees can be collapsed.
-- [ ] An compact protobuf-based binary format
-- [x] Nested python dictionaries or JSON
-- [/] The output of [fdb list](https://confluence.ecmwf.int/display/FDB/fdb-list)
-- [ ] [mars list][mars list]
-- [ ] [constraints.json][constraints]
 
-[constraints]: https://object-store.os-api.cci2.ecmwf.int/cci2-prod-catalogue/resources/reanalysis-era5-land/constraints_a0ae5b42d67869674e13fba9fd055640bcffc37c24578be1f465d7d5ab2c7ee5.json
-[mars list]: https://git.ecmwf.int/projects/CDS/repos/cads-forms-reanalysis/browse/reanalysis-era5-single-levels/gecko-config/mars.list?at=refs%2Fheads%2Fprod
 
-Useful algorithms:
-- [x] Compression
-- [/] Union/Intersection/Difference
-
-Performant Membership Queries
-- Identifier membership
-- Datacube query (selection)
-
-Metadata Storage
 
 
 

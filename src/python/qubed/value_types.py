@@ -19,6 +19,10 @@ class Values(ABC):
         pass
 
     @abstractmethod
+    def __iter__(self) -> Iterable[Any]:
+        pass
+
+    @abstractmethod
     def from_strings(self, values: Iterable[str]) -> list['Values']:
         pass
     
@@ -48,6 +52,7 @@ class QEnum(Values):
 
     def __len__(self) -> int:
         return len(self.values)
+    
     def summary(self) -> str:
         return '/'.join(map(str, sorted(self.values)))
     def __contains__(self, value: Any) -> bool:
@@ -67,6 +72,15 @@ class DateRange(Range):
     end: date
     step: timedelta
     dtype: Literal["date"] = dataclasses.field(kw_only=True, default="date")
+
+    def __len__(self) -> int:
+        return (self.end - self.start) // self.step
+
+    def __iter__(self) -> Iterable[date]:
+        current = self.start
+        while current <= self.end if self.step.days > 0 else current >= self.end:
+            yield current
+            current += self.step
 
     @classmethod
     def from_strings(self, values: Iterable[str]) -> list['DateRange']:
@@ -104,10 +118,6 @@ class DateRange(Range):
     def __contains__(self, value: Any) -> bool:
         v = datetime.strptime(value, "%Y%m%d").date()
         return self.start <= v <= self.end and (v - self.start) % self.step == 0
-
-
-    def __len__(self) -> int:
-        return (self.end - self.start) // self.step
     
     def summary(self) -> str:
         def fmt(d): return d.strftime("%Y%m%d")

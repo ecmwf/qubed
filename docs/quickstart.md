@@ -42,7 +42,53 @@ print(f"{cq.n_leaves = }, {cq.n_nodes = }")
 cq
 ```
 
-Load a larger example qube (requires source checkout):
+### Quick Tree Construction
+
+One of the quickest ways to construct non-trivial trees is to use the `Qube.from_datacube` method to construct dense trees and then use the set operations to combine or intersect them:
+
+
+```{code-cell} python3
+q = Qube.from_datacube({
+    "class": "d1",
+    "dataset": ["climate-dt", "another-value"],
+    'generation': ['1', "2", "3"],
+})
+
+r  = Qube.from_datacube({
+    "class": "d1",
+    "dataset": ["weather-dt", "climate-dt"],
+    'generation': ['1', "2", "3", "4"],
+})
+
+q | r
+```
+
+
+### Iteration / Flattening
+
+Iterate over the leaves:
+
+```{code-cell} python3
+for i, identifier in enumerate(cq.leaves()):
+    print(identifier)
+    if i > 10:
+        print("...")
+        break
+```
+
+Iterate over the datacubes:
+
+```{code-cell} python3
+for i, datacube in enumerate(cq.datacubes()):
+    print(datacube)
+    if i > 10:
+        print("...")
+        break
+```
+
+### A Real World Example
+
+Load a larger example qube:
 
 ```{code-cell} python3
 import requests
@@ -77,43 +123,38 @@ for key, values in axes.items():
 ```
 
 
-<!-- ### Set Operations
+### Set Operations
+
+The union/intersection/difference of two dense datacubes is not itself dense.
 
 ```{code-cell} python3
-A = Qube.from_dict({
-    "a=1/2/3" : {"b=1/2/3" : {"c=1/2/3" : {}}},
-    "a=5" : {  "b=4" : {  "c=4" : {}}}
-    })
+A = Qube.from_dict({"a=1/2/3" : {"b=i/j/k" : {}},})
+B = Qube.from_dict({"a=2/3/4" : {"b=j/k/l" : {}},})
 
-B = Qube.from_dict({
-    "a=1/2/3" : {"b=1/2/3" : {"c=1/2/3" : {}}},
-    "a=5" : {  "b=4" : {  "c=4" : {}}}
-    })
-
-A.print(name="A"), B.print(name="B");
-
-A | B
-``` -->
-
-<!-- ### Command Line Usage
-
-```bash 
-fdb list class=rd,expver=0001,... | qubed --from=fdblist --to=text
+A.print(), B.print();
 ```
 
-`--from` options include: 
-* `fdblist`
-* `json`
-* `protobuf`
-* `marslist`
-* `constraints`
+Union: 
 
-`--to` options include:
-* `text`
-* `html`
-* `json`
-* `datacubes`
-* `constraints`
+```{code-cell} python3
+(A | B).print();
+```
 
-use `--input` and `--output` to specify input and output files respectively. -->
+Intersection:
+
+```{code-cell} python3
+(A & B).print();
+```
+
+Difference:
+
+```{code-cell} python3
+(A - B).print();
+```
+
+Symmetric Difference:
+
+```{code-cell} python3
+(A ^ B).print();
+```
 

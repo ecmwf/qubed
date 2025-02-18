@@ -2,7 +2,7 @@ import dataclasses
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Iterable, Literal, Sequence
 
 from frozendict import frozendict
 
@@ -42,6 +42,18 @@ class Qube:
                                     key = lambda n : ((n.key, n.values.min()))
                                     )),
         )
+    
+    @classmethod
+    def from_datacube(cls, datacube: dict[str, str | Sequence[str]]) -> 'Qube':
+        key_vals = list(datacube.items())[::-1]
+
+        children: list["Qube"] = []
+        for key, values in key_vals:
+            if not isinstance(values, list):
+                values = [values]
+            children = [cls.make(key, QEnum(values), children)]
+        
+        return cls.make("root", QEnum(("root",)), children)
 
 
     @classmethod
@@ -88,17 +100,33 @@ class Qube:
         return node_tree_to_html(self, depth = 2, collapse = True)
     
     def __or__(self, other: "Qube") -> "Qube":
-        return set_operations.operation(self, other, set_operations.SetOperation.UNION)
+        return set_operations.operation(self, other, set_operations.SetOperation.UNION, type(self))
     
     def __and__(self, other: "Qube") -> "Qube":
-        return set_operations.operation(self, other, set_operations.SetOperation.INTERSECTION)
+        return set_operations.operation(self, other, set_operations.SetOperation.INTERSECTION, type(self))
     
     def __sub__(self, other: "Qube") -> "Qube":
-        return set_operations.operation(self, other, set_operations.SetOperation.DIFFERENCE)
+        return set_operations.operation(self, other, set_operations.SetOperation.DIFFERENCE, type(self))
     
     def __xor__(self, other: "Qube") -> "Qube":
-        return set_operations.operation(self, other, set_operations.SetOperation.SYMMETRIC_DIFFERENCE)
+        return set_operations.operation(self, other, set_operations.SetOperation.SYMMETRIC_DIFFERENCE, type(self))
+    
+    def leaves(self) -> Iterable[dict[str, str]]:
+        for value in self.values:
+            if not self.children: 
+                yield {self.key : value}
+            for child in self.children:
+                for leaf in child.leaves():
+                    if self.key != "root":
+                        yield {self.key : value, **leaf}
+                    else:
+                        yield leaf
 
+    def datacubes(self):
+        def to_list_of_cubes(node: Qube) -> list[list[Qube]]:
+            return [[node] + sub_cube for c in node.children for sub_cube in to_list_of_cubes(c)]
+
+        return to_list_of_cubes(self)
     
     def __getitem__(self, args) -> 'Qube':
         key, value = args
@@ -110,6 +138,8 @@ class Qube:
 
     @cached_property
     def n_leaves(self) -> int:
+        # This line makes the equation q.n_leaves + r.n_leaves == (q | r).n_leaves true is q and r have no overlap
+        if self.key == "root" and not self.children: return 0
         return len(self.values) * (sum(c.n_leaves for c in self.children) if self.children else 1)
 
     @cached_property
@@ -174,7 +204,8 @@ class Qube:
         for c in self.children:
             for k, v in c.axes().items():
                 axes[k].update(v)
-        axes[self.key].update(self.values)
+        if self.key != "root":
+            axes[self.key].update(self.values)
         return dict(axes)
 
     @staticmethod
@@ -253,12 +284,6 @@ class Qube:
     def insert(self, identifier : dict[str, list[str]]) -> 'Qube':
         insertion = [(k, v) for k, v in identifier.items()]
         return Qube._insert(self, insertion)
-    
-    def to_list_of_cubes(self):
-        def to_list_of_cubes(node: Qube) -> list[list[Qube]]:
-            return [[node] + sub_cube for c in node.children for sub_cube in to_list_of_cubes(c)]
-
-        return to_list_of_cubes(self)
 
     def info(self):
         cubes = self.to_list_of_cubes()
