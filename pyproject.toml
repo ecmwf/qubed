@@ -1,6 +1,6 @@
 [build-system]
 requires = ["maturin>=0.14", "setuptools", "setuptools-rust", "setuptools_scm"]
-build-backend = "setuptools.build_meta"
+build-backend = "maturin"
 
 [tool.setuptools_scm]
 write_to = "src/python/qubed/_version.py"
