@@ -1,6 +1,23 @@
-// #![allow(unused_imports)]
+#![allow(unused_imports)]
 // #![allow(dead_code)]
 // #![allow(unused_variables)]
+
+
+use pyo3::prelude::*;
+use pyo3::wrap_pyfunction;
+use pyo3::types::{PyDict, PyInt, PyList, PyString};
+
+#[pyfunction]
+fn hello(_py: Python, name: &str) -> PyResult<String> {
+    Ok(format!("Hello, {}!", name))
+}
+
+#[pymodule]
+fn rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(hello, m)?).unwrap();
+    Ok(())
+}
+
 
 // use rsfdb::listiterator::KeyValueLevel;
 // use rsfdb::request::Request;
@@ -9,8 +26,6 @@
 // use serde_json::{json, Value};
 // use std::time::Instant;
 
-// use pyo3::prelude::*;
-// use pyo3::types::{PyDict, PyInt, PyList, PyString};
 
 // use std::collections::HashMap;
 
