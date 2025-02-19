@@ -13,3 +13,5 @@ target/
 _build/
 build/
 .ipynb_checkpoints/
+dist/
+Cargo.lock

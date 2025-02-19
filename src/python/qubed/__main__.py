@@ -56,11 +56,12 @@ def convert(args):
         new_branch = Qube.from_datacube(datacube)
         q = (q | Qube.from_datacube(datacube))
 
-    output = match args.output_format:
-        case "text":
-            str(q)
-        case "html":
-            q.html()
+    # output = match args.output_format:
+    #     case "text":
+    #         str(q)
+    #     case "html":
+    #         q.html()
+    output = "fw"
 
     with open(args.output, "w") as f:
         f.write(output)
