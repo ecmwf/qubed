@@ -36,7 +36,7 @@ jobs:
         with:
           python-version: 3.x
       - name: Set cargo version from tag
-        run: .github/workflows/update_version.sh
+        run: python .github/workflows/update_version.py
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -70,7 +70,7 @@ jobs:
         with:
           python-version: 3.x
       - name: Set cargo version from tag
-        run: .github/workflows/update_version.sh
+        run: python .github/workflows/update_version.py
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -101,7 +101,7 @@ jobs:
           python-version: 3.x
           architecture: ${{ matrix.platform.target }}
       - name: Set cargo version from tag
-        run: .github/workflows/update_version.sh
+        run: python .github/workflows/update_version.py
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -130,7 +130,7 @@ jobs:
         with:
           python-version: 3.x
       - name: Set cargo version from tag
-        run: .github/workflows/update_version.sh
+        run: python .github/workflows/update_version.py
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -148,7 +148,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set cargo version from tag
-        run: .github/workflows/update_version.sh
+        run: python .github/workflows/update_version.py
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:
