@@ -1,2 +1,2 @@
-VERSION=$(git describe --tags --always | sed 's/^v//')
-sed -i -E 's/^version = "[^"]+"/version = "'"$VERSION"'"/' Cargo.toml
+VERSION=$(git describe --tags --always | awk '{gsub(/^v/, ""); print}')
+perl -pi -e "s/^version = \"[^\"]+\"/version = \"$VERSION\"/" Cargo.toml
