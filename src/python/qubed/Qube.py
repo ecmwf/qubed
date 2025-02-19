@@ -44,6 +44,10 @@ class Qube:
         )
     
     @classmethod
+    def root_node(cls, children: Iterable["Qube"]) -> 'Qube':
+        return cls.make("root", QEnum(("root",)), children)
+    
+    @classmethod
     def from_datacube(cls, datacube: dict[str, str | Sequence[str]]) -> 'Qube':
         key_vals = list(datacube.items())[::-1]
 
@@ -53,7 +57,7 @@ class Qube:
                 values = [values]
             children = [cls.make(key, QEnum(values), children)]
         
-        return cls.make("root", QEnum(("root",)), children)
+        return cls.root_node(children)
 
 
     @classmethod
@@ -77,13 +81,11 @@ class Qube:
                     children=from_dict(children)
                 ) for k, children in d.items()]
         
-        return Qube.make(key = "root",
-                              values=QEnum(("root",)),
-                              children = from_dict(d))
+        return Qube.root_node(from_dict(d))
     
     @classmethod
     def empty(cls) -> 'Qube':
-        return cls.make("root", QEnum(("root",)), [])
+        return Qube.root_node([])
 
     
     def __str__(self, depth = None, name = None) -> str:
@@ -93,8 +95,9 @@ class Qube:
     def print(self, depth = None, name: str | None = None): 
         print(self.__str__(depth = depth, name = name))
     
-    def html(self, depth = 2, collapse = True) -> HTML:
-        return HTML(node_tree_to_html(self, depth = depth, collapse = collapse))
+    def html(self, depth = 2, collapse = True, name: str | None = None) -> HTML:
+        node = dataclasses.replace(self, data = RootNodeData(key = name, values=self.values, metadata=self.metadata)) if name is not None else self
+        return HTML(node_tree_to_html(node=node, depth = depth, collapse = collapse))
     
     def _repr_html_(self) -> str:
         return node_tree_to_html(self, depth = 2, collapse = True)
@@ -122,11 +125,18 @@ class Qube:
                     else:
                         yield leaf
 
-    def datacubes(self):
-        def to_list_of_cubes(node: Qube) -> list[list[Qube]]:
-            return [[node] + sub_cube for c in node.children for sub_cube in to_list_of_cubes(c)]
+    def datacubes(self) -> "Qube":
+        def to_list_of_cubes(node: Qube) -> Iterable[Qube]:
+            if not node.children:
+                yield node
+            # print(node.key)
+            for c in node.children:
+                # print(c)
+                for sub_cube in to_list_of_cubes(c):
+                    yield dataclasses.replace(node, children=[sub_cube])
+                
 
-        return to_list_of_cubes(self)
+        return Qube.root_node((q for c in self.children for q in to_list_of_cubes(c)))
     
     def __getitem__(self, args) -> 'Qube':
         key, value = args
@@ -144,6 +154,7 @@ class Qube:
 
     @cached_property
     def n_nodes(self) -> int:
+        if self.key == "root" and not self.children: return 0
         return 1 + sum(c.n_nodes for c in self.children)
 
     def transform(self, func: 'Callable[[Qube], Qube | list[Qube]]') -> 'Qube':

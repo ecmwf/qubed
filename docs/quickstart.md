@@ -79,11 +79,7 @@ for i, identifier in enumerate(cq.leaves()):
 Iterate over the datacubes:
 
 ```{code-cell} python3
-for i, datacube in enumerate(cq.datacubes()):
-    print(datacube)
-    if i > 10:
-        print("...")
-        break
+cq.datacubes()
 ```
 
 ### A Real World Example

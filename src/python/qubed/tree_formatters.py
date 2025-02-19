@@ -8,7 +8,7 @@ class TreeLike(Protocol):
     @property
     def children(self) -> Sequence["TreeLike"]: ...  # Supports indexing like node.children[i]
     
-    def summary(self, **kwargs) -> str: ...
+    def summary(self) -> str: ...
 
 @dataclass(frozen=True)
 class HTML():

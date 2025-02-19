@@ -6,6 +6,7 @@ Initial Python Implementation
 [x] Query with request 
 [x] Iteration over leaves
 [x] Iteration over datacubes
+[x] Command line creation from fdb list --compact 
 [ ] Set up periodic updates to climate-dt/extremes-dt again
 [ ] Maybe also do production db?
 [ ] Do mars list to contraints conversion

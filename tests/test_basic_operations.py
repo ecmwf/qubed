@@ -26,6 +26,12 @@ def test_n_leaves():
     # Size is 3*3*3 + 1*1*1 = 27 + 1
     assert q.n_leaves == 27 + 1
 
+def test_n_leaves_empty():
+    assert Qube.empty().n_leaves == 0
+
+def test_n_nodes_empty():
+    assert Qube.empty().n_nodes == 0
+
 
 def test_union():
     q = Qube.from_dict({"a=1/2/3" : {"b=1" : {}},})
