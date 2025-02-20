@@ -1,6 +1,8 @@
 # Q<sup>3</sup> Quick Querying of Qubes
 [![Static Badge](https://github.com/ecmwf/codex/raw/refs/heads/main/Project%20Maturity/emerging_badge.svg)](https://github.com/ecmwf/codex/raw/refs/heads/main/Project%20Maturity#emerging)
 [![Docs](https://readthedocs.org/projects/qubed/badge/?version=latest)](https://qubed.readthedocs.io/en/latest/)
+[![PyPi](https://img.shields.io/pypi/v/qubed.svg)](https://pypi.org/project/qubed/)
+[![Wheel](https://img.shields.io/pypi/wheel/qubed.svg)](https://pypi.org/project/qubed/)
 
 Qubed provides a datastructure primitive for working with trees of DataCubes. If a normal tree looks like this:
 ```
