@@ -66,10 +66,20 @@ class Qube:
             return Qube.make(
                 key=json["key"],
                 values=values_from_json(json["values"]),
-                metadata=json["metadata"] if "metadata" in json else {},
+                metadata=frozendict(json["metadata"]) if "metadata" in json else {},
                 children=(from_json(c) for c in json["children"]),
             )
         return from_json(json)
+    
+    def to_json(self) -> dict:
+        def to_json(node: Qube) -> dict:
+            return {
+                "key": node.key,
+                "values": node.values.to_json(),
+                "metadata": dict(node.metadata),
+                "children": [to_json(c) for c in node.children]
+            }
+        return to_json(self)
     
     @classmethod
     def from_dict(cls, d: dict) -> 'Qube':
@@ -101,6 +111,12 @@ class Qube:
     
     def _repr_html_(self) -> str:
         return node_tree_to_html(self, depth = 2, collapse = True)
+    
+    # Allow "key=value/value" / qube to prepend keys
+    def __rtruediv__(self, other: str) -> "Qube":
+        key, values = other.split("=")
+        values = QEnum((values.split("/")))
+        return Qube.root_node([Qube.make(key, values, self.children)])
     
     def __or__(self, other: "Qube") -> "Qube":
         return set_operations.operation(self, other, set_operations.SetOperation.UNION, type(self))
@@ -176,7 +192,7 @@ class Qube:
         return dataclasses.replace(self, children = children)
 
     
-    def select(self, selection : dict[str, str | list[str]], mode: Literal["strict", "relaxed"] = "relaxed") -> 'Qube':
+    def select(self, selection : dict[str, str | list[str]], mode: Literal["strict", "relaxed"] = "relaxed", prune=True) -> 'Qube':
         # make all values lists
         selection = {k : v if isinstance(v, list) else [v] for k,v in selection.items()}
 
@@ -187,7 +203,15 @@ class Qube:
             if node.key not in selection: 
                 if mode == "strict":
                     return None
-                return dataclasses.replace(node, children = not_none(select(c) for c in node.children))
+                
+                new_children = not_none(select(c) for c in node.children)
+                
+                # prune==true then remove any non-leaf nodes
+                # which have had all their children removed
+                if prune and node.children and not new_children:
+                    return None
+                
+                return dataclasses.replace(node, children = new_children)
             
             # If the key is specified, check if any of the values match
             values = QEnum((c for c in selection[node.key] if c in node.values))
