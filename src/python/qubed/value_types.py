@@ -30,6 +30,10 @@ class Values(ABC):
     def min(self):
         pass
 
+    @abstractmethod
+    def to_json(self):
+        pass
+
 T = TypeVar("T")
 EnumValuesType = FrozenSet[T]
 @dataclass(frozen=True, order=True)
@@ -61,6 +65,8 @@ class QEnum(Values):
         return [type(self)(tuple(values))]
     def min(self):
         return min(self.values)
+    def to_json(self):
+        return list(self.values)
 
 @dataclass(frozen=True)
 class Range(Values, ABC):

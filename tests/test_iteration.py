@@ -17,19 +17,3 @@ def test_iter_leaves_simple():
     ]
 
     assert set(make_hashable(q.leaves())) == set(make_hashable(entries))
-
-# def test_iter_leaves():
-#     d = {
-#         "class=od" : {
-#             "expver=0001": {"param=1":{}, "param=2":{}},
-#             "expver=0002": {"param=1":{}, "param=2":{}},
-#         },
-#         "class=rd" : {
-#             "expver=0001": {"param=1":{}, "param=2":{}, "param=3":{}},
-#             "expver=0002": {"param=1":{}, "param=2":{}},
-#         },
-#     }
-#     q = Qube.from_dict(d)
-#     r = Qube.from_dict(d)
-
-#     assert q == r

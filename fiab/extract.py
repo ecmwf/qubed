@@ -1,4 +1,3 @@
-
 import json
 from collections import defaultdict
 
@@ -8,26 +7,36 @@ predicted_indices = [*metadata['data_indices']['data']['output']['prognostic'], 
 variables = metadata['dataset']["variables"]
 variables = [variables[i] for i in predicted_indices]
 
-print('Variables:', variables)
+# print('Raw Model Variables:', variables)
 
+# Split variables between pressure and surface
 surface_variables = [v for v in variables if '_' not in v]
-pressure_level_variables = [v for v in variables if '_' in v]
 
-pressure_levels = sorted(set([v.split('_')[-1] for v in pressure_level_variables]))
-pressure_level_variables = sorted(set([v.split('_')[0] for v in pressure_level_variables]))
-
-levels_for_variables = defaultdict(list)
+# Collect the levels for each pressure variable
+level_variables = defaultdict(list)
 for v in variables:
-    if "_" in v:
-        variable, level = v.split('_')
-        levels_for_variables[variable].append(level)
+    if '_' in v:
+        variable, level = v.split("_")
+        level_variables[variable].append(int(level))
 
-print('Levels for variables:', levels_for_variables)
+# print(level_variables)
 
-print('Pressure level variables:', pressure_level_variables)
-print('Pressure levels:', sorted([int(p) for p in pressure_levels]))
+# Use qubed library to contruct tree
+from qubed import Qube
 
-print('Surface variables:', surface_variables)
+model_tree = Qube.empty()
 
-frequency = metadata['config']['data']['frequency']
-print("Frequency:", frequency)
+for variable, levels in level_variables.items():
+    model_tree = model_tree | Qube.from_datacube({
+        "levtype": "pl",
+        "param" : variable,
+        "level" : levels,
+    })
+
+for variable in surface_variables:
+    model_tree = model_tree | Qube.from_datacube({
+        "levtype": "sfc",
+        "param" : variable,
+    })
+
+print(model_tree.to_json())
