@@ -16,3 +16,4 @@ build/
 dist/
 Cargo.lock
 src/python/qubed/_version.py
+*.ipynb
