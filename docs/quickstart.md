@@ -42,7 +42,34 @@ print(f"{cq.n_leaves = }, {cq.n_nodes = }")
 cq
 ```
 
-### Quick Tree Construction
+
+With the HTML representation you can click on the leaves to expand them. You can copy a path representation of a node to the clipboard by alt/option/⌥ clicking on it. You can then extract that node in code using `[]`:
+
+```{code-cell} python3
+cq["class=rd,expver=0001"]
+```
+
+Select a subtree:
+
+```{code-cell} python3
+cq["class", "od"]["expver", "0001"]
+```
+
+Intersect with a dense datacube:
+
+```{code-cell} python3
+dq = Qube.from_datacube({
+    "class": ["od", "rd", "cd"],
+    "expver": ["0001", "0002", "0003"],
+    "param": "2",
+})
+
+(cq & dq).print()
+```
+
+
+
+### Tree Construction
 
 One of the quickest ways to construct non-trivial trees is to use the `Qube.from_datacube` method to construct dense trees and then use the set operations to combine or intersect them:
 
@@ -154,3 +181,11 @@ Symmetric Difference:
 (A ^ B).print();
 ```
 
+### Transformations
+
+`q.transform` takes a python function from one node to one or more nodes and uses this to build a new tree. This can be used for simple operations on the key or values but also to split or remove nodes. Note that you can't use it to merge nodes beause it's only allowed to see one node at a time.
+
+```{code-cell} python3
+def capitalize(node): return node.replace(key = node.key.capitalize())
+climate_dt.transform(capitalize).html(depth=1)
+```

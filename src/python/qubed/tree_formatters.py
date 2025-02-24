@@ -16,15 +16,17 @@ class HTML():
     def _repr_html_(self):
         return self.html
 
-def summarize_node(node: TreeLike, collapse = False, **kwargs) -> tuple[str, TreeLike]:
+def summarize_node(node: TreeLike, collapse = False, **kwargs) -> tuple[str, str, TreeLike]:
     """
     Extracts a summarized representation of the node while collapsing single-child paths.
     Returns the summary string and the last node in the chain that has multiple children.
     """
     summaries = []
+    paths = []
     
     while True:
         summary = node.summary(**kwargs)
+        paths.append(summary)
         if len(summary) > 50:
             summary = summary[:50] + "..."
         summaries.append(summary)
@@ -36,10 +38,10 @@ def summarize_node(node: TreeLike, collapse = False, **kwargs) -> tuple[str, Tre
             break
         node = node.children[0]
 
-    return ", ".join(summaries), node
+    return ", ".join(summaries), ",".join(paths), node
 
 def node_tree_to_string(node : TreeLike, prefix : str = "", depth = None) -> Iterable[str]:
-    summary, node = summarize_node(node)
+    summary, path, node = summarize_node(node)
     
     if depth is not None and depth <= 0:
         yield summary + " - ...\n"
@@ -59,14 +61,14 @@ def node_tree_to_string(node : TreeLike, prefix : str = "", depth = None) -> Ite
         yield from node_tree_to_string(child, prefix + extension, depth = depth - 1 if depth is not None else None)
 
 def _node_tree_to_html(node : TreeLike, prefix : str = "", depth = 1, connector = "", **kwargs) -> Iterable[str]:
-    summary, node = summarize_node(node, **kwargs)
+    summary, path, node = summarize_node(node, **kwargs)
     
     if len(node.children) == 0:
-        yield f'<span class="leaf">{connector}{summary}</span>'
+        yield f'<span class="qubed-node leaf" data-path="{path}">{connector}{summary}</span>'
         return
     else:
         open = "open" if depth > 0 else ""
-        yield f"<details {open}><summary>{connector}{summary}</summary>"
+        yield f'<details {open} data-path="{path}"><summary class="qubed-node">{connector}{summary}</summary>'
 
     for index, child in enumerate(node.children):
         connector = "└── " if index == len(node.children) - 1 else "├── "
@@ -76,10 +78,12 @@ def _node_tree_to_html(node : TreeLike, prefix : str = "", depth = 1, connector 
 
 def node_tree_to_html(node : TreeLike, depth = 1, **kwargs) -> str:
         css_id = f"qubed-tree-{random.randint(0, 1000000)}"
-        css = f"""
+        
+        # It's ugle to use an f string here because css uses {} so much so instead
+        # we use CSS_ID as a placeholder and replace it later
+        css = """
         <style>
-        pre#{css_id} """ \
-        """{
+        pre#CSS_ID {
             font-family: monospace;
             white-space: pre;
             font-family: SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,Courier,monospace;
@@ -88,6 +92,11 @@ def node_tree_to_html(node : TreeLike, depth = 1, **kwargs) -> str:
             
             details {
                 margin-left: 0;
+            }
+
+            .qubed-node a {
+                margin-left: 10px;
+                text-decoration: none;
             }
 
             summary {
@@ -125,6 +134,30 @@ def node_tree_to_html(node : TreeLike, depth = 1, **kwargs) -> str:
 
         }
         </style>
-        """
+        """.replace("CSS_ID", css_id)
+
+        # This js snippet copies the path of a node to the clipboard when clicked
+        js = """
+        <script type="module" defer>
+        async function nodeOnClick(event) {
+            if (!event.altKey) return;
+            event.preventDefault();
+            let current_element = this.parentElement;
+            let paths = [];
+            while (true) {
+                if (current_element.dataset.path) {
+                    paths.push(current_element.dataset.path);
+                }
+                current_element = current_element.parentElement;
+                if (current_element.tagName == "PRE") break;
+            }
+            const path = paths.reverse().slice(1).join(",");
+            await navigator.clipboard.writeText(path);
+        }
+
+        const nodes = document.querySelectorAll("#CSS_ID .qubed-node");
+        nodes.forEach(n => n.addEventListener("click", nodeOnClick));
+        </script>
+        """.replace("CSS_ID", css_id)
         nodes = "".join(_node_tree_to_html(node=node, depth=depth, **kwargs))
-        return f"{css}<pre class='qubed-tree' id='{css_id}'>{nodes}</pre>"
+        return f"{js}{css}<pre class='qubed-tree' id='{css_id}'>{nodes}</pre>"

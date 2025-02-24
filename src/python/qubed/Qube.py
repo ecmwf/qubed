@@ -8,7 +8,11 @@ from frozendict import frozendict
 
 from . import set_operations
 from .node_types import NodeData, RootNodeData
-from .tree_formatters import HTML, node_tree_to_html, node_tree_to_string
+from .tree_formatters import (
+    HTML,
+    node_tree_to_html,
+    node_tree_to_string,
+)
 from .value_types import QEnum, Values, values_from_json
 
 
@@ -28,6 +32,16 @@ class Qube:
     @property
     def metadata(self) -> frozendict[str, Any]:
         return self.data.metadata
+    
+    def replace(self, **kwargs) -> 'Qube':
+        data_keys = {k : v for k, v in kwargs.items() if k in ["key", "values", "metadata"]}
+        node_keys = {k : v for k, v in kwargs.items() if k == "children"}
+        if not data_keys and not node_keys:
+            return self
+        if not data_keys:
+            return dataclasses.replace(self, **node_keys)
+        
+        return dataclasses.replace(self, data = dataclasses.replace(self.data, **data_keys), **node_keys)
 
     
     def summary(self) -> str:
@@ -155,12 +169,28 @@ class Qube:
         return Qube.root_node((q for c in self.children for q in to_list_of_cubes(c)))
     
     def __getitem__(self, args) -> 'Qube':
-        key, value = args
-        for c in self.children:
-            if c.key == key and value in c.values:
-                data = dataclasses.replace(c.data, values = QEnum((value,)))
-                return dataclasses.replace(c, data = data)
-        raise KeyError(f"Key {key} not found in children of {self.key}")
+        if isinstance(args, str):
+            specifiers = args.split(",")
+            current = self
+            for specifier in specifiers:
+                key, values = specifier.split("=")
+                values = values.split("/")
+                for c in current.children:
+                    if c.key == key and set(values) == set(c.values):
+                        current = c
+                        break
+                else:
+                    raise KeyError(f"Key '{key}' not found in children of '{current.key}'")
+            return Qube.root_node(current.children)
+        
+        elif isinstance(args, tuple) and len(args) == 2:
+            key, value = args
+            for c in self.children:
+                if c.key == key and value in c.values:
+                    return Qube.root_node(c.children)
+            raise KeyError(f"Key {key} not found in children of {self.key}")
+        else:
+            raise ValueError("Unknown key type")
 
     @cached_property
     def n_leaves(self) -> int:
@@ -173,7 +203,7 @@ class Qube:
         if self.key == "root" and not self.children: return 0
         return 1 + sum(c.n_nodes for c in self.children)
 
-    def transform(self, func: 'Callable[[Qube], Qube | list[Qube]]') -> 'Qube':
+    def transform(self, func: 'Callable[[Qube], Qube | Iterable[Qube]]') -> 'Qube':
         """
         Call a function on every node of the Qube, return one or more nodes.
         If multiple nodes are returned they each get a copy of the (transformed) children of the original node.
@@ -185,7 +215,7 @@ class Qube:
             if isinstance(new_nodes, Qube):
                 new_nodes = [new_nodes]
 
-            return [dataclasses.replace(new_node, children = children)
+            return [new_node.replace(children = children)
                     for new_node in new_nodes]
         
         children = tuple(cc for c in self.children for cc in transform(c))
@@ -243,87 +273,6 @@ class Qube:
             axes[self.key].update(self.values)
         return dict(axes)
 
-    @staticmethod
-    def _insert(position: "Qube", identifier : list[tuple[str, list[str]]]):
-        """
-        This algorithm goes as follows:
-        We're at a particular node in the Qube, and we have a list of key-values pairs that we want to insert.
-        We take the first key values pair
-        key, values = identifier.pop(0)
-
-        The general idea is to insert key, values into the current node and use recursion to handle the rest of the identifier.
-        
-        We have two sources of values with possible overlap. The values to insert and the values attached to the children of this node.
-        For each value coming from either source we put it in one of three categories:
-            1) Values that exist only in the already existing child. (Coming exclusively from position.children)
-            2) Values that exist in both a child and the new values.
-            3) Values that exist only in the new values.
-            
-
-        Thus we add the values to insert to a set, and loop over the children.
-        For each child we partition its values into the three categories.
-
-        For 1) we create a new child node with the key, reduced set of values and the same children.
-        For 2)
-            Create a new child node with the key, and the values in group 2
-            Recurse to compute the children
-
-        Once we have finished looping over children we know all the values left over came exclusively from the new values.
-        So we:
-            Create a new node with these values.
-            Recurse to compute the children
-
-        Finally we return the node with all these new children.
-        """
-        pass
-        # if not identifier:
-        #     return position
-
-        # key, values = identifier.pop(0)
-        # # print(f"Inserting {key}={values} into {position.summary()}")
-
-        # # Only the children with the matching key are relevant.
-        # source_children = {c : [] for c in position.children if c.key == key}
-        # new_children = []
-
-        # values = set(values)
-        # for c in source_children:
-        #     values_set = set(c.values)
-        #     group_1 = values_set - values
-        #     group_2 = values_set & values
-        #     values = values - values_set # At the end of this loop values will contain only the new values
-
-        #     if group_1:
-        #         group_1_node = Qube.make(c.key, QEnum((group_1)), c.children)
-        #         new_children.append(group_1_node) # Add the unaffected part of this child
-            
-        #     if group_2:
-        #         new_node = Qube.make(key, QEnum((affected)), [])
-        #         new_node = Qube._insert(new_node, identifier)
-        #         new_children.append(new_node) # Add the affected part of this child
-
-
-        #     unaffected = [x for x in c.values if x not in affected]
-
-
-        #     if affected: # This check is not technically necessary, but it makes the code more readable
-
-
-        # # If there are any values not in any of the existing children, add them as a new child
-        # if entirely_new_values:
-        #     new_node = Qube.make(key, QEnum((entirely_new_values)), [])
-        #     new_children.append(Qube._insert(new_node, identifier))
-
-        return Qube.make(position.key, position.values, new_children)
-
-    def insert(self, identifier : dict[str, list[str]]) -> 'Qube':
-        insertion = [(k, v) for k, v in identifier.items()]
-        return Qube._insert(self, insertion)
-
-    def info(self):
-        cubes = self.to_list_of_cubes()
-        print(f"Number of distinct paths: {len(cubes)}")
-
     @cached_property
     def structural_hash(self) -> int:
         """
@@ -343,7 +292,4 @@ class Qube:
         new_children = set_operations.compress_children(new_children)
 
         # Return the now compressed node
-        return Qube(
-            data = self.data,
-            children = tuple(sorted(new_children))
-        )
+        return Qube.make(self.key, self.values, new_children)

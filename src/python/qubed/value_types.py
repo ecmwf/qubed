@@ -1,9 +1,11 @@
 import dataclasses
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
-from typing import Any, FrozenSet, Iterable, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, FrozenSet, Iterable, Literal, TypeVar
 
+if TYPE_CHECKING:
+    from .Qube import Qube
 
 @dataclass(frozen=True)
 class Values(ABC):
@@ -67,10 +69,31 @@ class QEnum(Values):
         return min(self.values)
     def to_json(self):
         return list(self.values)
+    
+class DateEnum(QEnum):  
+    def summary(self) -> str:
+        def fmt(d): return d.strftime("%Y%m%d")
+        return '/'.join(map(fmt, sorted(self.values)))
 
 @dataclass(frozen=True)
 class Range(Values, ABC):
     dtype: str = dataclasses.field(kw_only=True)
+
+    start: Any
+    end: Any
+    step: Any
+
+    def min(self):
+        return self.start
+    
+    def __iter__(self) -> Iterable[Any]:
+        i = self.start
+        while i <= self.end:
+            yield i
+            i += self.step
+
+    def to_json(self):
+        return dataclasses.asdict(self)
 
 @dataclass(frozen=True)
 class DateRange(Range):
@@ -89,36 +112,58 @@ class DateRange(Range):
             current += self.step
 
     @classmethod
-    def from_strings(self, values: Iterable[str]) -> list['DateRange']:
+    def from_strings(cls, values: Iterable[str]) -> "list[DateRange | QEnum]":
         dates = sorted([datetime.strptime(v, "%Y%m%d") for v in values])
         if len(dates) < 2:
-            return [DateRange(
-                start=dates[0],
-                end=dates[0],
-                step=timedelta(days=0)
-            )]
+            return [DateEnum(dates)]
         
         ranges = []
-        current_range, dates = [dates[0],], dates[1:]
+        current_group, dates = [dates[0],], dates[1:]
+        current_type : Literal["enum", "range"] = "enum"
         while len(dates) > 1:
-            if dates[0] - current_range[-1] == timedelta(days=1):
-                current_range.append(dates.pop(0))
-            
-            elif len(current_range) == 1:
-                ranges.append(DateRange(
-                start=current_range[0],
-                end=current_range[0],
-                step=timedelta(days=0)
-                ))
-                current_range = [dates.pop(0),]
+            if current_type == "range":
 
-            else:
+                # If the next date fits then add it to the current range
+                if dates[0] - current_group[-1] == timedelta(days=1):
+                    current_group.append(dates.pop(0))
+
+
+                # Emit the current range and start a new one
+                else:
+                    if len(current_group) == 1:
+                        ranges.append(DateEnum(current_group))
+                    else:
+                        ranges.append(DateRange(
+                            start=current_group[0],
+                            end=current_group[-1],
+                            step=timedelta(days=1)
+                        ))
+                    current_group = [dates.pop(0),]
+                    current_type = "enum"
+            
+            if current_type == "enum":
+                # If the next date is one more than the last then switch to range mode
+                if dates[0] - current_group[-1] == timedelta(days=1):
+                    last = current_group.pop()
+                    if current_group:
+                        ranges.append(DateEnum(current_group))
+                    current_group = [last, dates.pop(0)]
+                    current_type = "range"
+
+                else:
+                    current_group.append(dates.pop(0))
+
+        # Handle remaining `current_group`
+        if current_group:
+            if current_type == "range":
                 ranges.append(DateRange(
-                start=current_range[0],
-                end=current_range[-1],
-                step=timedelta(days=1)
+                    start=current_group[0],
+                    end=current_group[-1],
+                    step=timedelta(days=1)
                 ))
-                current_range = [dates.pop(0),]
+            else:
+                ranges.append(DateEnum(current_group))
+
         return ranges
     
     def __contains__(self, value: Any) -> bool:
@@ -140,6 +185,11 @@ class TimeRange(Range):
     end: int
     step: int
     dtype: Literal["time"] = dataclasses.field(kw_only=True, default="time")
+
+    def min(self):
+        return self.start
+    def __iter__(self) -> Iterable[Any]:
+        return super().__iter__()
 
     @classmethod
     def from_strings(self, values: Iterable[str]) -> list['TimeRange']:
@@ -198,7 +248,9 @@ class IntRange(Range):
         return (self.end - self.start) // self.step
     
     def summary(self) -> str:
-        def fmt(d): return d.strftime("%Y%m%d")
+        def fmt(d): return d
+        if self.step == 0:
+            return f"{fmt(self.start)}"
         return f"{fmt(self.start)}/to/{fmt(self.end)}/by/{self.step}"
     
     def __contains__(self, value: Any) -> bool:
@@ -247,3 +299,17 @@ def values_from_json(obj) -> Values:
         case "time": return TimeRange(**obj)
         case "int": return IntRange(**obj)
         case _: raise ValueError(f"Unknown dtype {obj['dtype']}")
+
+
+def convert_datatypes(q: "Qube", conversions: dict[str, Values]) -> "Qube":
+    def _convert(q: "Qube") -> Iterable["Qube"]:
+        if q.key in conversions:
+            data_type = conversions[q.key]
+            assert isinstance(q.values, QEnum), "Only QEnum values can be converted to other datatypes."
+            for values_group in data_type.from_strings(q.values):
+                # print(values_group)
+                yield replace(q, data=replace(q.data, values=values_group))
+        else:
+            yield q
+
+    return q.transform(_convert)
