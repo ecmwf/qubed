@@ -16,7 +16,7 @@ from .tree_formatters import (
 from .value_types import QEnum, Values, values_from_json
 
 
-@dataclass(frozen=True, eq=True, order=True)
+@dataclass(frozen=False, eq=True, order=True, unsafe_hash=True)
 class Qube:
     data: NodeData
     children: tuple['Qube', ...]

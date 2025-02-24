@@ -38,8 +38,8 @@ class Values(ABC):
 
 T = TypeVar("T")
 EnumValuesType = FrozenSet[T]
-@dataclass(frozen=True, order=True)
 
+@dataclass(frozen=True, order=True)
 class QEnum(Values):
     """
     The simplest kind of key value is just a list of strings.
