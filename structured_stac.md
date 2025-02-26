@@ -7,7 +7,7 @@
 - **Extension [Maturity Classification](https://github.com/radiantearth/stac-spec/tree/master/extensions/README.md#extension-maturity):** Proposal
 - **Owner**: @TomHodson
 
-This STAC extension allows for represention of [generalised datacubes][gen_datacubes]. 
+This STAC extension allows for represention of [generalised datacubes][gen_datacubes].
 
 A datacube has a fixed set of dimensions `[a, b, c..]` , each of which have a fixed span `{a: ["temp","rainfall"], b : [1-7], c:[True, False]}` such that we can access data by indexing, i.e providing a value for each axis, `a="rainfall", b=1, ...`.  A generalised datacubes allow the dimensions to change during indexing, so choosing `a="rainfall"` might yield a different set of axes from `a="temp"`.
 
@@ -49,7 +49,7 @@ A typical `Catalog` entry with this extension:
         "multiple": true,
       }
       ""
-      
+
     },
   ],
   "stac_extensions": [
@@ -136,11 +136,11 @@ A spatial dimension in vertical (z) direction.
 | unit             | string           | The unit of measurement for the data, preferably compliant to [UDUNITS-2](https://ncics.org/portfolio/other-resources/udunits2/) units (singular). |
 | reference_system | string\|number\|object | The spatial reference system for the data, specified as [numerical EPSG code](http://www.epsg-registry.org/), [WKT2 (ISO 19162) string](http://docs.opengeospatial.org/is/18-010r7/18-010r7.html) or [PROJJSON object](https://proj.org/specifications/projjson.html). Defaults to EPSG code 4326. |
 
-A Vertical Spatial Dimension Object MUST specify an `extent` or `values`. It MAY specify both. 
+A Vertical Spatial Dimension Object MUST specify an `extent` or `values`. It MAY specify both.
 
 ### Temporal Dimension Object
 
-A temporal dimension based on the ISO 8601 standard. The temporal reference system for the data is expected to be ISO 8601 compliant 
+A temporal dimension based on the ISO 8601 standard. The temporal reference system for the data is expected to be ISO 8601 compliant
 (Gregorian calendar / UTC). Data not compliant with ISO 8601 can be represented as an *Additional Dimension Object* with `type` set to `temporal`.
 
 | Field Name | Type            | Description                                                  |

@@ -9,4 +9,4 @@ with data_path.open("r") as f:
 
 compressed_tree = compressed_tree.guess_datatypes()
 
-compressed_tree.print(depth = 10)
+compressed_tree.print(depth=10)

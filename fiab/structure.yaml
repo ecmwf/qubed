@@ -8,7 +8,7 @@
         class: rd
         stream: anemoi
         expver: something
-        lead_time: 
+        lead_time:
           type: datetime
           format: '%Y-%m-%d %H:%M:%S'
           step: 6h
@@ -41,7 +41,7 @@
         class: rd
         stream: anemoi
         expver: something
-        lead_time: 
+        lead_time:
           type: datetime
           format: '%Y-%m-%d %H:%M:%S'
           step: 6h

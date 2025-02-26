@@ -37,7 +37,7 @@ Unfortunately, we have more than one data file. If we are lucky, the set of iden
 }
 ```
 
-with the property that any particular choice for a value for any key will correspond to datafile that exists. So this object represents `2x1x3x1x2x2x4 = 96` different datafiles. 
+with the property that any particular choice for a value for any key will correspond to datafile that exists. So this object represents `2x1x3x1x2x2x4 = 96` different datafiles.
 
 To save space I will also represent this same thing like this:
 ```

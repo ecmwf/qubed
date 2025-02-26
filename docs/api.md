@@ -1,4 +1,4 @@
-# API 
+# API
 
 ## Set Operations
 
@@ -11,4 +11,3 @@ A = Qube.from_dict({
 })
 A
 ```
-

@@ -157,7 +157,7 @@ B = Qube.from_dict({"a=2/3/4" : {"b=j/k/l" : {}},})
 A.print(), B.print();
 ```
 
-Union: 
+Union:
 
 ```{code-cell} python3
 (A | B).print();

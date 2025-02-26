@@ -1,10 +1,10 @@
 # Command Line Usage
 
-```bash 
+```bash
 fdb list class=rd,expver=0001,... | qubed --from=fdblist --to=text
 ```
 
-`--from` options include: 
+`--from` options include:
 * `fdblist`
 * `json`
 * `protobuf`

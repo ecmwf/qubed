@@ -36,12 +36,12 @@ B
 └─── a=2, b=3/4/5, c=2
 ```
 
-We pair the two trees and traverse them in tandem, at each level we group the nodes by node key and for every pair of nodes in a group, compute the values only in A, the values only in B and the 
+We pair the two trees and traverse them in tandem, at each level we group the nodes by node key and for every pair of nodes in a group, compute the values only in A, the values only in B and the
 ```
 for node_a in level_A:
     for node_b in level_B:
         just_A, intersection, just_B = Qube.fused_set_operations(
-            node_a.values, 
+            node_a.values,
             node_b.values
         )
 ```

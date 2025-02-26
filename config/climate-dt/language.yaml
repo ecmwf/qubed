@@ -140,7 +140,7 @@ _field: &_field
     - [lwda, long window daily archive] # extremes-dt
     - [lwwv, long window wave] # extremes-dt
     - [clmn, climate-monthly, Climate run monthly means output] # climate-dt
-  
+
     # - [amap, analysis for multianalysis project]
     # - [ammc, melbourne]
     # - [cher, ch, chernobyl]
@@ -468,7 +468,7 @@ _field: &_field
     type: enum
     multiple: true
     values:
-    - [20211021, ]  
+    - [20211021, ]
 
   year:
     category: data

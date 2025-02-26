@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   linux:
-    runs-on: 
+    runs-on:
         - ubuntu-latest
     steps:
       - uses: actions/checkout@v4

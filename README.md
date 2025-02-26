@@ -33,7 +33,7 @@ root
     └── expver=0002, param=1/2
 ```
 
-Qubed provides all the algorithms on this data structure you would expect such as intersection/union/difference, compression, search, filtering etc. 
+Qubed provides all the algorithms on this data structure you would expect such as intersection/union/difference, compression, search, filtering etc.
 
 In addition to this core datastructure, this repostitory contains a collection of components designed to deliver user friendly cataloging for datacube data. The STAC Server, Frontend and a periodic job to do tree compression can be deployed together to kubernetes using the [helm chart](./helm_chart). Thise deployment can then be accessed either via the Query Builder Web interface or the python client.
 
@@ -45,7 +45,7 @@ In addition to this core datastructure, this repostitory contains a collection o
 
 - 🌟 Implements our proposed [Datacube STAC Extension](./structured_stac.md).
 - 🛠️ Allows efficient traversal of ECMWF's datacubes.
-- Part of the implementation of this is [🌲 Tree Compressor](./tree_compresser), a **compressed tree representation** optimised for storing trees with many duplicated subtress. 
+- Part of the implementation of this is [🌲 Tree Compressor](./tree_compresser), a **compressed tree representation** optimised for storing trees with many duplicated subtress.
 - 🔗 **[Live Example](https://climate-catalogue.lumi.apps.dte.destination-earth.eu/api/stac?root=root&activity=story-nudging%2Cscenariomip&class=d1)**.
 
 ---
@@ -58,7 +58,7 @@ In addition to this core datastructure, this repostitory contains a collection o
 
 ---
 
-### TODO: 🐍 [Qubed Python Query Builder](./python_query_builder) 
+### TODO: 🐍 [Qubed Python Query Builder](./python_query_builder)
 > **Python Client**
 
 - 🤖 A Python client for the **STAC Server**.

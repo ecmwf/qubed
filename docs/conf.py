@@ -6,10 +6,10 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'qubed'
-copyright = '2025, Tom Hodson (ECMWF)'
-author = 'Tom Hodson (ECMWF)'
-release = '0.1.0'
+project = "qubed"
+copyright = "2025, Tom Hodson (ECMWF)"
+author = "Tom Hodson (ECMWF)"
+release = "0.1.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -20,8 +20,8 @@ extensions = [
     "myst_nb",  # For parsing markdown
 ]
 
-templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', "jupyter_execute"]
+templates_path = ["_templates"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "jupyter_execute"]
 
 
 source_suffix = {

@@ -32,7 +32,3 @@ spec:
         - {{ .Values.ingress.hostname }}
       secretName: {{ .Values.ingress.tlsSecretName }}
 {{- end }}
-
-
-
-

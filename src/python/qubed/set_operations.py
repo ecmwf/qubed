@@ -20,16 +20,31 @@ class SetOperation(Enum):
     DIFFERENCE = (1, 0, 0)
     SYMMETRIC_DIFFERENCE = (1, 0, 1)
 
-def fused_set_operations(A: "Values", B: "Values") -> tuple[list[Values], list[Values], list[Values]]:
+
+def fused_set_operations(
+    A: "Values", B: "Values"
+) -> tuple[list[Values], list[Values], list[Values]]:
     if isinstance(A, QEnum) and isinstance(B, QEnum):
         set_A, set_B = set(A), set(B)
         intersection = set_A & set_B
         just_A = set_A - intersection
         just_B = set_B - intersection
-        return [QEnum(just_A),], [QEnum(intersection),], [QEnum(just_B),]
-                
-    
-    raise NotImplementedError("Fused set operations on values types other than QEnum are not yet implemented")
+        return (
+            [
+                QEnum(just_A),
+            ],
+            [
+                QEnum(intersection),
+            ],
+            [
+                QEnum(just_B),
+            ],
+        )
+
+    raise NotImplementedError(
+        "Fused set operations on values types other than QEnum are not yet implemented"
+    )
+
 
 def node_intersection(A: "Values", B: "Values") -> tuple[Values, Values, Values]:
     if isinstance(A, QEnum) and isinstance(B, QEnum):
@@ -38,18 +53,24 @@ def node_intersection(A: "Values", B: "Values") -> tuple[Values, Values, Values]
         just_A = set_A - intersection
         just_B = set_B - intersection
         return QEnum(just_A), QEnum(intersection), QEnum(just_B)
-                
-    
-    raise NotImplementedError("Fused set operations on values types other than QEnum are not yet implemented")
 
-def operation(A: "Qube", B : "Qube", operation_type: SetOperation, node_type) -> "Qube":
-    assert A.key == B.key, "The two Qube root nodes must have the same key to perform set operations," \
-                           f"would usually be two root nodes. They have {A.key} and {B.key} respectively"
-    
-    assert A.values == B.values, f"The two Qube root nodes must have the same values to perform set operations {A.values = }, {B.values = }"
+    raise NotImplementedError(
+        "Fused set operations on values types other than QEnum are not yet implemented"
+    )
+
+
+def operation(A: "Qube", B: "Qube", operation_type: SetOperation, node_type) -> "Qube":
+    assert A.key == B.key, (
+        "The two Qube root nodes must have the same key to perform set operations,"
+        f"would usually be two root nodes. They have {A.key} and {B.key} respectively"
+    )
+
+    assert A.values == B.values, (
+        f"The two Qube root nodes must have the same values to perform set operations {A.values = }, {B.values = }"
+    )
 
     # Group the children of the two nodes by key
-    nodes_by_key = defaultdict(lambda : ([], []))
+    nodes_by_key = defaultdict(lambda: ([], []))
     for node in A.children:
         nodes_by_key[node.key][0].append(node)
     for node in B.children:
@@ -59,7 +80,9 @@ def operation(A: "Qube", B : "Qube", operation_type: SetOperation, node_type) ->
 
     # For every node group, perform the set operation
     for key, (A_nodes, B_nodes) in nodes_by_key.items():
-        new_children.extend(_operation(key, A_nodes, B_nodes, operation_type, node_type))
+        new_children.extend(
+            _operation(key, A_nodes, B_nodes, operation_type, node_type)
+        )
 
     # Whenever we modify children we should recompress them
     # But since `operation` is already recursive, we only need to compress this level not all levels
@@ -68,10 +91,12 @@ def operation(A: "Qube", B : "Qube", operation_type: SetOperation, node_type) ->
 
     # The values and key are the same so we just replace the children
     return replace(A, children=new_children)
-    
+
 
 # The root node is special so we need a helper method that we can recurse on
-def _operation(key: str, A: list["Qube"], B : list["Qube"], operation_type: SetOperation, node_type) -> Iterable["Qube"]:
+def _operation(
+    key: str, A: list["Qube"], B: list["Qube"], operation_type: SetOperation, node_type
+) -> Iterable["Qube"]:
     # We need to deal with the case where only one of the trees has this key.
     # To do so we can insert a dummy node with no children and no values into both A and B
     keep_just_A, keep_intersection, keep_just_B = operation_type.value
@@ -83,12 +108,11 @@ def _operation(key: str, A: list["Qube"], B : list["Qube"], operation_type: SetO
 
     for node_a in A:
         for node_b in B:
-
             # Compute A - B, A & B, B - A
             # Update the values for the two source nodes to remove the intersection
             just_a, intersection, just_b = node_intersection(
-                values[node_a], 
-                values[node_b], 
+                values[node_a],
+                values[node_b],
             )
 
             # Remove the intersection from the source nodes
@@ -97,10 +121,13 @@ def _operation(key: str, A: list["Qube"], B : list["Qube"], operation_type: SetO
 
             if keep_intersection:
                 if intersection:
-                    new_node_a = replace(node_a, data = replace(node_a.data, values = intersection))
-                    new_node_b = replace(node_b, data= replace(node_b.data, values = intersection))
+                    new_node_a = replace(
+                        node_a, data=replace(node_a.data, values=intersection)
+                    )
+                    new_node_b = replace(
+                        node_b, data=replace(node_b.data, values=intersection)
+                    )
                     yield operation(new_node_a, new_node_b, operation_type, node_type)
-
 
     # Now we've removed all the intersections we can yield the just_A and just_B parts if needed
     if keep_just_A:
@@ -111,6 +138,7 @@ def _operation(key: str, A: list["Qube"], B : list["Qube"], operation_type: SetO
         for node in B:
             if values[node]:
                 yield node_type.make(key, values[node], node.children)
+
 
 def compress_children(children: Iterable["Qube"]) -> tuple["Qube"]:
     """
@@ -124,8 +152,8 @@ def compress_children(children: Iterable["Qube"]) -> tuple["Qube"]:
         # only care about the key and children of each node, ignore values
         key = hash((child.key, tuple((cc.structural_hash for cc in child.children))))
         identical_children[key].add(child)
-    
-    # Now go through and create new compressed nodes for any groups that need collapsing
+
+    # Now go through and create new compressed nodes for any groups that need collapsing
     new_children = []
     for child_set in identical_children.values():
         if len(child_set) > 1:
@@ -134,19 +162,23 @@ def compress_children(children: Iterable["Qube"]) -> tuple["Qube"]:
             key = child_set[0].key
 
             # Compress the children into a single node
-            assert all(isinstance(child.data.values, QEnum) for child in child_set), "All children must have QEnum values"
-            
-            node_data = NodeData(
-                key = key,
-                metadata = frozendict(), # Todo: Implement metadata compression
-                values = QEnum((v for child in child_set for v in child.data.values.values)),
+            assert all(isinstance(child.data.values, QEnum) for child in child_set), (
+                "All children must have QEnum values"
             )
-            new_child = node_type(data = node_data, children = child_set[0].children)
+
+            node_data = NodeData(
+                key=key,
+                metadata=frozendict(),  # Todo: Implement metadata compression
+                values=QEnum(
+                    (v for child in child_set for v in child.data.values.values)
+                ),
+            )
+            new_child = node_type(data=node_data, children=child_set[0].children)
         else:
             # If the group is size one just keep it
             new_child = child_set.pop()
-        
+
         new_children.append(new_child)
-    return tuple(sorted(new_children, 
-                        key = lambda n : ((n.key, tuple(sorted(n.values.values))))
-                        ))
+    return tuple(
+        sorted(new_children, key=lambda n: ((n.key, tuple(sorted(n.values.values)))))
+    )

@@ -2,14 +2,15 @@ from dataclasses import dataclass, field
 
 character = str
 
+
 @dataclass(unsafe_hash=True)
-class TrieNode():
+class TrieNode:
     parent: "TrieNode | None"
     parent_char: character
     children: dict[character, "TrieNode"] = field(default_factory=dict)
 
 
-@dataclass 
+@dataclass
 class Trie:
     root: TrieNode = field(default_factory=lambda: TrieNode(None, ""))
     reverse_lookup: dict[int, TrieNode] = field(default_factory=dict)
@@ -28,7 +29,7 @@ class Trie:
             self.reverse_lookup[n_id] = node
 
         return n_id
-    
+
     def lookup_by_id(self, n_id: int):
         leaf_node = self.reverse_lookup[n_id]
         string = []
@@ -37,4 +38,3 @@ class Trie:
             leaf_node = leaf_node.parent
 
         return "".join(reversed(string))
-

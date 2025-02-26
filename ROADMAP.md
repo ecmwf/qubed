@@ -3,10 +3,10 @@ Initial Python Implementation
 [x] Basic Qube datastructure
 [x] Compression
 [x] Set Operations (Union, Difference, Intersection...)
-[x] Query with request 
+[x] Query with request
 [x] Iteration over leaves
 [x] Iteration over datacubes
-[x] Command line creation from fdb list --compact 
+[x] Command line creation from fdb list --compact
 [ ] Set up periodic updates to climate-dt/extremes-dt again
 [ ] Maybe also do production db?
 [ ] Do mars list to contraints conversion

@@ -4,4 +4,4 @@ cd backend
     --reload-include="*.html" \
     --reload-include="*.css" \
     --reload-include="*.js" \
-    --reload-include="*.yaml" 
+    --reload-include="*.yaml"

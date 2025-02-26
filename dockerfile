@@ -3,7 +3,7 @@ FROM python:3.12-slim AS base
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
-    openssh-client \ 
+    openssh-client \
     git \
     && apt-get clean
 
@@ -30,7 +30,7 @@ RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 # COPY config/destinE/schema /config/schema
 # COPY config/destinE/language.yaml /config/language.yaml
 
-COPY ./tree_compresser /code/tree_compresser 
+COPY ./tree_compresser /code/tree_compresser
 
 # Clone the rsfdb and rsfindlibs repos manually because they're private
 
@@ -39,7 +39,7 @@ COPY ./tree_compresser /code/tree_compresser
 COPY stac_server/deps/rsfdb /code/rsfdb
 COPY stac_server/deps/rsfindlibs /code/rsfindlibs
 
-RUN pip install --no-cache-dir -e /code/tree_compresser 
+RUN pip install --no-cache-dir -e /code/tree_compresser
 COPY ./stac_server /code/stac_server
 
 WORKDIR /code/stac_server

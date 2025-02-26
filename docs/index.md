@@ -54,14 +54,3 @@ Distinct datasets: {climate_dt.n_leaves},
 Number of nodes in the tree: {climate_dt.n_nodes}
 """)
 ```
-
-
-
-
-
-
-
-
-
-
-
