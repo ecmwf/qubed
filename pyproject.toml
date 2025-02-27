@@ -18,6 +18,9 @@ requires-python = ">= 3.11"
 dynamic = ["version"]
 dependencies = [
     "frozendict",
+    "rich",
+    "numpy",
+    "click",
 ]
 
 # Because this is a mixed rust/python project the structure is src/python/qubed rather than the more typical src/qubed
