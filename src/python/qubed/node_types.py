@@ -3,13 +3,13 @@ from typing import Hashable
 
 from frozendict import frozendict
 
-from .value_types import Values
+from .value_types import ValueGroup
 
 
 @dataclass(frozen=False, eq=True, order=True, unsafe_hash=True)
 class NodeData:
     key: str
-    values: Values
+    values: ValueGroup
     metadata: dict[str, tuple[Hashable, ...]] = field(
         default_factory=frozendict, compare=False
     )

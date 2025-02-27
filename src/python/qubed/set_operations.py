@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Iterable
 from frozendict import frozendict
 
 from .node_types import NodeData
-from .value_types import QEnum, Values
+from .value_types import QEnum, ValueGroup
 
 if TYPE_CHECKING:
     from .qube import Qube
@@ -22,8 +22,8 @@ class SetOperation(Enum):
 
 
 def fused_set_operations(
-    A: "Values", B: "Values"
-) -> tuple[list[Values], list[Values], list[Values]]:
+    A: "ValueGroup", B: "ValueGroup"
+) -> tuple[list[ValueGroup], list[ValueGroup], list[ValueGroup]]:
     if isinstance(A, QEnum) and isinstance(B, QEnum):
         set_A, set_B = set(A), set(B)
         intersection = set_A & set_B
@@ -46,7 +46,9 @@ def fused_set_operations(
     )
 
 
-def node_intersection(A: "Values", B: "Values") -> tuple[Values, Values, Values]:
+def node_intersection(
+    A: "ValueGroup", B: "ValueGroup"
+) -> tuple[ValueGroup, ValueGroup, ValueGroup]:
     if isinstance(A, QEnum) and isinstance(B, QEnum):
         set_A, set_B = set(A), set(B)
         intersection = set_A & set_B

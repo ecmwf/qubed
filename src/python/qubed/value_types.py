@@ -9,33 +9,41 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class Values(ABC):
+class ValueGroup(ABC):
     @abstractmethod
     def summary(self) -> str:
+        "Provide a string summary of the value group."
         pass
 
     @abstractmethod
     def __len__(self) -> int:
+        "Return how many values this group contains."
         pass
 
     @abstractmethod
     def __contains__(self, value: Any) -> bool:
+        "Given a value, coerce to the value type and determine if it is in the value group."
         pass
 
     @abstractmethod
     def __iter__(self) -> Iterable[Any]:
+        "Iterate over the values in the group."
         pass
 
+    @classmethod
     @abstractmethod
-    def from_strings(self, values: Iterable[str]) -> list["Values"]:
+    def from_strings(cls, values: Iterable[str]) -> list["ValueGroup"]:
+        "Given a list of strings, return a one or more ValueGroups of this type."
         pass
 
     @abstractmethod
     def min(self):
+        "Return the minimum value in the group."
         pass
 
     @abstractmethod
-    def to_json(self):
+    def to_json(self) -> dict:
+        "Return a JSON serializable representation of the value group."
         pass
 
 
@@ -44,7 +52,7 @@ EnumValuesType = FrozenSet[T]
 
 
 @dataclass(frozen=True, order=True)
-class QEnum(Values):
+class QEnum(ValueGroup):
     """
     The simplest kind of key value is just a list of strings.
     summary -> string1/string2/string....
@@ -70,7 +78,7 @@ class QEnum(Values):
     def __contains__(self, value: Any) -> bool:
         return value in self.values
 
-    def from_strings(self, values: Iterable[str]) -> list["Values"]:
+    def from_strings(self, values: Iterable[str]) -> list["ValueGroup"]:
         return [type(self)(tuple(values))]
 
     def min(self):
@@ -89,7 +97,7 @@ class DateEnum(QEnum):
 
 
 @dataclass(frozen=True)
-class Range(Values, ABC):
+class Range(ValueGroup, ABC):
     dtype: str = dataclasses.field(kw_only=True)
 
     start: Any
@@ -327,7 +335,7 @@ class IntRange(Range):
         return ranges
 
 
-def values_from_json(obj) -> Values:
+def values_from_json(obj) -> ValueGroup:
     if isinstance(obj, list):
         return QEnum(tuple(obj))
 
@@ -342,7 +350,7 @@ def values_from_json(obj) -> Values:
             raise ValueError(f"Unknown dtype {obj['dtype']}")
 
 
-def convert_datatypes(q: "Qube", conversions: dict[str, Values]) -> "Qube":
+def convert_datatypes(q: "Qube", conversions: dict[str, ValueGroup]) -> "Qube":
     def _convert(q: "Qube") -> Iterable["Qube"]:
         if q.key in conversions:
             data_type = conversions[q.key]

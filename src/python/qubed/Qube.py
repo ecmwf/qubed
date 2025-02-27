@@ -13,7 +13,7 @@ from .tree_formatters import (
     node_tree_to_html,
     node_tree_to_string,
 )
-from .value_types import QEnum, Values, values_from_json
+from .value_types import QEnum, ValueGroup, values_from_json
 
 
 @dataclass(frozen=False, eq=True, order=True, unsafe_hash=True)
@@ -26,7 +26,7 @@ class Qube:
         return self.data.key
 
     @property
-    def values(self) -> Values:
+    def values(self) -> ValueGroup:
         return self.data.values
 
     @property
@@ -51,7 +51,7 @@ class Qube:
         return self.data.summary()
 
     @classmethod
-    def make(cls, key: str, values: Values, children, **kwargs) -> "Qube":
+    def make(cls, key: str, values: ValueGroup, children, **kwargs) -> "Qube":
         return cls(
             data=NodeData(key, values, metadata=kwargs.get("metadata", frozendict())),
             children=tuple(sorted(children, key=lambda n: ((n.key, n.values.min())))),
