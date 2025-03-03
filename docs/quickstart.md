@@ -9,8 +9,13 @@ jupytext:
 # Quickstart
 
 ## Installation
+To install the latest stable release from PyPI (recommended):
 ```bash
 pip install qubed
+```
+Or to build and install the latest version from github (requires cargo):
+```bash
+pip install qubed@git+https://github.com/ecmwf/qubed.git@main
 ```
 
 ## Usage
