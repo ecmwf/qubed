@@ -95,6 +95,37 @@ class DateEnum(QEnum):
 
         return "/".join(map(fmt, sorted(self.values)))
 
+@dataclass(frozen=True)
+class WildCard(ValueGroup):
+    def summary(self) -> str:
+        "Provide a string summary of the value group."
+        return "Includes all options"
+
+    def __len__(self) -> int:
+        "Return how many values this group contains."
+        return -1
+
+    def __contains__(self, value: Any) -> bool:
+        "Given a value, coerce to the value type and determine if it is in the value group."
+        return True
+
+    @abstractmethod
+    def __iter__(self) -> Iterable[Any]:
+        "Iterate over the values in the group."
+        pass
+
+    @classmethod
+    def from_strings(cls, values: Iterable[str]) -> list["ValueGroup"]:
+        "Given a list of strings, return a one or more ValueGroups of this type."
+        return [cls()]
+
+    def min(self):
+        "Return the minimum value in the group."
+        return -1
+
+    def to_json(self) -> dict:
+        "Return a JSON serializable representation of the value group."
+        return dataclasses.asdict(self)
 
 @dataclass(frozen=True)
 class Range(ValueGroup, ABC):
