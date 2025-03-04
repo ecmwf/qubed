@@ -58,23 +58,10 @@ model_3
 ```
 
 
-Model 4 uses and experimental wildcard flag to indicate that it can produce any parameter.
-
-```{code-cell} python3
-model_4 = Qube.from_datacube({
-        "levtype": "pl",
-        "param" : "*", # Special value that matches with everything
-        "level" : [100, 200, 300, 400, 50, 850, 500, 150, 600, 250, 700, 925, 1000],
-    })
-model_4 = "model=4" / ("frequency=6h" / model_4)
-model_4
-```
-
-
 Now we can combine the three models into a single qube:
 
 ```{code-cell} python3
-all_models = model_1 | model_2 | model_3 | model_4
+all_models = model_1 | model_2 | model_3
 all_models
 ```
 
@@ -109,6 +96,40 @@ all_models.select({
     "param" : ["q", "t", "u", "v"],
     "frequency": "6h",
 })
+```
+
+## Using WildCards
+
+```{code-cell} python3
+daily_surface_means = Qube.from_datacube({
+    "model": "*",
+    "frequency": "*",
+    "levtype": "sfc",
+    "param": "*",
+})
+all_models & daily_surface_means
+```
+
+```{code-cell} python3
+
+daily_level_means = Qube.from_datacube({
+    "model": "*",
+    "frequency": "*",
+    "levtype": "pl",
+    "param": "*",
+    "level": "*"
+})
+all_models & daily_level_means
+```
+
+```{code-cell} python3
+daily_level_mean_products = all_models & daily_surface_means
+for i, identifier in enumerate(daily_level_mean_products.leaves()):
+    print(identifier)
+    if i > 10:
+        print("...")
+        break
+
 ```
 
 <!-- ## Choosing the fewest models needed to cover the requested parameter set -->
