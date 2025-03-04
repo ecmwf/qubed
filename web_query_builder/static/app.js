@@ -5,8 +5,14 @@ function getSTACUrlFromQuery() {
   const params = new URLSearchParams(window.location.search);
 
   // get current window url and remove path part
-  let api_url = new URL(window.location.href);
-  api_url.pathname = "/api/stac";
+  if (window.API_URL.startsWith("http")) {
+    // Absolute URL: Use it directly
+    api_url = new URL(window.API_URL);
+  } else {
+    // Relative URL: Combine with the current window's location
+    api_url = new URL(window.location.href);
+    api_url.pathname = window.API_URL;
+  }
 
   for (const [key, value] of params.entries()) {
     api_url.searchParams.set(key, value);

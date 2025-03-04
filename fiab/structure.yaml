@@ -1,0 +1,67 @@
+# Format: list of models, each model has a model_outputs field which contains a nested tree of nodes
+# Nodes have {node: name, cube: list of key value(s) pairs, children: list[nodes]}
+
+- model: surface_and_atmosphere_model
+  model_outputs:
+    - node: root
+      cube:
+        class: rd
+        stream: anemoi
+        expver: something
+        lead_time:
+          type: datetime
+          format: '%Y-%m-%d %H:%M:%S'
+          step: 6h
+
+
+      children:
+        - node: pressure_variables
+          other_metadata: something
+          cube:
+            param: ['q', 't', 'u', 'v', 'w', 'z']
+            level: [50, 100, 150, 200, 250, 300, 400, 500, 600, 700, 850, 925, 1000]
+
+
+        - node: surface_variables
+          other_metadata: something
+          cube:
+            param: ['sp', 'msl', '10u', '10v', '2t', '2d', 'skt', 'tcw', 'cp', 'tp']
+
+        # Hypothetical Ocean variables
+        - node: ocean_variables
+          cube:
+            param: ["saltiness", "number of eels", "is_blue", "good_for_surfing"]
+            ocean_levels: [??, ??]
+
+  # Alternative List of cubes format
+  - model: surface_and_atmosphere_model
+  model_outputs:
+    - node: root
+      cube:
+        class: rd
+        stream: anemoi
+        expver: something
+        lead_time:
+          type: datetime
+          format: '%Y-%m-%d %H:%M:%S'
+          step: 6h
+
+
+      children:
+        - node: pressure_variables
+          other_metadata: something
+          cube:
+            param: ['q', 't', 'u', 'v', 'w', 'z']
+            level: [50, 100, 150, 200, 250, 300, 400, 500, 600, 700, 850, 925, 1000]
+
+
+        - node: surface_variables
+          other_metadata: something
+          cube:
+            param: ['sp', 'msl', '10u', '10v', '2t', '2d', 'skt', 'tcw', 'cp', 'tp']
+
+        # Hypothetical Ocean variables
+        - node: ocean_variables
+          cube:
+            param: ["saltiness", "number of eels", "is_blue", "good_for_surfing"]
+            ocean_levels: [??, ??]

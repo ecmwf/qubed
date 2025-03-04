@@ -6,3 +6,14 @@ config.yaml
 raw_list
 *.egg-info/
 deps/
+docs/_build/
+docs/jupyter_execute
+target/
+*.so
+_build/
+build/
+.ipynb_checkpoints/
+dist/
+Cargo.lock
+src/python/qubed/_version.py
+*.ipynb

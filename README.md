@@ -1,12 +1,41 @@
 # Q<sup>3</sup> Quick Querying of Qubes
+[![Static Badge](https://github.com/ecmwf/codex/raw/refs/heads/main/Project%20Maturity/emerging_badge.svg)](https://github.com/ecmwf/codex/raw/refs/heads/main/Project%20Maturity#emerging)
+[![Docs](https://readthedocs.org/projects/qubed/badge/?version=latest)](https://qubed.readthedocs.io/en/latest/)
+[![PyPi](https://img.shields.io/pypi/v/qubed.svg)](https://pypi.org/project/qubed/)
+[![Wheel](https://img.shields.io/pypi/wheel/qubed.svg)](https://pypi.org/project/qubed/)
 
-> [!WARNING]
-> This project is under development and not yet feature complete or tested.
+Qubed provides a datastructure primitive for working with trees of DataCubes. If a normal tree looks like this:
+```
+root
+├── class=od
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=rd
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2
+```
 
-> [!WARNING]
-> This project is BETA and will be experimental for the forseable future. Interfaces and functionality are likely to change, and the project itself may be scrapped. DO NOT use this software in any project/software that is operational.
+A compressed view of the same set would be:
+```
+root
+├── class=od, expver=0001/0002, param=1/2
+└── class=rd
+    ├── expver=0001, param=1/2/3
+    └── expver=0002, param=1/2
+```
 
-This repostitory contains a collection of components designed to deliver user friendly cataloging for datacube data. The STAC Server, Frontend and a periodic job to do tree compression can be deployed together to kubernetes using the [helm chart](./helm_chart). Thise deployment can then be accessed either via the Query Builder Web interface or the python client.
+Qubed provides all the algorithms on this data structure you would expect such as intersection/union/difference, compression, search, filtering etc.
+
+In addition to this core datastructure, this repostitory contains a collection of components designed to deliver user friendly cataloging for datacube data. The STAC Server, Frontend and a periodic job to do tree compression can be deployed together to kubernetes using the [helm chart](./helm_chart). Thise deployment can then be accessed either via the Query Builder Web interface or the python client.
 
 ## 📦 Components Overview
 
@@ -16,7 +45,7 @@ This repostitory contains a collection of components designed to deliver user fr
 
 - 🌟 Implements our proposed [Datacube STAC Extension](./structured_stac.md).
 - 🛠️ Allows efficient traversal of ECMWF's datacubes.
-- Part of the implementation of this is [🌲 Tree Compressor](./tree_compresser), a **compressed tree representation** optimised for storing trees with many duplicated subtress. 
+- Part of the implementation of this is [🌲 Tree Compressor](./tree_compresser), a **compressed tree representation** optimised for storing trees with many duplicated subtress.
 - 🔗 **[Live Example](https://climate-catalogue.lumi.apps.dte.destination-earth.eu/api/stac?root=root&activity=story-nudging%2Cscenariomip&class=d1)**.
 
 ---
@@ -29,7 +58,7 @@ This repostitory contains a collection of components designed to deliver user fr
 
 ---
 
-### TODO: 🐍 [Qubed Python Query Builder](./python_query_builder) 
+### TODO: 🐍 [Qubed Python Query Builder](./python_query_builder)
 > **Python Client**
 
 - 🤖 A Python client for the **STAC Server**.

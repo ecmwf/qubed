@@ -15,5 +15,5 @@ with open("config/climate-dt/language.yaml") as f:
     mars_language = yaml.safe_load(f)["_field"]
 
 print("Storing data in redis")
-r.set('compressed_catalog', json.dumps(compressed_catalog))
-r.set('mars_language', json.dumps(mars_language))
+r.set("compressed_catalog", json.dumps(compressed_catalog))
+r.set("mars_language", json.dumps(mars_language))

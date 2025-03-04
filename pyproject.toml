@@ -1,0 +1,66 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "qubed"
+description = "A library that provides a tree of datacubes called Qube."
+readme = "README.md"
+authors = [
+  {name = "Tom Hodson", email = "thomas.hodson@ecmwf.int"},
+]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+requires-python = ">= 3.11"
+dynamic = ["version"]
+dependencies = [
+    "frozendict",
+    "numpy",
+
+    # CLI
+    "rich",
+    "click",
+    "psutil"
+]
+
+# Because this is a mixed rust/python project the structure is src/python/qubed rather than the more typical src/qubed
+# Since this is slightly non-standard so we have to explicitly tell setuptools the python source is there.
+[tool.setuptools.packages.find]
+where = ["src/python"]
+
+[project.scripts]
+qubed = "qubed.__main__:main"
+
+[tool.maturin]
+python-source = "src/python"
+module-name = "qubed.rust"
+features = ["pyo3/extension-module"]
+
+
+[project.optional-dependencies]
+
+stac_server = [
+    "fastapi",
+]
+
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+    "myst_nb",
+    "sphinx-autobuild",
+    "jupyterlab",
+    "ipykernel",
+]
+
+dev = [
+    "pytest",
+    "black",
+    "ruff",
+    "flake8",
+    "pre-commit",
+    "isort",
+
+]
