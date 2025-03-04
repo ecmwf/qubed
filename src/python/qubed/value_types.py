@@ -16,13 +16,26 @@ class ValueGroup(ABC):
         pass
 
     @abstractmethod
-    def __len__(self) -> int:
-        "Return how many values this group contains."
+    def __contains__(self, value: Any) -> bool:
+        "Given a value, coerce to the value type and determine if it is in the value group."
         pass
 
     @abstractmethod
-    def __contains__(self, value: Any) -> bool:
-        "Given a value, coerce to the value type and determine if it is in the value group."
+    def to_json(self) -> dict:
+        "Return a JSON serializable representation of the value group."
+        pass
+
+    @abstractmethod
+    def min(self):
+        "Return the minimum value in the group."
+        pass
+
+
+@dataclass(frozen=True)
+class FiniteValueGroup(ValueGroup, ABC):
+    @abstractmethod
+    def __len__(self) -> int:
+        "Return how many values this group contains."
         pass
 
     @abstractmethod
@@ -36,23 +49,13 @@ class ValueGroup(ABC):
         "Given a list of strings, return a one or more ValueGroups of this type."
         pass
 
-    @abstractmethod
-    def min(self):
-        "Return the minimum value in the group."
-        pass
-
-    @abstractmethod
-    def to_json(self) -> dict:
-        "Return a JSON serializable representation of the value group."
-        pass
-
 
 T = TypeVar("T")
 EnumValuesType = FrozenSet[T]
 
 
 @dataclass(frozen=True, order=True)
-class QEnum(ValueGroup):
+class QEnum(FiniteValueGroup):
     """
     The simplest kind of key value is just a list of strings.
     summary -> string1/string2/string....
@@ -86,6 +89,21 @@ class QEnum(ValueGroup):
 
     def to_json(self):
         return list(self.values)
+
+
+@dataclass(frozen=True, order=True)
+class WildcardGroup(ValueGroup):
+    def summary(self) -> str:
+        return "*"
+
+    def __contains__(self, value: Any) -> bool:
+        return True
+
+    def to_json(self):
+        return "*"
+
+    def min(self):
+        return "*"
 
 
 class DateEnum(QEnum):

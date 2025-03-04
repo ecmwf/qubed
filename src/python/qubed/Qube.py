@@ -13,7 +13,7 @@ from .tree_formatters import (
     node_tree_to_html,
     node_tree_to_string,
 )
-from .value_types import QEnum, ValueGroup, values_from_json
+from .value_types import QEnum, ValueGroup, WildcardGroup, values_from_json
 
 
 @dataclass(frozen=False, eq=True, order=True, unsafe_hash=True)
@@ -67,9 +67,15 @@ class Qube:
 
         children: list["Qube"] = []
         for key, values in key_vals:
-            if not isinstance(values, list):
+            if values == "*":
+                values = WildcardGroup()
+            elif not isinstance(values, list):
                 values = [values]
-            children = [cls.make(key, QEnum(values), children)]
+
+            if isinstance(values, list):
+                values = QEnum(values)
+
+            children = [cls.make(key, values, children)]
 
         return cls.root_node(children)
 

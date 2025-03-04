@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Iterable
 from frozendict import frozendict
 
 from .node_types import NodeData
-from .value_types import QEnum, ValueGroup
+from .value_types import QEnum, ValueGroup, WildcardGroup
 
 if TYPE_CHECKING:
     from .qube import Qube
@@ -21,31 +21,6 @@ class SetOperation(Enum):
     SYMMETRIC_DIFFERENCE = (1, 0, 1)
 
 
-def fused_set_operations(
-    A: "ValueGroup", B: "ValueGroup"
-) -> tuple[list[ValueGroup], list[ValueGroup], list[ValueGroup]]:
-    if isinstance(A, QEnum) and isinstance(B, QEnum):
-        set_A, set_B = set(A), set(B)
-        intersection = set_A & set_B
-        just_A = set_A - intersection
-        just_B = set_B - intersection
-        return (
-            [
-                QEnum(just_A),
-            ],
-            [
-                QEnum(intersection),
-            ],
-            [
-                QEnum(just_B),
-            ],
-        )
-
-    raise NotImplementedError(
-        "Fused set operations on values types other than QEnum are not yet implemented"
-    )
-
-
 def node_intersection(
     A: "ValueGroup", B: "ValueGroup"
 ) -> tuple[ValueGroup, ValueGroup, ValueGroup]:
@@ -56,8 +31,21 @@ def node_intersection(
         just_B = set_B - intersection
         return QEnum(just_A), QEnum(intersection), QEnum(just_B)
 
+    if isinstance(A, WildcardGroup) and isinstance(B, WildcardGroup):
+        return A, WildcardGroup(), B
+
+    # If A is a wildcard matcher then the intersection is everything
+    # just_A is still *
+    # just_B is empty
+    if isinstance(A, WildcardGroup):
+        return A, B, QEnum([])
+
+    # The reverse if B is a wildcard
+    if isinstance(B, WildcardGroup):
+        return QEnum([]), A, B
+
     raise NotImplementedError(
-        "Fused set operations on values types other than QEnum are not yet implemented"
+        f"Fused set operations on values types {type(A)} and {type(B)} not yet implemented"
     )
 
 
@@ -99,8 +87,6 @@ def operation(A: "Qube", B: "Qube", operation_type: SetOperation, node_type) -> 
 def _operation(
     key: str, A: list["Qube"], B: list["Qube"], operation_type: SetOperation, node_type
 ) -> Iterable["Qube"]:
-    # We need to deal with the case where only one of the trees has this key.
-    # To do so we can insert a dummy node with no children and no values into both A and B
     keep_just_A, keep_intersection, keep_just_B = operation_type.value
 
     # Iterate over all pairs (node_A, node_B)
@@ -181,6 +167,4 @@ def compress_children(children: Iterable["Qube"]) -> tuple["Qube"]:
             new_child = child_set.pop()
 
         new_children.append(new_child)
-    return tuple(
-        sorted(new_children, key=lambda n: ((n.key, tuple(sorted(n.values.values)))))
-    )
+    return tuple(sorted(new_children, key=lambda n: ((n.key, n.values.min()))))

@@ -58,10 +58,23 @@ model_3
 ```
 
 
+Model 4 uses and experimental wildcard flag to indicate that it can produce any parameter.
+
+```{code-cell} python3
+model_4 = Qube.from_datacube({
+        "levtype": "pl",
+        "param" : "*", # Special value that matches with everything
+        "level" : [100, 200, 300, 400, 50, 850, 500, 150, 600, 250, 700, 925, 1000],
+    })
+model_4 = "model=4" / ("frequency=6h" / model_4)
+model_4
+```
+
+
 Now we can combine the three models into a single qube:
 
 ```{code-cell} python3
-all_models = model_1 | model_2 | model_3
+all_models = model_1 | model_2 | model_3 | model_4
 all_models
 ```
 
