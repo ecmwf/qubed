@@ -12,7 +12,7 @@ q = Qube.from_dict(
 
 
 def test_consumption():
-    assert q.select({"expver": "0001"}) == Qube.from_dict(
+    assert q.select({"expver": "0001"}, consume=True) == Qube.from_dict(
         {"class=od": {"expver=0001": {"param=1": {}, "param=2": {}}}}
     )
 
