@@ -261,6 +261,7 @@ class Qube:
         selection: dict[str, str | list[str]],
         mode: Literal["strict", "relaxed"] = "relaxed",
         prune=True,
+        consume=True,
     ) -> "Qube":
         # make all values lists
         selection = {k: v if isinstance(v, list) else [v] for k, v in selection.items()}
