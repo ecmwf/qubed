@@ -136,7 +136,6 @@ class Qube:
             indent = (len(line) - len(stripped)) // 4
             if initial_indent is None:
                 initial_indent = indent
-                print(f"Initial indent {initial_indent}")
             indent = indent - initial_indent
 
             # Split multiple key=value parts into nested structure
