@@ -2,21 +2,18 @@
 
 ```bash
 fdb list class=rd,expver=0001,... | qubed --from=fdblist --to=text
+
+fdb list --minimum-keys=class class=d1,dataset=climate-dt --config prod_remoteFDB.yaml  | qubed convert --from=fdb --to=text
+
 ```
 
 `--from` options include:
-* `fdblist`
-* `json`
-* `protobuf`
-* `marslist`
-* `constraints`
+* `fdb`
 
 `--to` options include:
 * `text`
 * `html`
 * `json`
-* `datacubes`
-* `constraints`
 
 use `--input` and `--output` to specify input and output files respectively.
 
@@ -27,3 +24,15 @@ gzip -dc tests/data/fdb_list_compact.gz| qubed convert --from=fdb --to=text --ou
 gzip -dc tests/data/fdb_list_porcelain.gz| qubed convert --from=fdb --to=json --output=qube.json
 gzip -dc tests/data/fdb_list_compact.gz | qubed convert --from=fdb --to=html --output=qube.html
 ```
+
+## Todo
+
+--from for
+* `protobuf`
+* `marslist`
+* `constraints`
+
+--to for
+* `json`
+* `datacubes`
+* `constraints`

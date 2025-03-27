@@ -11,12 +11,11 @@ jupytext:
 
 ```{toctree}
 :maxdepth: 1
-background.md
 quickstart.md
-api.md
-development.md
+background.md
 algorithms.md
 fiab.md
+cmd.md
 ```
 
 Qubed provides a datastructure called a Qube which represents sets of data identified by multiple key value pairs as a tree of datacubes. To understand what that means go to [Background](background.md), to just start using the library skip straight to the [Quickstart](quickstart.md).
