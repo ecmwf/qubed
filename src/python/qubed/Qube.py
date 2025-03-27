@@ -154,10 +154,18 @@ class Qube:
                 # Add to the dictionary at current stack level
                 parent = stack[-1]
                 key = list(current.keys())[0]
+                if key in parent:
+                    raise ValueError(
+                        f"This function doesn't yet support reading in uncompressed trees, repeated key is {key}"
+                    )
                 parent[key] = current[key]
             else:
                 # Top level
                 key = list(current.keys())[0]
+                if root:
+                    raise ValueError(
+                        f"This function doesn't yet support reading in uncompressed trees, repeated key is {key}"
+                    )
                 root = current[key]
 
             # Push to the stack
