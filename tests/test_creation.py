@@ -10,7 +10,7 @@ def test_simple():
         ├── param=2t, threshold=273.15
         └── param=tp, threshold=0.1/1/10/100/20/25/5/50
     """)
-    q.print()
+
     r = Qube.from_dict(
         {
             "frequency=6:00:00": {
