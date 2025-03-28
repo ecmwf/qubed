@@ -71,7 +71,7 @@ class QEnum(ValueGroup):
     values: EnumValuesType
 
     def __init__(self, obj):
-        object.__setattr__(self, "values", frozenset(obj))
+        object.__setattr__(self, "values", tuple(sorted(obj)))
 
     def __post_init__(self):
         assert isinstance(self.values, tuple)

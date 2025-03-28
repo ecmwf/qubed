@@ -291,8 +291,6 @@ class Qube:
             return
 
         for index, value in enumerate(self.values):
-            # print(self.key, index, indices, value)
-            # print({k: np.shape(v) for k, v in self.metadata.items()})
             indexed_metadata = {
                 k: vs[indices + (index,)] for k, vs in self.metadata.items()
             }
