@@ -18,3 +18,4 @@ Cargo.lock
 src/python/qubed/_version.py
 *.ipynb
 cmake_build/
+tests/data/
