@@ -24,22 +24,12 @@ FROM base AS stac_server
 COPY stac_server/requirements.txt /code/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
-# Todo: don't embed this here, mount them at runtime
-# ENV CONFIG_DIR=/config/
-# COPY config/destinE/config.yaml /config/config.yaml
-# COPY config/destinE/schema /config/schema
-# COPY config/destinE/language.yaml /config/language.yaml
+COPY ./src /code/qubed/src
+COPY ./pyproject.toml /code/qubed/
+COPY ./Cargo.toml /code/qubed/
+COPY ./README.md /code/qubed/
 
-COPY ./tree_compresser /code/tree_compresser
-
-# Clone the rsfdb and rsfindlibs repos manually because they're private
-
-# RUN --mount=type=ssh git clone ssh://git@github.com/ecmwf/rsfdb.git
-# RUN --mount=type=ssh git clone ssh://git@github.com/ecmwf/rsfindlibs.git
-COPY stac_server/deps/rsfdb /code/rsfdb
-COPY stac_server/deps/rsfindlibs /code/rsfindlibs
-
-RUN pip install --no-cache-dir -e /code/tree_compresser
+RUN pip install --no-cache-dir -e /code/qubed
 COPY ./stac_server /code/stac_server
 
 WORKDIR /code/stac_server
