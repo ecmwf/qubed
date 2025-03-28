@@ -8,7 +8,14 @@ repository = "https://github.com/ecmwf/qubed"
 # rsfdb = {git = "https://github.com/ecmwf/rsfdb", branch = "develop"}
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-pyo3 = "0.23"
+
+# For fdb binding
+libc = "0.2"
+libloading = "0.6"
+once_cell =  "1.8"
+
+[dependencies.pyo3]
+version = "0.23"
 
 [package.metadata.maturin]
 version-from-git = true
@@ -18,8 +25,6 @@ name = "tree_traverser"
 crate-type = ["cdylib"]
 path = "./src/rust/lib.rs"
 
-# [patch.'https://github.com/ecmwf/rsfdb']
-# rsfdb = { path = "../rsfdb" }
-
-# [patch.'https://github.com/ecmwf-projects/rsfindlibs']
-# rsfindlibs = { path = "../rsfindlibs" }
+[features]
+extension-module = ["pyo3/extension-module"]
+default = ["extension-module"]

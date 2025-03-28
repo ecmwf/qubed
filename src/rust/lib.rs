@@ -12,6 +12,17 @@ fn hello(_py: Python, name: &str) -> PyResult<String> {
     Ok(format!("Hello, {}!", name))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hello() {
+        let out = Python::with_gil(|py| hello(py, "world"));
+        assert_eq!(out.unwrap(), "Hello, world!");
+    }
+}
+
 #[pymodule]
 fn rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(hello, m)?).unwrap();
@@ -19,9 +30,10 @@ fn rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 
-// use rsfdb::listiterator::KeyValueLevel;
-// use rsfdb::request::Request;
-// use rsfdb::FDB;
+mod fdb;
+use fdb::listiterator::KeyValueLevel;
+use fdb::request::Request;
+use fdb::FDB;
 
 // use serde_json::{json, Value};
 // use std::time::Instant;
