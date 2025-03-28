@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ECMWF DestinE STAC Viewer</title>
     <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/qube_styles.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
@@ -38,8 +39,12 @@
 }
             </code></pre>
 
+            <!-- Container to show the current tree -->
+            <h2>Currently Selected Tree</h2></summary>
+            <pre id = "qube"></pre>
+
             <!-- Container fo the raw STAC response -->
-            <details open>
+            <details>
                 <summary><h2>Raw STAC Response</h2></summary>
                 <p>See the <a href="https://github.com/ecmwf-projects/catalogs/blob/main/structured_stac.md">STAC Extension Proposal</a> for more details on the format.</p>
                 <pre class="json-pre"><code id="raw-stac" class="language-json"></code></pre>

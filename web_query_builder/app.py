@@ -29,5 +29,5 @@ def index():
         "index.html",
         request=request,
         config=config,
-        api_url=os.environ.get("API_URL", "/api/stac"),
+        api_url=os.environ.get("API_URL", "/api/v1/stac"),
     )

@@ -22,7 +22,7 @@ class HTML:
 
 
 def summarize_node(
-    node: TreeLike, collapse=False, **kwargs
+    node: TreeLike, collapse=False, max_summary_length=50, **kwargs
 ) -> tuple[str, str, TreeLike]:
     """
     Extracts a summarized representation of the node while collapsing single-child paths.
@@ -33,9 +33,11 @@ def summarize_node(
 
     while True:
         summary = node.summary(**kwargs)
+        if "is_leaf" in node.metadata and node.metadata["is_leaf"]:
+            summary += "🌿"
         paths.append(summary)
-        if len(summary) > 50:
-            summary = summary[:50] + "..."
+        if len(summary) > max_summary_length:
+            summary = summary[:max_summary_length] + "..."
         summaries.append(summary)
         if not collapse:
             break
@@ -96,8 +98,11 @@ def _node_tree_to_html(
     yield "</details>"
 
 
-def node_tree_to_html(node: TreeLike, depth=1, **kwargs) -> str:
-    css_id = f"qubed-tree-{random.randint(0, 1000000)}"
+def node_tree_to_html(
+    node: TreeLike, depth=1, include_css=True, include_js=True, css_id=None, **kwargs
+) -> str:
+    if css_id is None:
+        css_id = f"qubed-tree-{random.randint(0, 1000000)}"
 
     # It's ugle to use an f string here because css uses {} so much so instead
     # we use CSS_ID as a placeholder and replace it later
@@ -180,4 +185,4 @@ def node_tree_to_html(node: TreeLike, depth=1, **kwargs) -> str:
         </script>
         """.replace("CSS_ID", css_id)
     nodes = "".join(_node_tree_to_html(node=node, depth=depth, **kwargs))
-    return f"{js}{css}<pre class='qubed-tree' id='{css_id}'>{nodes}</pre>"
+    return f"{js if include_js else ''}{css if include_css else ''}<pre class='qubed-tree' id='{css_id}'>{nodes}</pre>"

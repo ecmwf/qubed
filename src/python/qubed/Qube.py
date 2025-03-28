@@ -242,6 +242,17 @@ class Qube:
                     else:
                         yield leaf
 
+    def leaf_nodes(self) -> "Iterable[tuple[dict[str, str], Qube]]":
+        for value in self.values:
+            if not self.children:
+                yield ({self.key: value}, self)
+            for child in self.children:
+                for leaf in child.leaf_nodes():
+                    if self.key != "root":
+                        yield ({self.key: value, **leaf[0]}, leaf[1])
+                    else:
+                        yield leaf
+
     def leaves_with_metadata(
         self, indices=()
     ) -> Iterable[tuple[dict[str, str], dict[str, str]]]:
@@ -375,35 +386,54 @@ class Qube:
             if consume and not node.children and selection:
                 return None
 
-            # Check if the key is specified in the selection
+            # If the key isn't in the selection then what we do depends on the mode:
+            # In strict mode we just stop here
+            # In next_level mode we include the next level down so you can tell what keys to add next
+            # In relaxed mode we skip the key if it't not in the request and carry on
             if node.key not in selection:
                 if mode == "strict":
                     return None
 
-                new_children = not_none(select(c, selection) for c in node.children)
+                # If this node doesn't exist in the
+                elif mode == "next_level":
+                    return node.replace(
+                        children=(),
+                        metadata=self.metadata | {"is_leaf": not bool(self.children)},
+                    )
 
-                # prune==true then remove any non-leaf nodes
-                # which have had all their children removed
-                if prune and node.children and not new_children:
+                elif mode == "relaxed":
+                    pass
+                else:
+                    raise ValueError(f"Unknown mode argument {mode}")
+
+            # If the key IS in the selection then check if the values match
+            if node.key in selection:
+                # If the key is specified, check if any of the values match
+                selection_criteria = selection[node.key]
+                if isinstance(selection_criteria, Callable):
+                    values = QEnum((c for c in node.values if selection_criteria(c)))
+                else:
+                    values = QEnum((c for c in selection[node.key] if c in node.values))
+
+                # Here modes don't matter because we've explicitly filtered on this key and found nothing
+                if not values:
                     return None
 
-                return node.replace(children=new_children)
-
-            # If the key is specified, check if any of the values match
-            selection_criteria = selection[node.key]
-            if isinstance(selection_criteria, Callable):
-                values = QEnum((c for c in node.values if selection_criteria(c)))
-            else:
-                values = QEnum((c for c in selection[node.key] if c in node.values))
-
-            if not values:
-                return None
+                node = node.replace(values=values)
 
             if consume:
                 selection = {k: v for k, v in selection.items() if k != node.key}
+
+            # Prune nodes that had had all their children pruned
+            new_children = not_none(select(c, selection) for c in node.children)
+            # if node.key == "dataset": print(prune, [(c.key, c.values.values) for c in node.children], [c.key for c in new_children])
+
+            if prune and node.children and not new_children:
+                return None
+
             return node.replace(
-                values=values,
-                children=not_none(select(c, selection) for c in node.children),
+                children=new_children,
+                metadata=self.metadata | {"is_leaf": not bool(new_children)},
             )
 
         return self.replace(

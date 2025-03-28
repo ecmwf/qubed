@@ -138,39 +138,23 @@ async function createCatalogItem(link, itemsContainer) {
     // Update the item div with real content
     itemDiv.classList.remove("loading");
 
-    const dimension = link["generalized_datacube:dimension"];
+    const variables = link["variables"];
+    const key = Object.keys(variables)[0];
+    const variable = variables[key];
 
     // add data-key attribute to the itemDiv
     itemDiv.dataset.key = link.title;
-    itemDiv.dataset.keyType = dimension.type;
+    itemDiv.dataset.keyType = variable.type;
 
     itemDiv.innerHTML = `
       <h3 class="item-title">${link.title || "No title available"}</h3>
       <p class="item-type">Key Type: ${itemDiv.dataset.keyType || "Unknown"}</p>
-      <!-- <p class="item-type">Paths: ${dimension.paths}</p> -->
-      <p class="item-type">Optional: ${dimension.optional ? "Yes" : "No"}</p>
       <p class="item-description">${
-        dimension.description
-          ? dimension.description.slice(0, 100)
-          : "No description available"
-      }...</p>
+        variable.description ? variable.description.slice(0, 100) : ""
+      }</p>
     `;
 
-    // if (dimension.type === "date" || dimension.type === "time") {
-    //   // Render a date picker for the "date" key
-    //   const picker = `<input type="${link.title}" name="${link.title}">`;
-    //   //convert picker to HTML node
-    //   const pickerNode = document
-    //     .createRange()
-    //     .createContextualFragment(picker);
-    //   itemDiv.appendChild(pickerNode);
-    // }
-    // Otherwise create a scrollable list with checkboxes for values if available
-    if (
-      //   dimension.type === "enum" &&
-      dimension.values &&
-      dimension.values.length > 0
-    ) {
+    if (variable.enum && variable.enum.length > 0) {
       const listContainer = renderCheckboxList(link);
       itemDiv.appendChild(listContainer);
     } else {
@@ -185,14 +169,16 @@ async function createCatalogItem(link, itemsContainer) {
 }
 
 function renderCheckboxList(link) {
-  const dimension = link["generalized_datacube:dimension"];
-  const value_descriptions = dimension.value_descriptions || [];
+  const variables = link["variables"];
+  const key = Object.keys(variables)[0];
+  const variable = variables[key];
+  const value_descriptions = variable.value_descriptions || [];
 
   const listContainerHTML = `
       <div class="item-list-container">
         <label class="list-label">Select one or more values:</label>
         <div class="scrollable-list">
-          ${dimension.values
+          ${variable.enum
             .map((value, index) => {
               const labelText = value_descriptions[index]
                 ? `${value} - ${value_descriptions[index]}`
@@ -201,7 +187,7 @@ function renderCheckboxList(link) {
                 <div class="checkbox-container">
                   <label class="checkbox-label">
                   <input type="checkbox" class="item-checkbox" value="${value}" ${
-                dimension.values.length === 1 ? "checked" : ""
+                variable.enum.length === 1 ? "checked" : ""
               }>
                   ${labelText}
                   </label>
@@ -268,8 +254,10 @@ function renderRawSTACResponse(catalog) {
   itemDetails.textContent = JSON.stringify(just_stac, null, 2);
 
   const debug_container = document.getElementById("debug");
-  // create new object without debug key
   debug_container.textContent = JSON.stringify(catalog.debug, null, 2);
+
+  const qube_container = document.getElementById("qube");
+  qube_container.innerHTML = catalog.debug.qube;
 }
 
 // Fetch STAC catalog and display items

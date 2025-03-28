@@ -209,3 +209,7 @@ span.value:hover {
         width: 100%;
     }
 }
+
+details h2 {
+    font-size: medium;
+}

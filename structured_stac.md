@@ -7,18 +7,36 @@
 - **Extension [Maturity Classification](https://github.com/radiantearth/stac-spec/tree/master/extensions/README.md#extension-maturity):** Proposal
 - **Owner**: @TomHodson
 
-This STAC extension allows for represention of [generalised datacubes][gen_datacubes].
+This STAC extension borrows the [Draft OGC Records API](https://docs.ogc.org/DRAFTS/20-004.html), specifically the [templated links section](https://docs.ogc.org/DRAFTS/20-004.html#sc_templated_links_with_variables) to give STAC the ability to index very large datasets that conform to a generalised datacube model.
 
-A datacube has a fixed set of dimensions `[a, b, c..]` , each of which have a fixed span `{a: ["temp","rainfall"], b : [1-7], c:[True, False]}` such that we can access data by indexing, i.e providing a value for each axis, `a="rainfall", b=1, ...`.  A generalised datacubes allow the dimensions to change during indexing, so choosing `a="rainfall"` might yield a different set of axes from `a="temp"`.
+A typical datacube has a fixed set of dimensions `[a, b, c..]` , each of which have a fixed span `{a: ["temp","rainfall"], b : [1-7], c:[True, False]}` such that we can access data by indexing, i.e providing a value for each axis, `a="rainfall", b=1, ...`.  A generalized datacube, by our defintion, allow the dimensions to change during indexing, so choosing `a="rainfall"` might yield a different set of axes from `a="temp"`.
 
-The [STAC Datacube][datacube_extension] extension serves the needs of datacubes that appear in STAC as Items or Collections, i.e as leaves in the tree. This extension instead focussing on allowing STAC to serve as an interface to dynamically explore the branches of generalised datacubes. It does this by adding additional metadata to the children of Catalog entries.
+The [STAC Datacube][datacube_extension] extension serves the needs of datacubes that appear in STAC as Items or Collections, i.e as leaves in the tree. This extension instead focussing on allowing STAC to serve as an interface to dynamically explore the branches of generalised datacubes. It does this by adding additional metadata from the OGC Records standard to the children of Catalog entries.
 
-We take the *Dimension Objects* defined by the [Datacube Extension][datacube_extension] and add them to [Link objects][link_objects] under the key `generalized_datacube:dimension`. This enables a single Link Object to represent a whole axis and its allowed values. Since `href` must now be constructed dynamically, we rempve it and add a `generalized_datacube:href_template` attribute to communicate how to construct the URLs corresponding to particular choice of value or values.
+In practice what this proposal does is:
 
-In order to support more complex slicing operations in which multiple indices may be selected for a given dimensions we also add additional optional attributes to all *Dimension Objects*, these are:
+1. Replace `"links":` with `"linkTemplates":` in the Catalog entry following the example of the OGC Records API.
+2. To each `rel: Child` object in `linkTemplates`:
+    a. Add a `variables` key following the OGC Records API with a list of entries like:
+        ```json
+"format": {
+        "type": "string",
+        "enum": [
+            "application/vnd.google-earth.kml+xml",
+            "application/vnd.google-earth.kmz",
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/png; mode=8bit",
+            "application/x-pdf",
+            "image/svg+xml",
+            "image/tiff"
+        ]
+        }
+        ```
+    b. Add a "uriTemplate" key that specifies how to contruct the resulting URL: i.e `http://hostname.tld/app/index.html?class=od&format={}`
 
-* `optional` : bool whether this dimension can be skipped.
-* `multiple` : boo wether multiple values can be selected for this key.
+This enables a child object to represent a whole axis and its allowed values. Since `href` must now be constructed dynamically, we rempve it and add a `generalized_datacube:href_template` attribute to communicate how to construct the URLs corresponding to particular choice of value or values.
 
 [gen_datacubes]: https://github.com/ecmwf/datacube-spec
 [link_objects]: https://github.com/radiantearth/stac-spec/blob/master/commons/links.md#link-object
@@ -34,19 +52,20 @@ A typical `Catalog` entry with this extension:
   "id": "rainfall",
   "stac_version": "1.0.0",
   "description": "ECMWF's Operational Data Archive",
-  "links": [
+  "linkTemplates": [
     {
-      "title": "Expver - Experiment Version",
-      "generalized_datacube:href_template": "http://136.156.129.226/app/index.html?class=od&expver={}",
       "rel": "child",
+      "title": "Expver - Experiment Version",
+      "uriTemplate": "http://hostname.tld/app/index.html?class=od&expver={}",
       "type": "application/json",
-      "generalized_datacube:dimension" : {
-        "type" : "enum",
-        "description": "Experiment version, 0001 selects operational data.",
-        "values" : ["0001", "xxxx"],
-        "value_descriptions" : ["Operational Data", "Experimental Data"],
-        "optional" : false,
-        "multiple": true,
+      "variables" : {
+        "expver" : {
+            "description": "Experiment version, 0001 selects operational data.",
+            "type" : "string",
+            "enum" : ["0001", "xxxx"],
+            "value_descriptions" : ["Operational Data", "Experimental Data"],
+            "optional" : false,
+        }
       }
       ""
 

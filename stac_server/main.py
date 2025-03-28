@@ -1,17 +1,19 @@
-import json
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict
 
-import redis
+import requests
 import yaml
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from tree_traverser import CompressedTree
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from frozendict import frozendict
+from qubed import Qube
+from qubed.tree_formatters import node_tree_to_html
 
 app = FastAPI()
+security = HTTPBearer()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,39 +22,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
-    return FileResponse("favicon.ico")
-
+qubes: dict[str, Qube] = {}
+print("Getting climate and extremes dt data from github")
+qubes["climate-dt"] = Qube.from_json(
+    requests.get(
+        "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/climate_dt.json"
+    ).json()
+)
+qubes["extremes-dt"] = Qube.from_json(
+    requests.get(
+        "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/extremes_dt.json"
+    ).json()
+)
+mars_language = yaml.safe_load(
+    requests.get(
+        "https://github.com/ecmwf/qubed/raw/refs/heads/main/config/climate-dt/language.yaml"
+    ).content
+)
 
 if "LOCAL_CACHE" in os.environ:
-    print("Getting data from local file")
-
     base = Path(os.environ["LOCAL_CACHE"])
-    with open(base / "compressed_tree.json", "r") as f:
-        json_tree = f.read()
 
     with open(base / "language.yaml", "r") as f:
         mars_language = yaml.safe_load(f)["_field"]
 
+if "API_KEY" in os.environ:
+    print("Getting data from local file")
 else:
-    print("Getting cache from redis")
-    r = redis.Redis(host="redis", port=6379, db=0)
-    json_tree = r.get("compressed_catalog")
-    assert json_tree, "No compressed tree found in redis"
-    mars_language = json.loads(r.get("mars_language"))
-
-print("Loading tree from json")
-c_tree = CompressedTree.from_json(json.loads(json_tree))
-
-print("Partialy decompressing tree, shoud be able to skip this step in future.")
-tree = c_tree.reconstruct_compressed_ecmwf_style()
+    with open("api_key.secret", "r") as f:
+        api_key = f.read()
 
 print("Ready to serve requests!")
 
 
-def request_to_dict(request: Request) -> Dict[str, Any]:
+def validate_key(key: str):
+    if key not in qubes:
+        raise HTTPException(status_code=404, detail=f"Qube {key} not found")
+    return key
+
+
+async def get_body_json(request: Request):
+    return await request.json()
+
+
+def parse_request(request: Request) -> dict[str, str | list[str]]:
     # Convert query parameters to dictionary format
     request_dict = dict(request.query_params)
     for key, value in request_dict.items():
@@ -63,116 +76,54 @@ def request_to_dict(request: Request) -> Dict[str, Any]:
     return request_dict
 
 
-def match_against_cache(request, tree):
-    if not tree:
-        return {"_END_": {}}
-    matches = {}
-    for k, subtree in tree.items():
-        if len(k.split("=")) != 2:
-            raise ValueError(f"Key {k} is not in the correct format")
-        key, values = k.split("=")
-        values = set(values.split(","))
-        if key in request:
-            if isinstance(request[key], list):
-                matching_values = ",".join(
-                    request_value
-                    for request_value in request[key]
-                    if request_value in values
-                )
-                if matching_values:
-                    matches[f"{key}={matching_values}"] = match_against_cache(
-                        request, subtree
-                    )
-            elif request[key] in values:
-                matches[f"{key}={request[key]}"] = match_against_cache(request, subtree)
-
-    if not matches:
-        return {k: {} for k in tree.keys()}
-    return matches
+def validate_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if credentials.credentials != api_key:
+        raise HTTPException(status_code=403, detail="Incorrect API Key")
+    return credentials
 
 
-def max_tree_depth(tree):
-    "Figure out the maximum depth of a tree"
-    if not tree:
-        return 0
-    return 1 + max(max_tree_depth(v) for v in tree.values())
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse("favicon.ico")
 
 
-def prune_short_branches(tree, depth=None):
-    if depth is None:
-        depth = max_tree_depth(tree)
-    return {
-        k: prune_short_branches(v, depth - 1)
-        for k, v in tree.items()
-        if max_tree_depth(v) == depth - 1
-    }
+@app.get("/api/v1/keys/")
+async def keys():
+    return list(qubes.keys())
 
 
-def get_paths_to_leaves(tree):
-    for k, v in tree.items():
-        if not v:
-            yield [
-                k,
-            ]
-        else:
-            for leaf in get_paths_to_leaves(v):
-                yield [
-                    k,
-                ] + leaf
+@app.get("/api/v1/get/{key}/")
+async def get(
+    key: str = Depends(validate_key),
+    request: dict[str, str | list[str]] = Depends(parse_request),
+):
+    return qubes[key].to_json()
 
 
-def get_leaves(tree):
-    for k, v in tree.items():
-        if not v:
-            yield k
-        else:
-            for leaf in get_leaves(v):
-                yield leaf
+@app.post("/api/v1/union/{key}/")
+async def union(
+    key: str,
+    credentials: HTTPAuthorizationCredentials = Depends(validate_api_key),
+    body_json=Depends(get_body_json),
+):
+    if key not in qubes:
+        qubes[key] = Qube.empty()
+
+    q = Qube.from_json(body_json)
+    qubes[key] = qubes[key] | q
+    return qubes[key].to_json()
 
 
-@app.get("/api/tree")
-async def get_tree(request: Request):
-    request_dict = request_to_dict(request)
-    print(c_tree.multi_match(request_dict))
-    return c_tree.multi_match(request_dict)
-
-
-@app.get("/api/match")
-async def get_match(request: Request):
-    # Convert query parameters to dictionary format
-    request_dict = request_to_dict(request)
-
-    # Run the schema matching logic
-    match_tree = match_against_cache(request_dict, tree)
-
-    # Prune the tree to only include branches that are as deep as the deepest match
-    # This means if you don't choose a certain branch at some point
-    # the UI won't keep nagging you to choose a value for that branch
-    match_tree = prune_short_branches(match_tree)
-
-    return match_tree
-
-
-@app.get("/api/paths")
-async def api_paths(request: Request):
-    request_dict = request_to_dict(request)
-    match_tree = match_against_cache(request_dict, tree)
-    match_tree = prune_short_branches(match_tree)
-    paths = get_paths_to_leaves(match_tree)
-
-    # deduplicate leaves based on the key
+def follow_query(request: dict[str, str | list[str]], qube: Qube):
+    s = qube.select(request, mode="next_level", prune=True, consume=False)
     by_path = defaultdict(lambda: {"paths": set(), "values": set()})
-    for p in paths:
-        if p[-1] == "_END_":
-            continue
-        key, values = p[-1].split("=")
-        values = values.split(",")
-        path = tuple(p[:-1])
 
-        by_path[key]["values"].update(values)
-        by_path[key]["paths"].add(tuple(path))
+    for request, node in s.leaf_nodes():
+        if not node.data.metadata["is_leaf"]:
+            by_path[node.key]["values"].update(node.values.values)
+            by_path[node.key]["paths"].add(frozendict(request))
 
-    return [
+    return s, [
         {
             "paths": list(v["paths"]),
             "key": key,
@@ -182,24 +133,27 @@ async def api_paths(request: Request):
     ]
 
 
-@app.get("/api/stac")
-async def get_STAC(request: Request):
-    request_dict = request_to_dict(request)
-    paths = await api_paths(request)
+@app.get("/api/v1/query/{key}")
+async def query(
+    key: str = Depends(validate_key),
+    request: dict[str, str | list[str]] = Depends(parse_request),
+):
+    qube, paths = follow_query(request, qubes[key])
+    return paths
+
+
+@app.get("/api/v1/stac/{key}/")
+async def get_STAC(
+    key: str = Depends(validate_key),
+    request: dict[str, str | list[str]] = Depends(parse_request),
+):
+    qube, paths = follow_query(request, qubes[key])
 
     def make_link(key_name, paths, values):
         """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
         path = paths[0]
         href_template = f"/stac?{'&'.join(path)}{'&' if path else ''}{key_name}={{}}"
-        optional = [False]
-        # optional_str = (
-        #     "Yes"
-        #     if all(optional) and len(optional) > 0
-        #     else ("Sometimes" if any(optional) else "No")
-        # )
         values_from_mars_language = mars_language.get(key_name, {}).get("values", [])
-
-        # values = [v[0] if isinstance(v, list) else v for v in values_from_mars_language]
 
         if all(isinstance(v, list) for v in values_from_mars_language):
             value_descriptions_dict = {
@@ -214,17 +168,19 @@ async def get_STAC(request: Request):
 
         return {
             "title": key_name,
-            "generalized_datacube:href_template": href_template,
+            "uriTemplate": href_template,
             "rel": "child",
             "type": "application/json",
-            "generalized_datacube:dimension": {
-                "type": mars_language.get(key_name, {}).get("type", ""),
-                "description": mars_language.get(key_name, {}).get("description", ""),
-                "values": values,
-                "value_descriptions": value_descriptions,
-                "optional": any(optional),
-                "multiple": True,
-                "paths": paths,
+            "variables": {
+                key: {
+                    "type": "string",
+                    "description": mars_language.get(key_name, {}).get(
+                        "description", ""
+                    ),
+                    "enum": values,
+                    "value_descriptions": value_descriptions,
+                    # "paths": paths,
+                }
             },
         }
 
@@ -242,7 +198,7 @@ async def get_STAC(request: Request):
             "description": mars_language.get(key, {}).get("description", ""),
             "value_descriptions": value_descriptions(key, values),
         }
-        for key, values in request_dict.items()
+        for key, values in request.items()
     }
 
     # Format the response as a STAC collection
@@ -253,9 +209,18 @@ async def get_STAC(request: Request):
         "description": "STAC collection representing potential children of this request",
         "links": [make_link(p["key"], p["paths"], p["values"]) for p in paths],
         "debug": {
-            "request": request_dict,
+            # "request": request,
             "descriptions": descriptions,
-            "paths": paths,
+            # "paths": paths,
+            "qube": node_tree_to_html(
+                qube.compress(),
+                collapse=True,
+                depth=10,
+                include_css=False,
+                include_js=False,
+                max_summary_length=200,
+                css_id="qube",
+            ),
         },
     }
 

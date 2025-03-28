@@ -1,0 +1,50 @@
+pre#qube {
+    font-family: monospace;
+    white-space: pre;
+    font-family: SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,Courier,monospace;
+    font-size: 12px;
+    line-height: 1.4;
+
+    details {
+        margin-left: 0;
+    }
+
+    .qubed-node a {
+        margin-left: 10px;
+        text-decoration: none;
+    }
+
+    summary {
+        list-style: none;
+        cursor: pointer;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        text-wrap: nowrap;
+        display: block;
+    }
+
+    summary:hover,span.leaf:hover {
+        background-color: #f0f0f0;
+    }
+
+    details > summary::after {
+        content: ' ▲';
+    }
+
+    details:not([open]) > summary::after {
+        content: " ▼";
+    }
+
+    .leaf {
+        text-overflow: ellipsis;
+        overflow: hidden;
+        text-wrap: nowrap;
+        display: block;
+    }
+
+    summary::-webkit-details-marker {
+      display: none;
+      content: "";
+    }
+
+}
