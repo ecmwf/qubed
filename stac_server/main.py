@@ -23,22 +23,27 @@ app.add_middleware(
 )
 
 qubes: dict[str, Qube] = {}
-print("Getting climate and extremes dt data from github")
-qubes["climate-dt"] = Qube.from_json(
-    requests.get(
-        "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/climate_dt.json"
-    ).json()
-)
-qubes["extremes-dt"] = Qube.from_json(
-    requests.get(
-        "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/extremes_dt.json"
-    ).json()
-)
-mars_language = yaml.safe_load(
-    requests.get(
-        "https://github.com/ecmwf/qubed/raw/refs/heads/main/config/climate-dt/language.yaml"
-    ).content
-)
+# print("Getting climate and extremes dt data from github")
+# try:
+#     qubes["climate-dt"] = Qube.from_json(
+#         requests.get(
+#             "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/climate_dt.json",
+#         timeout=3).json()
+#     )
+#     qubes["extremes-dt"] = Qube.from_json(
+#         requests.get(
+#             "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/extremes_dt.json",
+#         timeout=3).json()
+#     )
+#     mars_language = yaml.safe_load(
+#         requests.get(
+#             "https://github.com/ecmwf/qubed/raw/refs/heads/main/config/climate-dt/language.yaml",
+#         timeout=3).content
+#     )
+# except:
+qubes["climate-dt"] = Qube.empty()
+qubes["extremes-dt"] = Qube.empty()
+mars_language = {}
 
 if "LOCAL_CACHE" in os.environ:
     base = Path(os.environ["LOCAL_CACHE"])
@@ -47,7 +52,7 @@ if "LOCAL_CACHE" in os.environ:
         mars_language = yaml.safe_load(f)["_field"]
 
 if "API_KEY" in os.environ:
-    print("Getting data from local file")
+    api_key = os.environ["API_KEY"]
 else:
     with open("api_key.secret", "r") as f:
         api_key = f.read()
