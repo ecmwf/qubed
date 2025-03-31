@@ -34,12 +34,3 @@ COPY ./stac_server /code/stac_server
 
 WORKDIR /code/stac_server
 CMD ["fastapi", "dev", "main.py", "--proxy-headers", "--port", "80", "--host", "0.0.0.0"]
-
-FROM base AS web_query_builder
-
-COPY web_query_builder/requirements.txt /code/requirements.txt
-RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
-
-COPY web_query_builder /code/web_query_builder
-WORKDIR /code/web_query_builder
-CMD ["flask", "run", "--host", "0.0.0.0", "--port", "80"]

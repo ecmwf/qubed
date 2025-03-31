@@ -6,14 +6,6 @@ stacServer:
     pullPolicy: Always
   servicePort: 80
 
-webQueryBuilder:
-  enabled: true
-  image:
-    repository: "eccr.ecmwf.int/qubed/web_query_builder"
-    tag: "latest"
-    pullPolicy: Always
-  servicePort: 80
-
 ingress:
   enabled: True
   tlsSecretName: "lumi-wildcard-tls"

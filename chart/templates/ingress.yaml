@@ -10,22 +10,13 @@ spec:
       http:
         paths:
         {{- if .Values.stacServer.enabled }}
-          - path: /api
+          - path: /
             pathType: Prefix
             backend:
               service:
                 name: stac-server
                 port:
                   number: {{ .Values.stacServer.servicePort }}
-        {{- end }}
-        {{- if .Values.webQueryBuilder.enabled }}
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: web-query-builder
-                port:
-                  number: {{ .Values.webQueryBuilder.servicePort }}
         {{- end }}
   tls:
     - hosts:

@@ -2,6 +2,9 @@ html,
 body {
     min-height: 100vh;
     height: 100%;
+
+    --accent-color: #003399;
+    --background-grey: #f4f4f4;
 }
 
 body {
@@ -23,7 +26,7 @@ body {
     width: 30%;
     padding: 10px;
     overflow-y: scroll;
-    background-color: #f4f4f4;
+    background-color: var(--background-grey);
     border-right: 1px solid #ddd;
 }
 
@@ -65,6 +68,7 @@ canvas {
     margin-bottom: 10px;
     border-radius: 5px;
     transition: background-color 0.2s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .item-title {
@@ -93,10 +97,8 @@ canvas {
 }
 
 .item.selected {
-    background-color: #d4e9ff;
-    /* Lighter blue for selection */
-    border-color: #003399;
-    /* Keep the original ECMWF blue for the border */
+    background-color: var(--background-grey);
+    border-color: var(--accent-color);
 }
 
 summary h2 {
@@ -119,7 +121,7 @@ button {
     /* Padding around button text */
     margin: 0 5px;
     /* Margin between buttons */
-    background-color: #003399;
+    background-color: var(--accent-color);
     /* ECMWF blue */
     color: white;
     /* White text color */
@@ -140,7 +142,6 @@ button:hover {
 
 .item-list-container {
     margin-top: 20px;
-    margin-bottom: 20px;
 }
 
 .scrollable-list {
@@ -150,7 +151,6 @@ button:hover {
     border: 1px solid #ccc;
     border-radius: 4px;
     background-color: #fff;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .checkbox-container {
@@ -170,14 +170,14 @@ button:hover {
 }
 
 .checkbox-container:hover .checkbox-label {
-    color: #003399;
+    color: var(--accent-color);
 }
 
 .list-label {
     font-weight: bold;
     margin-bottom: 0.5em;
     display: block;
-    color: #003399;
+    color: var(--accent-color);
 }
 
 span.key,

@@ -176,7 +176,6 @@ function renderCheckboxList(link) {
 
   const listContainerHTML = `
       <div class="item-list-container">
-        <label class="list-label">Select one or more values:</label>
         <div class="scrollable-list">
           ${variable.enum
             .map((value, index) => {
