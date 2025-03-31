@@ -23,7 +23,13 @@ There's some handy test data in the `tests/data` directory. For example:
 gzip -dc tests/data/fdb_list_compact.gz| qubed convert --from=fdb --to=text --output=qube.txt
 gzip -dc tests/data/fdb_list_porcelain.gz| qubed convert --from=fdb --to=json --output=qube.json
 gzip -dc tests/data/fdb_list_compact.gz | qubed convert --from=fdb --to=html --output=qube.html
+
+// Operational data stream=oper/wave/enfo/waef
+fdb list class=od,expver=0001,date=0,stream=oper --compact >> operational_compact.txt
+operational_compact.txt | qubed convert --from=fdb --to=text --output=operational.txt
 ```
+
+
 
 ## Todo
 

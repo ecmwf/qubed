@@ -1,3 +1,4 @@
+import json
 import time
 
 import click
@@ -107,7 +108,15 @@ def convert(input, output, from_format, to_format):
                 n0 = q.n_leaves
                 t = time.time()
 
-    output_content = str(q) if to_format == "text" else q.html().html
+    if to_format == "text":
+        output_content = str(q)
+    elif to_format == "json":
+        output_content = json.dumps(q.to_json())
+    elif to_format == "html":
+        output_content = q.html().html
+    else:
+        output_content = str(q)
+
     output.write(output_content)
 
 
