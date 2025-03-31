@@ -1,20 +1,18 @@
+import json
 import os
 from collections import defaultdict
-from pathlib import Path
 
 import requests
 import yaml
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from frozendict import frozendict
 from qubed import Qube
 from qubed.tree_formatters import node_tree_to_html
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
-import json
 
 app = FastAPI()
 security = HTTPBearer()
@@ -67,17 +65,20 @@ else:
     qubes["climate-dt"] = Qube.from_json(
         requests.get(
             "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/climate_dt.json",
-        timeout=1).json()
+            timeout=1,
+        ).json()
     )
     qubes["extremes-dt"] = Qube.from_json(
         requests.get(
             "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/extremes_dt.json",
-        timeout=1).json()
+            timeout=1,
+        ).json()
     )
     mars_language = yaml.safe_load(
         requests.get(
             "https://github.com/ecmwf/qubed/raw/refs/heads/main/config/climate-dt/language.yaml",
-        timeout=1).content
+            timeout=1,
+        ).content
     )
 
 if "API_KEY" in os.environ:
@@ -120,14 +121,19 @@ def validate_api_key(credentials: HTTPAuthorizationCredentials = Depends(securit
 async def favicon():
     return FileResponse("favicon.ico")
 
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "config": {
-        "message": "Hello from the dev server!",
-    },
-    "api_url": "/api/v1/stac/climate-dt",
-    "request" : request,
-    })
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "config": {
+                "message": "Hello from the dev server!",
+            },
+            "api_url": os.environ.get("API_URL", "/api/v1/stac/climate-dt"),
+        },
+    )
 
 
 @app.get("/api/v1/keys/")
@@ -175,13 +181,15 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
         for key, v in by_path.items()
     ]
 
+
 @app.get("/api/v1/select/{key}/")
-async def get(
+async def select(
     key: str = Depends(validate_key),
     request: dict[str, str | list[str]] = Depends(parse_request),
 ):
     q = qubes[key].select(request)
     return q.to_json()
+
 
 @app.get("/api/v1/query/{key}")
 async def query(
