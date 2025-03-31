@@ -14,20 +14,28 @@ spec:
       labels:
         app: stac-server
     spec:
-      initContainers:
-        - name: wait-for-redis
-          image: busybox
-          command:
-            [
-              'sh', '-c',
-              'until nc -z -v -w30 {{ .Values.stacServer.environment.REDIS_HOST }} {{ .Values.redis.service.port }}; do echo "Waiting for Redis..."; sleep 5; done;'
-            ]
       containers:
         - name: stac-server
           image: "{{ .Values.stacServer.image.repository }}:{{ .Values.stacServer.image.tag }}"
           imagePullPolicy: {{ .Values.stacServer.image.pullPolicy }}
           env:
-            - name: REDIS_HOST
-              value: "{{ .Values.stacServer.environment.REDIS_HOST }}"
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                    name: api-key
+                    key: API_KEY
           ports:
             - containerPort: {{ .Values.stacServer.servicePort }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stac-server
+spec:
+  selector:
+    app: stac-server
+  ports:
+    - protocol: TCP
+      port: {{ .Values.stacServer.servicePort }}
+      targetPort: {{ .Values.stacServer.servicePort }}
+  type: ClusterIP

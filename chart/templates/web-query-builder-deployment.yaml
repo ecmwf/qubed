@@ -19,7 +19,7 @@ spec:
           imagePullPolicy: {{ .Values.webQueryBuilder.image.pullPolicy }}
           env:
             - name: API_HOST
-              value: stac-server
+              value: "https://{{ .Values.ingress.hostname }}/api/v1/stac/climate-dt"
           ports:
             - containerPort: {{ .Values.webQueryBuilder.servicePort }}
 ---

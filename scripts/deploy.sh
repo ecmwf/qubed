@@ -1,1 +1,2 @@
-helm upgrade stac-server chart -n stac-server
+# helm install qubed chart -n qubed
+helm upgrade qubed chart -n qubed
