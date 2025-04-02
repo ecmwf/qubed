@@ -34,7 +34,7 @@ def summarize_node(
     while True:
         summary = node.summary(**kwargs)
         if "is_leaf" in node.metadata and node.metadata["is_leaf"]:
-            summary += "🌿"
+            summary += " 🌿"
         paths.append(summary)
         if len(summary) > max_summary_length:
             summary = summary[:max_summary_length] + "..."

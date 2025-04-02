@@ -168,3 +168,12 @@ def compress_children(children: Iterable["Qube"]) -> tuple["Qube"]:
 
         new_children.append(new_child)
     return tuple(sorted(new_children, key=lambda n: ((n.key, n.values.min()))))
+
+
+def union(a: "Qube", b: "Qube") -> "Qube":
+    return operation(
+        a,
+        b,
+        SetOperation.UNION,
+        type(a),
+    )

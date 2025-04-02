@@ -1,4 +1,5 @@
 import dataclasses
+import functools
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -121,6 +122,13 @@ class Qube:
                 )
 
         return Qube.root_node(list(from_dict(d)))
+
+    def to_dict(self) -> dict:
+        def to_dict(q: "Qube") -> tuple[str, dict]:
+            key = f"{q.key}={','.join(str(v) for v in q.values.values)}"
+            return key, dict(to_dict(c) for c in q.children)
+
+        return to_dict(self)[1]
 
     @classmethod
     def from_tree(cls, tree_str):
@@ -283,17 +291,20 @@ class Qube:
                     else:
                         yield leaf, metadata
 
-    def datacubes(self) -> "Qube":
-        def to_list_of_cubes(node: Qube) -> Iterable[Qube]:
-            if not node.children:
-                yield node
-            # print(node.key)
-            for c in node.children:
-                # print(c)
-                for sub_cube in to_list_of_cubes(c):
-                    yield node.replace(children=[sub_cube])
+    def datacubes(self) -> Iterable[dict[str, Any | list[Any]]]:
+        def to_list_of_cubes(node: Qube) -> Iterable[dict[str, Any | list[Any]]]:
+            if node.key == "root":
+                for c in node.children:
+                    yield from to_list_of_cubes(c)
 
-        return Qube.root_node((q for c in self.children for q in to_list_of_cubes(c)))
+            if not node.children:
+                yield {node.key: list(node.values.values)}
+
+            for c in node.children:
+                for sub_cube in to_list_of_cubes(c):
+                    yield {node.key: list(node.values.values)} | sub_cube
+
+        return to_list_of_cubes(self)
 
     def __getitem__(self, args) -> "Qube":
         if isinstance(args, str):
@@ -353,6 +364,22 @@ class Qube:
 
         children = tuple(cc for c in self.children for cc in transform(c))
         return self.replace(children=children)
+
+    def remove_by_key(self, keys: str | list[str]):
+        _keys: list[str] = keys if isinstance(keys, list) else [keys]
+
+        def remove_key(node: "Qube") -> "Qube":
+            children = []
+            for c in node.children:
+                if c.key in _keys:
+                    grandchildren = tuple(sorted(remove_key(cc) for cc in c.children))
+                    children.extend(grandchildren)
+                else:
+                    children.append(remove_key(c))
+
+            return node.replace(children=tuple(sorted(children)))
+
+        return remove_key(self).compress()
 
     def convert_dtypes(self, converters: dict[str, Callable[[Any], Any]]):
         def convert(node: Qube) -> Qube:
@@ -474,11 +501,25 @@ class Qube:
         return hash_node(self)
 
     def compress(self) -> "Qube":
-        # First compress the children (this recursively compresses all the way to the leaves)
-        new_children = [child.compress() for child in self.children]
+        """
+        This method is quite computationally heavy because of trees like this:
+        root, class=d1, generation=1
+        ├── time=0600, many identical keys, param=8,78,79
+        ├── time=0600, many identical keys, param=8,78,79
+        └── time=0600, many identical keys, param=8,78,79
+        This tree compresses dow n
 
-        # Now compress the set of children at this level
-        new_children = set_operations.compress_children(new_children)
+        """
 
-        # Return the now compressed node
-        return Qube.make(self.key, self.values, new_children)
+        def union(a: "Qube", b: "Qube") -> "Qube":
+            b = type(self).root_node(children=(b,))
+            out = set_operations.operation(
+                a, b, set_operations.SetOperation.UNION, type(self)
+            )
+            return out
+
+        new_children = [c.compress() for c in self.children]
+        if len(new_children) > 1:
+            new_children = functools.reduce(union, new_children, Qube.empty()).children
+
+        return self.replace(children=tuple(sorted(new_children)))
