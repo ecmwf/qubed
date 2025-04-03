@@ -373,6 +373,7 @@ class Qube:
             for c in node.children:
                 if c.key in _keys:
                     grandchildren = tuple(sorted(remove_key(cc) for cc in c.children))
+                    grandchildren = remove_key(Qube.root_node(grandchildren)).children
                     children.extend(grandchildren)
                 else:
                     children.append(remove_key(c))
