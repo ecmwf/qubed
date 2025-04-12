@@ -1,9 +1,11 @@
 import dataclasses
 import functools
+import json
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cached_property
+from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal, Sequence
 
 from frozendict import frozendict
@@ -62,6 +64,11 @@ class Qube:
     @classmethod
     def root_node(cls, children: Iterable["Qube"]) -> "Qube":
         return cls.make("root", QEnum(("root",)), children)
+
+    @classmethod
+    def load(cls, path: str | Path) -> "Qube":
+        with open(path, "r") as f:
+            return Qube.from_json(json.load(f))
 
     @classmethod
     def from_datacube(cls, datacube: dict[str, str | Sequence[str]]) -> "Qube":
