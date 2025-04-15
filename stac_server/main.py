@@ -74,6 +74,14 @@ else:
             timeout=1,
         ).json()
     )
+
+    qubes["od"] = Qube.from_json(
+        requests.get(
+            "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/od.json",
+            timeout=1,
+        ).json()
+    )
+    qubes["climate-dt"] = qubes["climate-dt"] | qubes["extremes-dt"] | qubes["od"]
     mars_language = yaml.safe_load(
         requests.get(
             "https://github.com/ecmwf/qubed/raw/refs/heads/main/config/climate-dt/language.yaml",

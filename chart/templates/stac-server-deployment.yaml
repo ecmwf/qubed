@@ -24,6 +24,8 @@ spec:
                 secretKeyRef:
                     name: api-key
                     key: API_KEY
+            - name: API_URL
+              value: "https://{{ .Values.ingress.hostname }}/api/v1/stac/climate-dt/"
           ports:
             - containerPort: {{ .Values.stacServer.servicePort }}
 ---
