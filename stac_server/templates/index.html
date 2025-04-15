@@ -51,7 +51,7 @@
 # pip install qubed requests
 import requests
 from qubed import Qube
-qube = Qube.from_json(requests.get("http://stac-catalogs.ecmwf-development.f.ewcloud.host/api/v1/select/climate-dt?{{request.url.query}}").json())
+qube = Qube.from_json(requests.get("{{ api_url }}select/climate-dt/?{{request.url.query}}").json())
 qube.print()
                 </code></pre>
             </details>
