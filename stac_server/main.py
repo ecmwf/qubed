@@ -139,7 +139,7 @@ async def read_root(request: Request):
             "config": {
                 "message": "Hello from the dev server!",
             },
-            "api_url": os.environ.get("API_URL", "/api/v1/stac/climate-dt"),
+            "api_url": os.environ.get("API_URL", "/api/v1/"),
         },
     )
 
