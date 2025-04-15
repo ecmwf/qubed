@@ -17,6 +17,7 @@ import numpy as np
 from frozendict import frozendict
 
 from . import set_operations
+from .metadata import from_nodes
 from .node_types import NodeData, RootNodeData
 from .tree_formatters import (
     HTML,
@@ -110,6 +111,10 @@ class Qube:
             )
 
         return from_json(json)
+
+    @classmethod
+    def from_nodes(cls, nodes: dict[str, dict], add_root: bool = True):
+        return from_nodes(cls, nodes, add_root)
 
     def to_json(self) -> dict:
         def to_json(node: Qube) -> dict:
