@@ -85,9 +85,9 @@ else:
     mars_language = yaml.safe_load(
         requests.get(
             "https://github.com/ecmwf/qubed/raw/refs/heads/main/config/climate-dt/language.yaml",
-            timeout=1,
+            timeout=3,
         ).content
-    )
+    )["_field"]
 
 if "API_KEY" in os.environ:
     api_key = os.environ["API_KEY"]
