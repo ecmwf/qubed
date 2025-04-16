@@ -12,7 +12,7 @@ jupytext:
 ```{toctree}
 :maxdepth: 1
 quickstart.md
-installation.md
+development.md
 background.md
 algorithms.md
 fiab.md

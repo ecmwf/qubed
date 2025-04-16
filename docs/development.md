@@ -1,4 +1,4 @@
-# Installation
+# Development
 
 To install the latest stable release from PyPI (recommended):
 
@@ -6,13 +6,11 @@ To install the latest stable release from PyPI (recommended):
 pip install qubed
 ```
 
-Or to build and install the latest version from github (requires rust):
+To install the latest version from github (requires rust):
 
 ```bash
 pip install qubed@git+https://github.com/ecmwf/qubed.git@main
 ```
-
-## Development
 
 To build the develop branch from source install a rust toolchain and pip install maturin then run:
 
