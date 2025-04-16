@@ -208,6 +208,65 @@ async def query(
     return paths
 
 
+@app.get("/api/v1/basicstac/{key}/{filters:path}")
+async def basic_stac(filters: str, key: str = Depends(validate_key)):
+    pairs = filters.strip("/").split("/")
+    request = dict(p.split("=") for p in pairs if "=" in p)
+
+    qube, _ = follow_query(request, qubes[key])
+
+    def make_link(child_request):
+        """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
+        kvs = [f"{key}={value}" for key, value in child_request.items()]
+        href = f"/api/v1/basicstac/{key}/{'/'.join(kvs)}"
+        last_key, last_value = list(child_request.items())[-1]
+
+        return {
+            "title": f"{last_key}={last_value}",
+            "href": href,
+            "rel": "child",
+            "type": "application/json",
+        }
+
+    # Format the response as a STAC collection
+    (this_key, this_value), *_ = (
+        list(request.items())[-1] if request else ("root", "root"),
+        None,
+    )
+    key_info = mars_language.get(this_key, {})
+    try:
+        values_info = dict(key_info.get("values", {}))
+        value_info = values_info.get(
+            this_value, f"No info found for value `{this_value}` found."
+        )
+    except ValueError:
+        value_info = f"No info found for value `{this_value}` found."
+
+    if this_key == "root":
+        value_info = "The root node"
+    # key_desc = key_info.get(
+    #     "description", f"No description for `key` {this_key} found."
+    # )
+    print(this_key, this_value)
+
+    print(this_key, key_info)
+    stac_collection = {
+        "type": "Catalog",
+        "stac_version": "1.0.0",
+        "id": "root"
+        if not request
+        else "/".join(f"{k}={v}" for k, v in request.items()),
+        "title": f"{this_key}={this_value}",
+        "description": value_info,
+        "links": [make_link(leaf) for leaf in qube.leaves()],
+        # "debug": {
+        #     "qube": str(qube),
+        # },
+    }
+
+    return stac_collection
+
+
 @app.get("/api/v1/stac/{key}/")
 async def get_STAC(
     key: str = Depends(validate_key),
@@ -269,9 +328,11 @@ async def get_STAC(
 
     # Format the response as a STAC collection
     stac_collection = {
-        "type": "Collection",
+        "type": "Catalog",
         "stac_version": "1.0.0",
-        "id": "partial-matches",
+        "id": "root"
+        if not request
+        else ",".join(f"{k}={v}" for k, v in request.items()),
         "description": "STAC collection representing potential children of this request",
         "links": [make_link(p["key"], p["paths"], p["values"]) for p in paths],
         "debug": {
