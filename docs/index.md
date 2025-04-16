@@ -12,44 +12,42 @@ jupytext:
 ```{toctree}
 :maxdepth: 1
 quickstart.md
+installation.md
 background.md
 algorithms.md
 fiab.md
 cmd.md
 ```
 
-Qubed provides a datastructure called a Qube which represents sets of data identified by multiple key value pairs as a tree of datacubes. To understand what that means go to [Background](background.md), to just start using the library skip straight to the [Quickstart](quickstart.md).
-
-Here's a real world dataset from the [Climate DT](https://destine.ecmwf.int/climate-change-adaptation-digital-twin-climate-dt/):
-
-```{code-cell} python3
-import requests
-from qubed import Qube
-climate_dt = Qube.from_json(requests.get("https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/climate_dt.json").json())
-climate_dt.html(depth=1)
+Qubed provides a datastructure primitive for working with trees of DataCubes. If a normal tree looks like this:
+```
+root
+├── class=od
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=rd
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2
 ```
 
-Click the arrows to expand and drill down deeper into the data. Any particular dataset is uniquely identified by a set of key value pairs:
-
-```{code-cell} python3
-import json
-for i, identifier in enumerate(climate_dt.leaves()):
-    print(identifier)
-    break
+A compressed view of the same set would be:
+```
+root
+├── class=od, expver=0001/0002, param=1/2
+└── class=rd
+    ├── expver=0001, param=1/2/3
+    └── expver=0002, param=1/2
 ```
 
-Here's an idea of the set of values each key can take:
-```{code-cell} python3
-axes = climate_dt.axes()
-for key, values in axes.items():
-    print(f"{key} : {list(sorted(values))[:10]}")
-```
+Qubed provides a datastructure that represents this compressed cube we call a Qube. It defines all the algorithms you would expect such as intersection/union/difference, compression, search, transformation and filtering.
 
-This dataset isn't dense, you can't choose any combination of the above key values pairs, but it does contain many dense datacubes. Hence it makes sense to store and process the set as a tree of dense datacubes, what we call a Qube. For a sense of scale, this dataset contains about 200 million distinct datasets but only contains a few thousand unique nodes.
-
-```{code-cell} python3
-print(f"""
-Distinct datasets: {climate_dt.n_leaves},
-Number of nodes in the tree: {climate_dt.n_nodes}
-""")
-```
+To get a little more background on the motivation and structure of a Qube go to [Background](background.md), for a more hands on intro, go to [Quickstart](quickstart.md).

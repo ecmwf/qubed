@@ -180,7 +180,7 @@ def node_tree_to_html(
             await navigator.clipboard.writeText(path);
         }
 
-        const nodes = document.querySelectorAll("#CSS_ID .qubed-node");
+        const nodes = document.querySelectorAll("#CSS_ID.qubed-node");
         nodes.forEach(n => n.addEventListener("click", nodeOnClick));
         </script>
         """.replace("CSS_ID", css_id)
