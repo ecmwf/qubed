@@ -273,11 +273,15 @@ async def get_STAC(
     request: dict[str, str | list[str]] = Depends(parse_request),
 ):
     qube, paths = follow_query(request, qubes[key])
+    kvs = [
+        f"{k}={','.join(v)}" if isinstance(v, list) else f"{k}={v}"
+        for k, v in request.items()
+    ]
+    request_params = "&".join(kvs)
 
     def make_link(key_name, paths, values):
         """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
-        path = paths[0]
-        href_template = f"/stac?{'&'.join(path)}{'&' if path else ''}{key_name}={{}}"
+        href_template = f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
         values_from_mars_language = mars_language.get(key_name, {}).get("values", [])
 
         if all(isinstance(v, list) for v in values_from_mars_language):
@@ -297,7 +301,7 @@ async def get_STAC(
             "rel": "child",
             "type": "application/json",
             "variables": {
-                key: {
+                key_name: {
                     "type": "string",
                     "description": mars_language.get(key_name, {}).get(
                         "description", ""
@@ -330,9 +334,7 @@ async def get_STAC(
     stac_collection = {
         "type": "Catalog",
         "stac_version": "1.0.0",
-        "id": "root"
-        if not request
-        else ",".join(f"{k}={v}" for k, v in request.items()),
+        "id": "root" if not request else "/stac?" + request_params,
         "description": "STAC collection representing potential children of this request",
         "links": [make_link(p["key"], p["paths"], p["values"]) for p in paths],
         "debug": {
