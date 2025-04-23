@@ -1,3 +1,8 @@
+# This causes python types to be evaluated later,
+# allowing you to reference types like Qube inside the definion of the Qube class
+# without having to do "Qube"
+from __future__ import annotations
+
 import dataclasses
 import functools
 import json
@@ -6,8 +11,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Literal, Sequence
+from typing import Any, Iterable, Iterator, Literal, Mapping, Sequence
 
+import numpy as np
 from frozendict import frozendict
 
 from . import set_operations
@@ -17,13 +23,18 @@ from .tree_formatters import (
     node_tree_to_html,
     node_tree_to_string,
 )
-from .value_types import QEnum, ValueGroup, WildcardGroup, values_from_json
+from .value_types import (
+    QEnum,
+    ValueGroup,
+    WildcardGroup,
+    values_from_json,
+)
 
 
 @dataclass(frozen=False, eq=True, order=True, unsafe_hash=True)
 class Qube:
     data: NodeData
-    children: tuple["Qube", ...]
+    children: tuple[Qube, ...]
 
     @property
     def key(self) -> str:
@@ -34,10 +45,10 @@ class Qube:
         return self.data.values
 
     @property
-    def metadata(self) -> frozendict[str, Any]:
+    def metadata(self) -> Mapping[str, np.ndarray]:
         return self.data.metadata
 
-    def replace(self, **kwargs) -> "Qube":
+    def replace(self, **kwargs) -> Qube:
         data_keys = {
             k: v for k, v in kwargs.items() if k in ["key", "values", "metadata"]
         }
@@ -55,41 +66,41 @@ class Qube:
         return self.data.summary()
 
     @classmethod
-    def make(cls, key: str, values: ValueGroup, children, **kwargs) -> "Qube":
+    def make(cls, key: str, values: ValueGroup, children, **kwargs) -> Qube:
         return cls(
             data=NodeData(key, values, metadata=kwargs.get("metadata", frozendict())),
             children=tuple(sorted(children, key=lambda n: ((n.key, n.values.min())))),
         )
 
     @classmethod
-    def root_node(cls, children: Iterable["Qube"]) -> "Qube":
+    def root_node(cls, children: Iterable[Qube]) -> Qube:
         return cls.make("root", QEnum(("root",)), children)
 
     @classmethod
-    def load(cls, path: str | Path) -> "Qube":
+    def load(cls, path: str | Path) -> Qube:
         with open(path, "r") as f:
             return Qube.from_json(json.load(f))
 
     @classmethod
-    def from_datacube(cls, datacube: dict[str, str | Sequence[str]]) -> "Qube":
+    def from_datacube(cls, datacube: dict[str, str | Sequence[str]]) -> Qube:
         key_vals = list(datacube.items())[::-1]
 
-        children: list["Qube"] = []
+        children: list[Qube] = []
         for key, values in key_vals:
+            values_group: ValueGroup
             if values == "*":
-                values = WildcardGroup()
-            elif not isinstance(values, list):
-                values = [values]
+                values_group = WildcardGroup()
+            elif isinstance(values, list):
+                values_group = QEnum(values)
+            else:
+                values_group = QEnum([values])
 
-            if isinstance(values, list):
-                values = QEnum(values)
-
-            children = [cls.make(key, values, children)]
+            children = [cls.make(key, values_group, children)]
 
         return cls.root_node(children)
 
     @classmethod
-    def from_json(cls, json: dict) -> "Qube":
+    def from_json(cls, json: dict) -> Qube:
         def from_json(json: dict) -> Qube:
             return Qube.make(
                 key=json["key"],
@@ -112,7 +123,7 @@ class Qube:
         return to_json(self)
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Qube":
+    def from_dict(cls, d: dict) -> Qube:
         def from_dict(d: dict) -> Iterator[Qube]:
             for k, children in d.items():
                 key, values = k.split("=")
@@ -131,8 +142,8 @@ class Qube:
         return Qube.root_node(list(from_dict(d)))
 
     def to_dict(self) -> dict:
-        def to_dict(q: "Qube") -> tuple[str, dict]:
-            key = f"{q.key}={','.join(str(v) for v in q.values.values)}"
+        def to_dict(q: Qube) -> tuple[str, dict]:
+            key = f"{q.key}={','.join(str(v) for v in q.values)}"
             return key, dict(to_dict(c) for c in q.children)
 
         return to_dict(self)[1]
@@ -189,10 +200,10 @@ class Qube:
         return cls.from_dict(root)
 
     @classmethod
-    def empty(cls) -> "Qube":
+    def empty(cls) -> Qube:
         return Qube.root_node([])
 
-    def __str__(self, depth=None, name=None) -> str:
+    def __str_helper__(self, depth=None, name=None) -> str:
         node = (
             dataclasses.replace(
                 self,
@@ -203,8 +214,11 @@ class Qube:
         )
         return "".join(node_tree_to_string(node=node, depth=depth))
 
+    def __str__(self):
+        return self.__str_helper__()
+
     def print(self, depth=None, name: str | None = None):
-        print(self.__str__(depth=depth, name=name))
+        print(self.__str_helper__(depth=depth, name=name))
 
     def html(self, depth=2, collapse=True, name: str | None = None) -> HTML:
         node = (
@@ -221,27 +235,27 @@ class Qube:
         return node_tree_to_html(self, depth=2, collapse=True)
 
     # Allow "key=value/value" / qube to prepend keys
-    def __rtruediv__(self, other: str) -> "Qube":
+    def __rtruediv__(self, other: str) -> Qube:
         key, values = other.split("=")
-        values = QEnum((values.split("/")))
-        return Qube.root_node([Qube.make(key, values, self.children)])
+        values_enum = QEnum((values.split("/")))
+        return Qube.root_node([Qube.make(key, values_enum, self.children)])
 
-    def __or__(self, other: "Qube") -> "Qube":
+    def __or__(self, other: Qube) -> Qube:
         return set_operations.operation(
             self, other, set_operations.SetOperation.UNION, type(self)
         )
 
-    def __and__(self, other: "Qube") -> "Qube":
+    def __and__(self, other: Qube) -> Qube:
         return set_operations.operation(
             self, other, set_operations.SetOperation.INTERSECTION, type(self)
         )
 
-    def __sub__(self, other: "Qube") -> "Qube":
+    def __sub__(self, other: Qube) -> Qube:
         return set_operations.operation(
             self, other, set_operations.SetOperation.DIFFERENCE, type(self)
         )
 
-    def __xor__(self, other: "Qube") -> "Qube":
+    def __xor__(self, other: Qube) -> Qube:
         return set_operations.operation(
             self, other, set_operations.SetOperation.SYMMETRIC_DIFFERENCE, type(self)
         )
@@ -270,11 +284,10 @@ class Qube:
 
     def leaves_with_metadata(
         self, indices=()
-    ) -> Iterable[tuple[dict[str, str], dict[str, str]]]:
+    ) -> Iterator[tuple[dict[str, str], dict[str, str | np.ndarray]]]:
         if self.key == "root":
             for c in self.children:
-                for leaf in c.leaves_with_metadata(indices=()):
-                    yield leaf
+                yield from c.leaves_with_metadata(indices=())
             return
 
         for index, value in enumerate(self.values):
@@ -305,21 +318,21 @@ class Qube:
                     yield from to_list_of_cubes(c)
 
             if not node.children:
-                yield {node.key: list(node.values.values)}
+                yield {node.key: list(node.values)}
 
             for c in node.children:
                 for sub_cube in to_list_of_cubes(c):
-                    yield {node.key: list(node.values.values)} | sub_cube
+                    yield {node.key: list(node.values)} | sub_cube
 
         return to_list_of_cubes(self)
 
-    def __getitem__(self, args) -> "Qube":
+    def __getitem__(self, args) -> Qube:
         if isinstance(args, str):
             specifiers = args.split(",")
             current = self
             for specifier in specifiers:
-                key, values = specifier.split("=")
-                values = values.split("/")
+                key, values_str = specifier.split("=")
+                values = values_str.split("/")
                 for c in current.children:
                     if c.key == key and set(values) == set(c.values):
                         current = c
@@ -354,7 +367,7 @@ class Qube:
             return 0
         return 1 + sum(c.n_nodes for c in self.children)
 
-    def transform(self, func: "Callable[[Qube], Qube | Iterable[Qube]]") -> "Qube":
+    def transform(self, func: "Callable[[Qube], Qube | Iterable[Qube]]") -> Qube:
         """
         Call a function on every node of the Qube, return one or more nodes.
         If multiple nodes are returned they each get a copy of the (transformed) children of the original node.
@@ -375,8 +388,8 @@ class Qube:
     def remove_by_key(self, keys: str | list[str]):
         _keys: list[str] = keys if isinstance(keys, list) else [keys]
 
-        def remove_key(node: "Qube") -> "Qube":
-            children = []
+        def remove_key(node: Qube) -> Qube:
+            children: list[Qube] = []
             for c in node.children:
                 if c.key in _keys:
                     grandchildren = tuple(sorted(remove_key(cc) for cc in c.children))
@@ -405,17 +418,23 @@ class Qube:
         mode: Literal["strict", "relaxed"] = "relaxed",
         prune=True,
         consume=False,
-    ) -> "Qube":
-        # make all values lists
-        selection: dict[str, list[str] | Callable[[Any], bool]] = {
-            k: v if isinstance(v, list | Callable) else [v]
-            for k, v in selection.items()
-        }
+    ) -> Qube:
+        # Find any bare str values and replace them with [str]
+        _selection: dict[str, list[str] | Callable[[Any], bool]] = {}
+        for k, v in selection.items():
+            if isinstance(v, list):
+                _selection[k] = v
+            elif callable(v):
+                _selection[k] = v
+            else:
+                _selection[k] = [v]
 
         def not_none(xs):
             return tuple(x for x in xs if x is not None)
 
-        def select(node: Qube, selection: dict[str, list[str]]) -> Qube | None:
+        def select(
+            node: Qube, selection: dict[str, list[str] | Callable[[Any], bool]]
+        ) -> Qube | None:
             # If this node has no children but there are still parts of the request
             # that have not been consumed, then prune this whole branch
             if consume and not node.children and selection:
@@ -442,13 +461,15 @@ class Qube:
                     raise ValueError(f"Unknown mode argument {mode}")
 
             # If the key IS in the selection then check if the values match
-            if node.key in selection:
+            if node.key in _selection:
                 # If the key is specified, check if any of the values match
-                selection_criteria = selection[node.key]
-                if isinstance(selection_criteria, Callable):
+                selection_criteria = _selection[node.key]
+                if callable(selection_criteria):
                     values = QEnum((c for c in node.values if selection_criteria(c)))
+                elif isinstance(selection_criteria, list):
+                    values = QEnum((c for c in selection_criteria if c in node.values))
                 else:
-                    values = QEnum((c for c in selection[node.key] if c in node.values))
+                    raise ValueError(f"Unknown selection type {selection_criteria}")
 
                 # Here modes don't matter because we've explicitly filtered on this key and found nothing
                 if not values:
@@ -468,11 +489,11 @@ class Qube:
 
             return node.replace(
                 children=new_children,
-                metadata=self.metadata | {"is_leaf": not bool(new_children)},
+                metadata=dict(self.metadata) | {"is_leaf": not bool(new_children)},
             )
 
         return self.replace(
-            children=not_none(select(c, selection) for c in self.children)
+            children=not_none(select(c, _selection) for c in self.children)
         )
 
     def span(self, key: str) -> list[str]:
@@ -508,7 +529,7 @@ class Qube:
 
         return hash_node(self)
 
-    def compress(self) -> "Qube":
+    def compress(self) -> Qube:
         """
         This method is quite computationally heavy because of trees like this:
         root, class=d1, generation=1
@@ -519,7 +540,7 @@ class Qube:
 
         """
 
-        def union(a: "Qube", b: "Qube") -> "Qube":
+        def union(a: Qube, b: Qube) -> Qube:
             b = type(self).root_node(children=(b,))
             out = set_operations.operation(
                 a, b, set_operations.SetOperation.UNION, type(self)
@@ -528,6 +549,8 @@ class Qube:
 
         new_children = [c.compress() for c in self.children]
         if len(new_children) > 1:
-            new_children = functools.reduce(union, new_children, Qube.empty()).children
+            new_children = list(
+                functools.reduce(union, new_children, Qube.empty()).children
+            )
 
         return self.replace(children=tuple(sorted(new_children)))

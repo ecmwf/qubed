@@ -1,16 +1,11 @@
+from __future__ import annotations
+
 import random
 from dataclasses import dataclass
-from typing import Iterable, Protocol, Sequence, runtime_checkable
+from typing import TYPE_CHECKING, Iterable
 
-
-@runtime_checkable
-class TreeLike(Protocol):
-    @property
-    def children(
-        self,
-    ) -> Sequence["TreeLike"]: ...  # Supports indexing like node.children[i]
-
-    def summary(self) -> str: ...
+if TYPE_CHECKING:
+    from .Qube import Qube
 
 
 @dataclass(frozen=True)
@@ -22,8 +17,8 @@ class HTML:
 
 
 def summarize_node(
-    node: TreeLike, collapse=False, max_summary_length=50, **kwargs
-) -> tuple[str, str, TreeLike]:
+    node: Qube, collapse=False, max_summary_length=50, **kwargs
+) -> tuple[str, str, Qube]:
     """
     Extracts a summarized representation of the node while collapsing single-child paths.
     Returns the summary string and the last node in the chain that has multiple children.
@@ -50,7 +45,7 @@ def summarize_node(
     return ", ".join(summaries), ",".join(paths), node
 
 
-def node_tree_to_string(node: TreeLike, prefix: str = "", depth=None) -> Iterable[str]:
+def node_tree_to_string(node: Qube, prefix: str = "", depth=None) -> Iterable[str]:
     summary, path, node = summarize_node(node)
 
     if depth is not None and depth <= 0:
@@ -74,7 +69,7 @@ def node_tree_to_string(node: TreeLike, prefix: str = "", depth=None) -> Iterabl
 
 
 def _node_tree_to_html(
-    node: TreeLike, prefix: str = "", depth=1, connector="", **kwargs
+    node: Qube, prefix: str = "", depth=1, connector="", **kwargs
 ) -> Iterable[str]:
     summary, path, node = summarize_node(node, **kwargs)
 
@@ -99,7 +94,7 @@ def _node_tree_to_html(
 
 
 def node_tree_to_html(
-    node: TreeLike, depth=1, include_css=True, include_js=True, css_id=None, **kwargs
+    node: Qube, depth=1, include_css=True, include_js=True, css_id=None, **kwargs
 ) -> str:
     if css_id is None:
         css_id = f"qubed-tree-{random.randint(0, 1000000)}"

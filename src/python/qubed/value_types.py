@@ -1,8 +1,19 @@
+from __future__ import annotations
+
 import dataclasses
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING, Any, FrozenSet, Iterable, Literal, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    FrozenSet,
+    Iterable,
+    Iterator,
+    Literal,
+    Sequence,
+    TypeVar,
+)
 
 if TYPE_CHECKING:
     from .Qube import Qube
@@ -30,23 +41,19 @@ class ValueGroup(ABC):
         "Return the minimum value in the group."
         pass
 
-
-@dataclass(frozen=True)
-class FiniteValueGroup(ValueGroup, ABC):
+    @classmethod
     @abstractmethod
-    def __len__(self) -> int:
-        "Return how many values this group contains."
+    def from_strings(cls, values: Iterable[str]) -> Sequence[ValueGroup]:
+        "Given a list of strings, return a one or more ValueGroups of this type."
         pass
 
     @abstractmethod
-    def __iter__(self) -> Iterable[Any]:
+    def __iter__(self) -> Iterator:
         "Iterate over the values in the group."
         pass
 
-    @classmethod
     @abstractmethod
-    def from_strings(cls, values: Iterable[str]) -> list["ValueGroup"]:
-        "Given a list of strings, return a one or more ValueGroups of this type."
+    def __len__(self) -> int:
         pass
 
 
@@ -55,7 +62,7 @@ EnumValuesType = FrozenSet[T]
 
 
 @dataclass(frozen=True, order=True)
-class QEnum(FiniteValueGroup):
+class QEnum(ValueGroup):
     """
     The simplest kind of key value is just a list of strings.
     summary -> string1/string2/string....
@@ -81,8 +88,9 @@ class QEnum(FiniteValueGroup):
     def __contains__(self, value: Any) -> bool:
         return value in self.values
 
-    def from_strings(self, values: Iterable[str]) -> list["ValueGroup"]:
-        return [type(self)(tuple(values))]
+    @classmethod
+    def from_strings(cls, values: Iterable[str]) -> Sequence[ValueGroup]:
+        return [cls(tuple(values))]
 
     def min(self):
         return min(self.values)
@@ -105,6 +113,16 @@ class WildcardGroup(ValueGroup):
     def min(self):
         return "*"
 
+    def __len__(self):
+        return None
+
+    def __iter__(self):
+        return ["*"]
+
+    @classmethod
+    def from_strings(cls, values: Iterable[str]) -> Sequence[ValueGroup]:
+        return [WildcardGroup()]
+
 
 class DateEnum(QEnum):
     def summary(self) -> str:
@@ -125,7 +143,7 @@ class Range(ValueGroup, ABC):
     def min(self):
         return self.start
 
-    def __iter__(self) -> Iterable[Any]:
+    def __iter__(self) -> Iterator[Any]:
         i = self.start
         while i <= self.end:
             yield i
@@ -145,19 +163,19 @@ class DateRange(Range):
     def __len__(self) -> int:
         return (self.end - self.start) // self.step
 
-    def __iter__(self) -> Iterable[date]:
+    def __iter__(self) -> Iterator[date]:
         current = self.start
         while current <= self.end if self.step.days > 0 else current >= self.end:
             yield current
             current += self.step
 
     @classmethod
-    def from_strings(cls, values: Iterable[str]) -> "list[DateRange | QEnum]":
+    def from_strings(cls, values: Iterable[str]) -> Sequence[DateRange | DateEnum]:
         dates = sorted([datetime.strptime(v, "%Y%m%d") for v in values])
         if len(dates) < 2:
             return [DateEnum(dates)]
 
-        ranges = []
+        ranges: list[DateEnum | DateRange] = []
         current_group, dates = (
             [
                 dates[0],
@@ -243,7 +261,7 @@ class TimeRange(Range):
     def min(self):
         return self.start
 
-    def __iter__(self) -> Iterable[Any]:
+    def __iter__(self) -> Iterator[Any]:
         return super().__iter__()
 
     @classmethod
@@ -369,7 +387,7 @@ def values_from_json(obj) -> ValueGroup:
 
 
 def convert_datatypes(q: "Qube", conversions: dict[str, ValueGroup]) -> "Qube":
-    def _convert(q: "Qube") -> Iterable["Qube"]:
+    def _convert(q: "Qube") -> Iterator["Qube"]:
         if q.key in conversions:
             data_type = conversions[q.key]
             assert isinstance(q.values, QEnum), (

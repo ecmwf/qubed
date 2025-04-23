@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import defaultdict
 from dataclasses import replace
 from enum import Enum
@@ -11,7 +13,7 @@ from .node_types import NodeData
 from .value_types import QEnum, ValueGroup, WildcardGroup
 
 if TYPE_CHECKING:
-    from .qube import Qube
+    from .Qube import Qube
 
 
 class SetOperation(Enum):
@@ -22,7 +24,7 @@ class SetOperation(Enum):
 
 
 def node_intersection(
-    A: "ValueGroup", B: "ValueGroup"
+    A: ValueGroup, B: ValueGroup
 ) -> tuple[ValueGroup, ValueGroup, ValueGroup]:
     if isinstance(A, QEnum) and isinstance(B, QEnum):
         set_A, set_B = set(A), set(B)
@@ -49,7 +51,7 @@ def node_intersection(
     )
 
 
-def operation(A: "Qube", B: "Qube", operation_type: SetOperation, node_type) -> "Qube":
+def operation(A: Qube, B: Qube, operation_type: SetOperation, node_type) -> Qube:
     assert A.key == B.key, (
         "The two Qube root nodes must have the same key to perform set operations,"
         f"would usually be two root nodes. They have {A.key} and {B.key} respectively"
@@ -60,13 +62,15 @@ def operation(A: "Qube", B: "Qube", operation_type: SetOperation, node_type) -> 
     )
 
     # Group the children of the two nodes by key
-    nodes_by_key = defaultdict(lambda: ([], []))
+    nodes_by_key: defaultdict[str, tuple[list[Qube], list[Qube]]] = defaultdict(
+        lambda: ([], [])
+    )
     for node in A.children:
         nodes_by_key[node.key][0].append(node)
     for node in B.children:
         nodes_by_key[node.key][1].append(node)
 
-    new_children = []
+    new_children: list[Qube] = []
 
     # For every node group, perform the set operation
     for key, (A_nodes, B_nodes) in nodes_by_key.items():
@@ -77,16 +81,16 @@ def operation(A: "Qube", B: "Qube", operation_type: SetOperation, node_type) -> 
     # Whenever we modify children we should recompress them
     # But since `operation` is already recursive, we only need to compress this level not all levels
     # Hence we use the non-recursive _compress method
-    new_children = compress_children(new_children)
+    new_children = list(compress_children(new_children))
 
     # The values and key are the same so we just replace the children
-    return replace(A, children=new_children)
+    return A.replace(children=tuple(sorted(new_children)))
 
 
 # The root node is special so we need a helper method that we can recurse on
 def _operation(
-    key: str, A: list["Qube"], B: list["Qube"], operation_type: SetOperation, node_type
-) -> Iterable["Qube"]:
+    key: str, A: list[Qube], B: list[Qube], operation_type: SetOperation, node_type
+) -> Iterable[Qube]:
     keep_just_A, keep_intersection, keep_just_B = operation_type.value
 
     # Iterate over all pairs (node_A, node_B)
@@ -128,7 +132,7 @@ def _operation(
                 yield node_type.make(key, values[node], node.children)
 
 
-def compress_children(children: Iterable["Qube"]) -> tuple["Qube"]:
+def compress_children(children: Iterable[Qube]) -> tuple[Qube, ...]:
     """
     Helper method tht only compresses a set of nodes, and doesn't do it recursively.
     Used in Qubed.compress but also to maintain compression in the set operations above.
@@ -138,16 +142,16 @@ def compress_children(children: Iterable["Qube"]) -> tuple["Qube"]:
     identical_children = defaultdict(set)
     for child in children:
         # only care about the key and children of each node, ignore values
-        key = hash((child.key, tuple((cc.structural_hash for cc in child.children))))
-        identical_children[key].add(child)
+        h = hash((child.key, tuple((cc.structural_hash for cc in child.children))))
+        identical_children[h].add(child)
 
     # Now go through and create new compressed nodes for any groups that need collapsing
     new_children = []
     for child_set in identical_children.values():
         if len(child_set) > 1:
-            child_set = list(child_set)
-            node_type = type(child_set[0])
-            key = child_set[0].key
+            child_list = list(child_set)
+            node_type = type(child_list[0])
+            key = child_list[0].key
 
             # Compress the children into a single node
             assert all(isinstance(child.data.values, QEnum) for child in child_set), (
@@ -155,13 +159,11 @@ def compress_children(children: Iterable["Qube"]) -> tuple["Qube"]:
             )
 
             node_data = NodeData(
-                key=key,
+                key=str(key),
                 metadata=frozendict(),  # Todo: Implement metadata compression
-                values=QEnum(
-                    (v for child in child_set for v in child.data.values.values)
-                ),
+                values=QEnum((v for child in child_set for v in child.data.values)),
             )
-            new_child = node_type(data=node_data, children=child_set[0].children)
+            new_child = node_type(data=node_data, children=child_list[0].children)
         else:
             # If the group is size one just keep it
             new_child = child_set.pop()
@@ -170,7 +172,7 @@ def compress_children(children: Iterable["Qube"]) -> tuple["Qube"]:
     return tuple(sorted(new_children, key=lambda n: ((n.key, n.values.min()))))
 
 
-def union(a: "Qube", b: "Qube") -> "Qube":
+def union(a: Qube, b: Qube) -> Qube:
     return operation(
         a,
         b,

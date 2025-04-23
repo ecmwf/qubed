@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
-from typing import Hashable
+from typing import Mapping
 
+import numpy as np
 from frozendict import frozendict
 
 from .value_types import ValueGroup
@@ -10,7 +11,7 @@ from .value_types import ValueGroup
 class NodeData:
     key: str
     values: ValueGroup
-    metadata: dict[str, tuple[Hashable, ...]] = field(
+    metadata: Mapping[str, np.ndarray] = field(
         default_factory=frozendict, compare=False
     )
 

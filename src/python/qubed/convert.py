@@ -8,8 +8,10 @@ def parse_key_value_pairs(text: str):
     for segment in text.split(","):
         if "=" not in segment:
             print(segment)
-        key, values = segment.split("=", 1)  # Ensure split only happens at first "="
-        values = values.split("/")
+        key, values_str = segment.split(
+            "=", 1
+        )  # Ensure split only happens at first "="
+        values = values_str.split("/")
         result[key] = values
 
     return result
