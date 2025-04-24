@@ -46,7 +46,7 @@ In addition to this core datastructure, this repostitory contains a collection o
 - 🌟 Implements our proposed [Datacube STAC Extension](./structured_stac.md).
 - 🛠️ Allows efficient traversal of ECMWF's datacubes.
 - Part of the implementation of this is [🌲 Tree Compressor](./tree_compresser), a **compressed tree representation** optimised for storing trees with many duplicated subtress.
-- 🔗 **[Live Example](https://climate-catalogue.lumi.apps.dte.destination-earth.eu/api/stac?root=root&activity=story-nudging%2Cscenariomip&class=d1)**.
+- 🔗 **[Live Example](https://qubed.lumi.apps.dte.destination-earth.eu/api/v1/stac/climate-dt/?class=od%2Cd1&dataset=climate-dt)**.
 
 ---
 
@@ -54,7 +54,7 @@ In addition to this core datastructure, this repostitory contains a collection o
 > **Web Frontend**
 
 - 👀 Displays data from the **STAC Server** in an intuitive user interface.
-- 🌍 **[Try the Live Demo](https://climate-catalogue.lumi.apps.dte.destination-earth.eu/)**.
+- 🌍 **[Try the Live Demo](https://qubed.lumi.apps.dte.destination-earth.eu/)**.
 
 ---
 
