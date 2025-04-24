@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Literal, Mapping, Sequence
+from typing import Any, Iterable, Iterator, Literal, Sequence
 
 import numpy as np
 from frozendict import frozendict
@@ -46,7 +46,7 @@ class Qube:
         return self.data.values
 
     @property
-    def metadata(self) -> Mapping[str, np.ndarray]:
+    def metadata(self):
         return self.data.metadata
 
     def replace(self, **kwargs) -> Qube:

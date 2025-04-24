@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import Mapping
 
 import numpy as np
 from frozendict import frozendict
@@ -11,8 +10,8 @@ from .value_types import ValueGroup
 class NodeData:
     key: str
     values: ValueGroup
-    metadata: Mapping[str, np.ndarray] = field(
-        default_factory=frozendict, compare=False
+    metadata: frozendict[str, np.ndarray] = field(
+        default_factory=lambda: frozendict({}), compare=False
     )
 
     def summary(self) -> str:

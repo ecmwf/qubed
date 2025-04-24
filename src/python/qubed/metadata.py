@@ -5,7 +5,7 @@ import numpy as np
 from .value_types import QEnum
 
 if TYPE_CHECKING:
-    from .qube import Qube
+    from .Qube import Qube
 
 
 def make_node(
