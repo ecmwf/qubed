@@ -33,3 +33,7 @@ source_suffix = {
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
+
+myst_enable_extensions = [
+    "attrs_inline",
+]

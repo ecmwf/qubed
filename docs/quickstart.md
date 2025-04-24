@@ -8,7 +8,7 @@ jupytext:
 ---
 # Quickstart
 
-First install qubed with `pip install qubed`. Now, let's dive in with a real world dataset from the [Climate DT](https://destine.ecmwf.int/climate-change-adaptation-digital-twin-climate-dt/). We'll pull a prebuild qube from github and render it in it's default HTML representation.
+First install qubed with `pip install qubed`. Now, let's dive in with a real world dataset from the [Climate DT](https://destine.ecmwf.int/climate-change-adaptation-digital-twin-climate-dt/). We'll pull a prebuilt qube from github and render it in it's default HTML representation.
 
 ```{code-cell} python3
 import requests
@@ -18,6 +18,10 @@ climate_dt.html(depth=1)
 ```
 
 Click the arrows to expand and drill down deeper into the data.
+
+```{note}
+There is currently a simple Qube web browser hosted [here](https://qubed.lumi.apps.dte.destination-earth.eu/). Browse that and copy the 'Example Qube Code' to download a Qube representing the selection at that point. You'll get something like `Qube.from_json(requests.get("https://qubed.lumi.apps.dte.destination-earth.eu/api/v1/select/climate-dt/?").json())`{l=python}
+```
 
 Fundamentally a Qube represents a set identifiers which are a set of key value pairs, here's the one leaf in the Climate DT dataset:
 
