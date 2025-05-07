@@ -20,3 +20,4 @@ src/python/qubed/_version.py
 cmake_build/
 tests/data/
 *.secret
+node_modules/

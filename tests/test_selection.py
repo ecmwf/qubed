@@ -27,6 +27,15 @@ def test_consumption_off():
     assert q.select({"expver": "0001"}, consume=False) == expected
 
 
+def test_require_match():
+    expected = Qube.from_dict(
+        {
+            "class=od": {"expver=0001": {"param=1": {}, "param=2": {}}},
+        }
+    )
+    assert q.select({"expver": "0001"}, require_match=True) == expected
+
+
 def test_function_input_to_select():
     q = Qube.from_tree("""
     root, frequency=6:00:00
