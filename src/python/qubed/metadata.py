@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Iterator
 
 import numpy as np
@@ -13,7 +15,7 @@ def make_node(
     key: str,
     values: Iterator,
     shape: list[int],
-    children: "tuple[Qube]",
+    children: tuple[Qube, ...],
     metadata: dict[str, np.ndarray] | None = None,
 ):
     return cls.make(
@@ -30,11 +32,11 @@ def from_nodes(cls, nodes, add_root=True):
     shape = [len(n["values"]) for n in nodes.values()]
     nodes = nodes.items()
     *nodes, (key, info) = nodes
-    root = make_node(shape=shape, children=(), key=key, **info)
+    root = make_node(cls, shape=shape, children=(), key=key, **info)
 
     for key, info in reversed(nodes):
         shape.pop()
-        root = make_node(shape=shape, children=(root,), key=key, **info)
+        root = make_node(cls, shape=shape, children=(root,), key=key, **info)
 
     if add_root:
         return cls.root_node(children=(root,))

@@ -40,7 +40,6 @@ def QEnum_intersection(
 
     for index_a, val_A in enumerate(A.values):
         if val_A in B.values:
-            # print(f"{val_A} in both")
             just_B.pop(val_A)
             intersection[val_A] = (
                 index_a  # We throw away any overlapping metadata from B
@@ -116,9 +115,8 @@ def operation(A: Qube, B: Qube, operation_type: SetOperation, node_type) -> Qube
 
     # For every node group, perform the set operation
     for key, (A_nodes, B_nodes) in nodes_by_key.items():
-        new_children.extend(
-            _operation(key, A_nodes, B_nodes, operation_type, node_type)
-        )
+        output = list(_operation(key, A_nodes, B_nodes, operation_type, node_type))
+        new_children.extend(output)
 
     # Whenever we modify children we should recompress them
     # But since `operation` is already recursive, we only need to compress this level not all levels
@@ -193,17 +191,17 @@ def compress_children(children: Iterable[Qube]) -> tuple[Qube, ...]:
     """
     # Take the set of new children and see if any have identical key, metadata and children
     # the values may different and will be collapsed into a single node
-    identical_children = defaultdict(set)
+
+    identical_children = defaultdict(list)
     for child in children:
         # only care about the key and children of each node, ignore values
         h = hash((child.key, tuple((cc.structural_hash for cc in child.children))))
-        identical_children[h].add(child)
+        identical_children[h].append(child)
 
     # Now go through and create new compressed nodes for any groups that need collapsing
     new_children = []
-    for child_set in identical_children.values():
-        if len(child_set) > 1:
-            child_list = list(child_set)
+    for child_list in identical_children.values():
+        if len(child_list) > 1:
             example = child_list[0]
             node_type = type(example)
             key = child_list[0].key
@@ -217,9 +215,10 @@ def compress_children(children: Iterable[Qube]) -> tuple[Qube, ...]:
                 k: [child.metadata[k] for child in child_list]
                 for k in example.metadata.keys()
             }
+
             metadata: frozendict[str, np.ndarray] = frozendict(
                 {
-                    k: np.concatenate(metadata_group, axis=-1)
+                    k: np.concatenate(metadata_group, axis=0)
                     for k, metadata_group in metadata_groups.items()
                 }
             )
@@ -227,12 +226,14 @@ def compress_children(children: Iterable[Qube]) -> tuple[Qube, ...]:
             node_data = NodeData(
                 key=key,
                 metadata=metadata,
-                values=QEnum((v for child in child_list for v in child.data.values)),
+                values=QEnum(set(v for child in child_list for v in child.data.values)),
             )
-            new_child = node_type(data=node_data, children=child_list[0].children)
+            children = [cc for c in child_list for cc in c.children]
+            compressed_children = compress_children(children)
+            new_child = node_type(data=node_data, children=compressed_children)
         else:
             # If the group is size one just keep it
-            new_child = child_set.pop()
+            new_child = child_list.pop()
 
         new_children.append(new_child)
 

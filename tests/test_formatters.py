@@ -21,7 +21,7 @@ root
 """.strip()
 
 as_html = """
-<details open data-path="root"><summary class="qubed-node">root</summary><span class="qubed-node leaf" data-path="class=od,expver=0001/0002,param=1/2">├── class=od, expver=0001/0002, param=1/2</span><details open data-path="class=rd"><summary class="qubed-node">└── class=rd</summary><span class="qubed-node leaf" data-path="expver=0001,param=1/2/3">    ├── expver=0001, param=1/2/3</span><span class="qubed-node leaf" data-path="expver=0002,param=1/2">    └── expver=0002, param=1/2</span></details></details>
+<details open><summary class="qubed-level"><span class="qubed-node" data-path="root" title="dtype: str\nmetadata: {}\n">root</span></summary><span class="qubed-level">├── <span class="qubed-node" data-path="class=od" title="dtype: str\nmetadata: {}\n">class=od</span>, <span class="qubed-node" data-path="expver=0001/0002" title="dtype: str\nmetadata: {}\n">expver=0001/0002</span>, <span class="qubed-node" data-path="param=1/2" title="dtype: str\nmetadata: {}\n">param=1/2</span></span><details open><summary class="qubed-level">└── <span class="qubed-node" data-path="class=rd" title="dtype: str\nmetadata: {}\n">class=rd</span></summary><span class="qubed-level">    ├── <span class="qubed-node" data-path="expver=0001" title="dtype: str\nmetadata: {}\n">expver=0001</span>, <span class="qubed-node" data-path="param=1/2/3" title="dtype: str\nmetadata: {}\n">param=1/2/3</span></span><span class="qubed-level">    └── <span class="qubed-node" data-path="expver=0002" title="dtype: str\nmetadata: {}\n">expver=0002</span>, <span class="qubed-node" data-path="param=1/2" title="dtype: str\nmetadata: {}\n">param=1/2</span></span></details></details>
 """.strip()
 
 

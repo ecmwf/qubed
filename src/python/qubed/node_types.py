@@ -13,6 +13,7 @@ class NodeData:
     metadata: frozendict[str, np.ndarray] = field(
         default_factory=lambda: frozendict({}), compare=False
     )
+    dtype: type = str
 
     def summary(self) -> str:
         return f"{self.key}={self.values.summary()}" if self.key != "root" else "root"

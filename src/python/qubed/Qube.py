@@ -49,9 +49,15 @@ class Qube:
     def metadata(self):
         return self.data.metadata
 
+    @property
+    def dtype(self):
+        return self.data.dtype
+
     def replace(self, **kwargs) -> Qube:
         data_keys = {
-            k: v for k, v in kwargs.items() if k in ["key", "values", "metadata"]
+            k: v
+            for k, v in kwargs.items()
+            if k in ["key", "values", "metadata", "dtype"]
         }
         node_keys = {k: v for k, v in kwargs.items() if k == "children"}
         if not data_keys and not node_keys:
@@ -69,7 +75,9 @@ class Qube:
     @classmethod
     def make(cls, key: str, values: ValueGroup, children, **kwargs) -> Qube:
         return cls(
-            data=NodeData(key, values, metadata=kwargs.get("metadata", frozendict())),
+            data=NodeData(
+                key, values, metadata=frozendict(kwargs.get("metadata", frozendict()))
+            ),
             children=tuple(sorted(children, key=lambda n: ((n.key, n.values.min())))),
         )
 
@@ -217,10 +225,16 @@ class Qube:
             if name is not None
             else self
         )
-        return "".join(node_tree_to_string(node=node, depth=depth))
+        out = "".join(node_tree_to_string(node=node, depth=depth))
+        if out[-1] == "\n":
+            out = out[:-1]
+        return out
 
     def __str__(self):
         return self.__str_helper__()
+
+    def __repr__(self):
+        return f"Qube({self.__str_helper__()})"
 
     def print(self, depth=None, name: str | None = None):
         print(self.__str_helper__(depth=depth, name=name))
@@ -409,7 +423,8 @@ class Qube:
         def convert(node: Qube) -> Qube:
             if node.key in converters:
                 converter = converters[node.key]
-                new_node = node.replace(values=QEnum(map(converter, node.values)))
+                values = [converter(v) for v in node.values]
+                new_node = node.replace(values=QEnum(values), dtype=type(values[0]))
                 return new_node
             return node
 

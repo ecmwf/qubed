@@ -4,6 +4,8 @@ import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable
 
+import numpy as np
+
 if TYPE_CHECKING:
     from .Qube import Qube
 
@@ -68,17 +70,51 @@ def node_tree_to_string(node: Qube, prefix: str = "", depth=None) -> Iterable[st
         )
 
 
+def summarize_node_html(
+    node: Qube, collapse=False, max_summary_length=50, **kwargs
+) -> tuple[str, Qube]:
+    """
+    Extracts a summarized representation of the node while collapsing single-child paths.
+    Returns the summary string and the last node in the chain that has multiple children.
+    """
+    summaries = []
+
+    while True:
+        path = node.summary(**kwargs)
+        summary = path
+        if "is_leaf" in node.metadata and node.metadata["is_leaf"]:
+            summary += " 🌿"
+
+        if len(summary) > max_summary_length:
+            summary = summary[:max_summary_length] + "..."
+        info = (
+            f"dtype: {node.dtype.__name__}\n"
+            f"metadata: {dict((k, np.shape(v)) for k, v in node.metadata.items())}\n"
+        )
+        summary = f'<span class="qubed-node" data-path="{path}" title="{info}">{summary}</span>'
+        summaries.append(summary)
+        if not collapse:
+            break
+
+        # Move down if there's exactly one child, otherwise stop
+        if len(node.children) != 1:
+            break
+        node = node.children[0]
+
+    return ", ".join(summaries), node
+
+
 def _node_tree_to_html(
     node: Qube, prefix: str = "", depth=1, connector="", **kwargs
 ) -> Iterable[str]:
-    summary, path, node = summarize_node(node, **kwargs)
+    summary, node = summarize_node_html(node, **kwargs)
 
     if len(node.children) == 0:
-        yield f'<span class="qubed-node leaf" data-path="{path}">{connector}{summary}</span>'
+        yield f'<span class="qubed-level">{connector}{summary}</span>'
         return
     else:
         open = "open" if depth > 0 else ""
-        yield f'<details {open} data-path="{path}"><summary class="qubed-node">{connector}{summary}</summary>'
+        yield f'<details {open}><summary class="qubed-level">{connector}{summary}</summary>'
 
     for index, child in enumerate(node.children):
         connector = "└── " if index == len(node.children) - 1 else "├── "
@@ -114,7 +150,7 @@ def node_tree_to_html(
                 margin-left: 0;
             }
 
-            .qubed-node a {
+            .qubed-level a {
                 margin-left: 10px;
                 text-decoration: none;
             }
@@ -128,7 +164,7 @@ def node_tree_to_html(
                 display: block;
             }
 
-            summary:hover,span.leaf:hover {
+            span.qubed-node:hover {
                 background-color: #f0f0f0;
             }
 
@@ -140,7 +176,7 @@ def node_tree_to_html(
                 content: " ▼";
             }
 
-            .leaf {
+            .qubed-level {
                 text-overflow: ellipsis;
                 overflow: hidden;
                 text-wrap: nowrap;
