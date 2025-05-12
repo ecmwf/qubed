@@ -119,6 +119,9 @@ class WildcardGroup(ValueGroup):
     def __iter__(self):
         return ["*"]
 
+    def __bool__(self):
+        return True
+
     @classmethod
     def from_strings(cls, values: Iterable[str]) -> Sequence[ValueGroup]:
         return [WildcardGroup()]

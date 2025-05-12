@@ -75,7 +75,11 @@ def node_intersection(
         return QEnum_intersection(A, B)
 
     if isinstance(A.values, WildcardGroup) and isinstance(B.values, WildcardGroup):
-        return A, ValuesMetadata(WildcardGroup(), {}), B
+        return (
+            ValuesMetadata(QEnum([]), {}),
+            ValuesMetadata(WildcardGroup(), {}),
+            ValuesMetadata(QEnum([]), {}),
+        )
 
     # If A is a wildcard matcher then the intersection is everything
     # just_A is still *
@@ -92,7 +96,7 @@ def node_intersection(
     )
 
 
-def operation(A: Qube, B: Qube, operation_type: SetOperation, node_type) -> Qube:
+def operation(A: Qube, B: Qube, operation_type: SetOperation, node_type) -> Qube | None:
     assert A.key == B.key, (
         "The two Qube root nodes must have the same key to perform set operations,"
         f"would usually be two root nodes. They have {A.key} and {B.key} respectively"
@@ -117,6 +121,18 @@ def operation(A: Qube, B: Qube, operation_type: SetOperation, node_type) -> Qube
     for key, (A_nodes, B_nodes) in nodes_by_key.items():
         output = list(_operation(key, A_nodes, B_nodes, operation_type, node_type))
         new_children.extend(output)
+
+    # print(f"operation {operation_type}: {A}, {B} {new_children = }")
+    # print(f"{A.children = }")
+    # print(f"{B.children = }")
+    # print(f"{new_children = }")
+
+    # If there are now no children as a result of the operation, return nothing.
+    if (A.children or B.children) and not new_children:
+        if A.key == "root":
+            return A.replace(children=())
+        else:
+            return None
 
     # Whenever we modify children we should recompress them
     # But since `operation` is already recursive, we only need to compress this level not all levels
@@ -161,7 +177,14 @@ def _operation(
                         values=intersection.values,
                         metadata=intersection.metadata,
                     )
-                    yield operation(new_node_a, new_node_b, operation_type, node_type)
+                    # print(f"{node_a = }")
+                    # print(f"{node_b = }")
+                    # print(f"{intersection.values =}")
+                    result = operation(
+                        new_node_a, new_node_b, operation_type, node_type
+                    )
+                    if result is not None:
+                        yield result
 
     # Now we've removed all the intersections we can yield the just_A and just_B parts if needed
     if keep_just_A:

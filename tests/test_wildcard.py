@@ -34,3 +34,16 @@ def test_intersection():
             },
         }
     )
+
+
+def test_wildcard_union():
+    q1 = Qube.from_tree(
+        "root, frequency=*, levtype=*, param=*, levelist=*, domain=a/b/c/d"
+    )
+    q2 = Qube.from_tree("root, frequency=*, levtype=*, param=*, domain=a/b/c/d")
+    expected = Qube.from_tree("""
+    root, frequency=*, levtype=*, param=*
+    ├── domain=a/b/c/d
+    └── levelist=*, domain=a/b/c/d
+    """)
+    assert (q1 | q2) == expected

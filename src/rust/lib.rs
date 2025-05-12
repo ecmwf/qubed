@@ -3,6 +3,8 @@
 // #![allow(unused_variables)]
 
 
+use std::collections::HashMap;
+
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3::types::{PyDict, PyInt, PyList, PyString};
@@ -18,6 +20,47 @@ fn rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Ord, Eq, Hash)]
+struct NodeId(usize);
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Ord, Eq, Hash)]
+struct StringId(usize);
+
+struct Node {
+    key: StringId,
+    metadata: HashMap<StringId, Vec<String>>,
+    parent: NodeId,
+    values: Vec<String>,
+    children: HashMap<StringId, Vec<NodeId>>,
+}
+
+
+
+struct Qube {
+    root: NodeId,
+    nodes: Vec<Node>,
+    strings: Vec<String>,
+}
+
+use std::ops;
+
+impl ops::Index<StringId> for Qube {
+    type Output = str;
+
+    fn index(&self, index: StringId) -> &str {
+        &self.strings[index.0]
+    }
+
+}
+
+impl ops::Index<NodeId> for Qube {
+    type Output = Node;
+
+    fn index(&self, index: NodeId) -> &Node {
+        &self.nodes[index.0]
+    }
+
+}
 
 // use rsfdb::listiterator::KeyValueLevel;
 // use rsfdb::request::Request;
