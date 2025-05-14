@@ -18,7 +18,7 @@ def make_node(
     children: tuple[Qube, ...],
     metadata: dict[str, np.ndarray] | None = None,
 ):
-    return cls.make(
+    return cls.make_node(
         key=key,
         values=QEnum(values),
         metadata={k: np.array(v).reshape(shape) for k, v in metadata.items()}
@@ -39,5 +39,5 @@ def from_nodes(cls, nodes, add_root=True):
         root = make_node(cls, shape=shape, children=(root,), key=key, **info)
 
     if add_root:
-        return cls.root_node(children=(root,))
+        return cls.make_root(children=(root,))
     return root

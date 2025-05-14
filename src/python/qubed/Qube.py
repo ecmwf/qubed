@@ -8,17 +8,17 @@ import functools
 import json
 from collections import defaultdict
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Literal, Sequence
+from typing import Any, Iterable, Iterator, Literal, Self, Sequence
 
 import numpy as np
 from frozendict import frozendict
 
 from . import set_operations
 from .metadata import from_nodes
-from .node_types import NodeData, RootNodeData
+from .protobuf.adapters import proto_to_qube, qube_to_proto
 from .tree_formatters import (
     HTML,
     node_tree_to_html,
@@ -32,58 +32,90 @@ from .value_types import (
 )
 
 
-@dataclass(frozen=False, eq=True, order=True, unsafe_hash=True)
-class Qube:
-    data: NodeData
-    children: tuple[Qube, ...]
+@dataclass
+class AxisInfo:
+    key: str
+    type: Any
+    depths: set[int]
+    values: set
 
-    @property
-    def key(self) -> str:
-        return self.data.key
+    def combine(self, other: Self):
+        self.key = other.key
+        self.type = other.type
+        self.depths.update(other.depths)
+        self.values.update(other.values)
+        # print(f"combining {self} and {other} getting {result}")
 
-    @property
-    def values(self) -> ValueGroup:
-        return self.data.values
-
-    @property
-    def metadata(self):
-        return self.data.metadata
-
-    @property
-    def dtype(self):
-        return self.data.dtype
-
-    def replace(self, **kwargs) -> Qube:
-        data_keys = {
-            k: v
-            for k, v in kwargs.items()
-            if k in ["key", "values", "metadata", "dtype"]
+    def to_json(self):
+        return {
+            "key": self.key,
+            "type": self.type.__name__,
+            "values": list(self.values),
+            "depths": list(self.depths),
         }
-        node_keys = {k: v for k, v in kwargs.items() if k == "children"}
-        if not data_keys and not node_keys:
-            return self
-        if not data_keys:
-            return dataclasses.replace(self, **node_keys)
 
-        return dataclasses.replace(
-            self, data=dataclasses.replace(self.data, **data_keys), **node_keys
-        )
+
+@dataclass(frozen=True, eq=True, order=True, unsafe_hash=True)
+class QubeNamedRoot:
+    "Helper class to print a custom root name"
+
+    key: str
+    dtype: str = "str"
+    children: tuple[Qube, ...] = ()
 
     def summary(self) -> str:
-        return self.data.summary()
+        return self.key
+
+
+@dataclass(frozen=True, eq=True, order=True, unsafe_hash=True)
+class Qube:
+    key: str
+    values: ValueGroup
+    metadata: frozendict[str, np.ndarray] = field(
+        default_factory=lambda: frozendict({}), compare=False
+    )
+    children: tuple[Qube, ...] = ()
+    is_root: bool = False
+
+    def replace(self, **kwargs) -> Qube:
+        return dataclasses.replace(self, **kwargs)
+
+    def summary(self) -> str:
+        if self.is_root:
+            return self.key
+        return f"{self.key}={self.values.summary()}" if self.key != "root" else "root"
 
     @classmethod
-    def make(cls, key: str, values: ValueGroup, children, **kwargs) -> Qube:
+    def make_node(
+        cls,
+        key: str,
+        values: Iterable | QEnum | WildcardGroup,
+        children: Iterable[Qube],
+        metadata: dict[str, np.ndarray] = {},
+        is_root: bool = False,
+    ) -> Qube:
+        if isinstance(values, ValueGroup):
+            values = values
+        else:
+            values = QEnum(values)
+
         return cls(
-            data=NodeData(
-                key, values, metadata=frozendict(kwargs.get("metadata", frozendict()))
-            ),
+            key,
+            values=values,
             children=tuple(sorted(children, key=lambda n: ((n.key, n.values.min())))),
+            metadata=frozendict(metadata),
+            is_root=is_root,
         )
 
     @classmethod
-    def root_node(cls, children: Iterable[Qube]) -> Qube:
-        return cls.make("root", QEnum(("root",)), children)
+    def make_root(cls, children: Iterable[Qube], metadata={}) -> Qube:
+        return cls.make_node(
+            "root",
+            values=QEnum(("root",)),
+            children=children,
+            metadata=metadata,
+            is_root=True,
+        )
 
     @classmethod
     def load(cls, path: str | Path) -> Qube:
@@ -104,18 +136,19 @@ class Qube:
             else:
                 values_group = QEnum([values])
 
-            children = [cls.make(key, values_group, children)]
+            children = [cls.make_node(key, values_group, children)]
 
-        return cls.root_node(children)
+        return cls.make_root(children)
 
     @classmethod
     def from_json(cls, json: dict) -> Qube:
-        def from_json(json: dict) -> Qube:
-            return Qube.make(
+        def from_json(json: dict, depth=0) -> Qube:
+            return Qube.make_node(
                 key=json["key"],
                 values=values_from_json(json["values"]),
                 metadata=frozendict(json["metadata"]) if "metadata" in json else {},
-                children=(from_json(c) for c in json["children"]),
+                children=(from_json(c, depth + 1) for c in json["children"]),
+                is_root=(depth == 0),
             )
 
         return from_json(json)
@@ -146,13 +179,13 @@ class Qube:
                 else:
                     values = QEnum(values)
 
-                yield Qube.make(
+                yield Qube.make_node(
                     key=key,
                     values=values,
                     children=from_dict(children),
                 )
 
-        return Qube.root_node(list(from_dict(d)))
+        return Qube.make_root(list(from_dict(d)))
 
     def to_dict(self) -> dict:
         def to_dict(q: Qube) -> tuple[str, dict]:
@@ -160,6 +193,13 @@ class Qube:
             return key, dict(to_dict(c) for c in q.children)
 
         return to_dict(self)[1]
+
+    @classmethod
+    def from_protobuf(cls, msg: bytes) -> Qube:
+        return proto_to_qube(cls, msg)
+
+    def to_protobuf(self) -> bytes:
+        return qube_to_proto(self)
 
     @classmethod
     def from_tree(cls, tree_str):
@@ -214,17 +254,12 @@ class Qube:
 
     @classmethod
     def empty(cls) -> Qube:
-        return Qube.root_node([])
+        return Qube.make_root([])
 
     def __str_helper__(self, depth=None, name=None) -> str:
-        node = (
-            dataclasses.replace(
-                self,
-                data=RootNodeData(key=name, values=self.values, metadata=self.metadata),
-            )
-            if name is not None
-            else self
-        )
+        node = self
+        if name is not None:
+            node = node.replace(key=name)
         out = "".join(node_tree_to_string(node=node, depth=depth))
         if out[-1] == "\n":
             out = out[:-1]
@@ -239,16 +274,19 @@ class Qube:
     def print(self, depth=None, name: str | None = None):
         print(self.__str_helper__(depth=depth, name=name))
 
-    def html(self, depth=2, collapse=True, name: str | None = None) -> HTML:
-        node = (
-            dataclasses.replace(
-                self,
-                data=RootNodeData(key=name, values=self.values, metadata=self.metadata),
-            )
-            if name is not None
-            else self
+    def html(
+        self,
+        depth=2,
+        collapse=True,
+        name: str | None = None,
+        info: Callable[[Qube], str] | None = None,
+    ) -> HTML:
+        node = self
+        if name is not None:
+            node = node.replace(key=name)
+        return HTML(
+            node_tree_to_html(node=node, depth=depth, collapse=collapse, info=info)
         )
-        return HTML(node_tree_to_html(node=node, depth=depth, collapse=collapse))
 
     def _repr_html_(self) -> str:
         return node_tree_to_html(self, depth=2, collapse=True)
@@ -257,7 +295,7 @@ class Qube:
     def __rtruediv__(self, other: str) -> Qube:
         key, values = other.split("=")
         values_enum = QEnum((values.split("/")))
-        return Qube.root_node([Qube.make(key, values_enum, self.children)])
+        return Qube.make_root([Qube.make_node(key, values_enum, self.children)])
 
     def __or__(self, other: Qube) -> Qube:
         return set_operations.operation(
@@ -358,16 +396,16 @@ class Qube:
                     raise KeyError(
                         f"Key '{key}' not found in children of '{current.key}', available keys are {[c.key for c in current.children]}"
                     )
-            return Qube.root_node(current.children)
+            return Qube.make_root(current.children)
 
         elif isinstance(args, tuple) and len(args) == 2:
             key, value = args
             for c in self.children:
                 if c.key == key and value in c.values:
-                    return Qube.root_node(c.children)
-            raise KeyError(f"Key {key} not found in children of {self.key}")
+                    return Qube.make_root(c.children)
+            raise KeyError(f"Key '{key}' not found in children of {self.key}")
         else:
-            raise ValueError("Unknown key type")
+            raise ValueError(f"Unknown key type {args}")
 
     @cached_property
     def n_leaves(self) -> int:
@@ -410,7 +448,7 @@ class Qube:
             for c in node.children:
                 if c.key in _keys:
                     grandchildren = tuple(sorted(remove_key(cc) for cc in c.children))
-                    grandchildren = remove_key(Qube.root_node(grandchildren)).children
+                    grandchildren = remove_key(Qube.make_root(grandchildren)).children
                     children.extend(grandchildren)
                 else:
                     children.append(remove_key(c))
@@ -424,7 +462,7 @@ class Qube:
             if node.key in converters:
                 converter = converters[node.key]
                 values = [converter(v) for v in node.values]
-                new_node = node.replace(values=QEnum(values), dtype=type(values[0]))
+                new_node = node.replace(values=QEnum(values))
                 return new_node
             return node
 
@@ -516,7 +554,8 @@ class Qube:
 
             return node.replace(
                 children=new_children,
-                metadata=dict(self.metadata) | {"is_leaf": not bool(new_children)},
+                metadata=dict(self.metadata)
+                | ({"is_leaf": not bool(new_children)} if mode == "next_level" else {}),
             )
 
         return self.replace(
@@ -542,6 +581,26 @@ class Qube:
                 axes[k].update(v)
         if self.key != "root":
             axes[self.key].update(self.values)
+        return dict(axes)
+
+    def axes_info(self, depth=0) -> dict[str, AxisInfo]:
+        axes = defaultdict(
+            lambda: AxisInfo(key="", type=str, depths=set(), values=set())
+        )
+        for c in self.children:
+            for k, info in c.axes_info(depth=depth + 1).items():
+                axes[k].combine(info)
+
+        if self.key != "root":
+            axes[self.key].combine(
+                AxisInfo(
+                    key=self.key,
+                    type=type(next(iter(self.values))),
+                    depths={depth},
+                    values=set(self.values),
+                )
+            )
+
         return dict(axes)
 
     @cached_property
@@ -570,7 +629,7 @@ class Qube:
         """
 
         def union(a: Qube, b: Qube) -> Qube:
-            b = type(self).root_node(children=(b,))
+            b = type(self).make_root(children=(b,))
             out = set_operations.operation(
                 a, b, set_operations.SetOperation.UNION, type(self)
             )
@@ -583,3 +642,20 @@ class Qube:
             )
 
         return self.replace(children=tuple(sorted(new_children)))
+
+    def add_metadata(self, **kwargs: dict[str, Any]):
+        metadata = {
+            k: np.array(
+                [
+                    v,
+                ]
+            )
+            for k, v in kwargs.items()
+        }
+        return self.replace(metadata=metadata)
+
+    def strip_metadata(self) -> Qube:
+        def strip(node):
+            return node.replace(metadata=frozendict({}))
+
+        return self.transform(strip)

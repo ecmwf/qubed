@@ -176,7 +176,7 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
     by_path = defaultdict(lambda: {"paths": set(), "values": set()})
 
     for request, node in s.leaf_nodes():
-        if not node.data.metadata["is_leaf"]:
+        if not node.metadata["is_leaf"]:
             by_path[node.key]["values"].update(node.values.values)
             by_path[node.key]["paths"].add(frozendict(request))
 

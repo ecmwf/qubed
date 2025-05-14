@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+message NdArray {
+  repeated int64 shape = 1;
+  string  dtype  = 2;
+  bytes   raw    = 3;
+}
+
+message StringGroup {repeated string items = 1; }
+
+// Stores values i.e class=1/2/3 the 1/2/3 part
+message ValueGroup {
+    oneof payload {
+    StringGroup s = 1;
+    NdArray tensor = 2;
+  }
+}
+
+message MetadataGroup {
+    oneof payload {
+    NdArray tensor = 1;
+  }
+}
+
+message Qube {
+  string key          = 1;
+  ValueGroup values   = 2;
+  map<string, MetadataGroup> metadata = 3;
+  string dtype        = 4;
+  repeated Qube children = 5;
+  bool is_root        = 6;
+}

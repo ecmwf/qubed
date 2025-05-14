@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import (
     TYPE_CHECKING,
@@ -21,6 +21,11 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ValueGroup(ABC):
+    @abstractmethod
+    def dtype(self) -> str:
+        "Provide a string rep of the datatype of these values"
+        pass
+
     @abstractmethod
     def summary(self) -> str:
         "Provide a string summary of the value group."
@@ -69,9 +74,13 @@ class QEnum(ValueGroup):
     """
 
     values: EnumValuesType
+    _dtype: str = "str"
 
     def __init__(self, obj):
         object.__setattr__(self, "values", tuple(sorted(obj)))
+        object.__setattr__(
+            self, "dtype", type(self.values[0]) if len(self.values) > 0 else "str"
+        )
 
     def __post_init__(self):
         assert isinstance(self.values, tuple)
@@ -87,6 +96,9 @@ class QEnum(ValueGroup):
 
     def __contains__(self, value: Any) -> bool:
         return value in self.values
+
+    def dtype(self):
+        return self._dtype
 
     @classmethod
     def from_strings(cls, values: Iterable[str]) -> Sequence[ValueGroup]:
@@ -114,13 +126,16 @@ class WildcardGroup(ValueGroup):
         return "*"
 
     def __len__(self):
-        return None
+        return 1
 
     def __iter__(self):
         return ["*"]
 
     def __bool__(self):
         return True
+
+    def dtype(self):
+        return "*"
 
     @classmethod
     def from_strings(cls, values: Iterable[str]) -> Sequence[ValueGroup]:
@@ -398,7 +413,7 @@ def convert_datatypes(q: "Qube", conversions: dict[str, ValueGroup]) -> "Qube":
             )
             for values_group in data_type.from_strings(q.values):
                 # print(values_group)
-                yield replace(q, data=replace(q.data, values=values_group))
+                yield q.replace(values=values_group)
         else:
             yield q
 

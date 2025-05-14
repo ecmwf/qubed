@@ -1,36 +1,40 @@
 from qubed import Qube
 
-d = {
-    "class=od": {
-        "expver=0001": {"param=1": {}, "param=2": {}},
-        "expver=0002": {"param=1": {}, "param=2": {}},
-    },
-    "class=rd": {
-        "expver=0001": {"param=1": {}, "param=2": {}, "param=3": {}},
-        "expver=0002": {"param=1": {}, "param=2": {}},
-    },
-}
-q = Qube.from_dict(d)
-
-
-def test_eq():
-    r = Qube.from_dict(d)
-    assert q == r
+q = Qube.from_tree("""
+root
+├── class=od
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=rd
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2
+""")
 
 
 def test_getitem():
-    assert q["class", "od"] == Qube.from_dict(
-        {
-            "expver=0001": {"param=1": {}, "param=2": {}},
-            "expver=0002": {"param=1": {}, "param=2": {}},
-        }
-    )
-    assert q["class", "od"]["expver", "0001"] == Qube.from_dict(
-        {
-            "param=1": {},
-            "param=2": {},
-        }
-    )
+    assert q["class", "od"] == Qube.from_tree("""
+root
+├── expver=0001
+│   ├── param=1
+│   └── param=2
+└── expver=0002
+    ├── param=1
+    └── param=2
+""")
+
+    assert q["class", "od"]["expver", "0001"] == Qube.from_tree("""
+root
+├── param=1
+└── param=2""")
 
 
 def test_n_leaves():
