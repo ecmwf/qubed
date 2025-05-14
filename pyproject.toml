@@ -19,6 +19,7 @@ dynamic = ["version"]
 dependencies = [
     "frozendict",
     "numpy",
+    "protobuf",
 
     # CLI
     "rich",
