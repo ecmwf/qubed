@@ -58,8 +58,14 @@ if "LOCAL_CACHE" in os.environ:
     with open("../tests/example_qubes/extremes_dt.json") as f:
         qubes["climate-dt"] = qubes["climate-dt"] | Qube.from_json(json.load(f))
 
-    with open("../config/climate-dt/language.yaml", "r") as f:
+    with open("../tests/example_qubes/od.json") as f:
+        qubes["climate-dt"] = qubes["climate-dt"] | Qube.from_json(json.load(f))
+
+    with open("../config/language/language.yaml", "r") as f:
         mars_language = yaml.safe_load(f)["_field"]
+
+    with open("../config/language/paramids.yaml", "r") as f:
+        params = yaml.safe_load(f)
 else:
     print("Getting climate and extremes dt data from github")
     qubes["climate-dt"] = Qube.from_json(
@@ -172,11 +178,11 @@ async def union(
 
 
 def follow_query(request: dict[str, str | list[str]], qube: Qube):
-    s = qube.select(request, mode="next_level", prune=True, consume=False)
+    s = qube.select(request, mode="next_level", consume=False)
     by_path = defaultdict(lambda: {"paths": set(), "values": set()})
 
     for request, node in s.leaf_nodes():
-        if not node.metadata["is_leaf"]:
+        if not node.metadata.get("is_leaf", True):
             by_path[node.key]["values"].update(node.values.values)
             by_path[node.key]["paths"].add(frozendict(request))
 
@@ -282,18 +288,32 @@ async def get_STAC(
     def make_link(key_name, paths, values):
         """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
         href_template = f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
-        values_from_mars_language = mars_language.get(key_name, {}).get("values", [])
 
-        if all(isinstance(v, list) for v in values_from_mars_language):
-            value_descriptions_dict = {
-                k: v[-1]
-                for v in values_from_mars_language
-                if len(v) > 1
-                for k in v[:-1]
-            }
-            value_descriptions = [value_descriptions_dict.get(v, "") for v in values]
-            if not any(value_descriptions):
-                value_descriptions = None
+        print(f"{key_name = }")
+        if key_name == "param":
+            print(params)
+            values_from_mars_language = params
+            value_descriptions = [
+                max(params.get(int(v), [""]), key=len) for v in values
+            ]
+            print(value_descriptions)
+        else:
+            values_from_mars_language = mars_language.get(key_name, {}).get(
+                "values", []
+            )
+
+            if all(isinstance(v, list) for v in values_from_mars_language):
+                value_descriptions_dict = {
+                    k: v[-1]
+                    for v in values_from_mars_language
+                    if len(v) > 1
+                    for k in v[:-1]
+                }
+                value_descriptions = [
+                    value_descriptions_dict.get(v, "") for v in values
+                ]
+                if not any(value_descriptions):
+                    value_descriptions = None
 
         return {
             "title": key_name,

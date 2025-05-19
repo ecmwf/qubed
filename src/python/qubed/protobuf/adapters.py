@@ -82,7 +82,7 @@ def qube_to_proto(q: Qube) -> bytes:
 def _proto_to_qube(cls: type, msg: qube_pb2.Qube) -> Qube:
     """protobuf Qube message → frozen Qube dataclass (new object)."""
 
-    return cls(
+    return cls.make_node(
         key=msg.key,
         values=_valuegroup_to_py(msg.values),
         metadata=frozendict(

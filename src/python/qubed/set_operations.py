@@ -193,7 +193,9 @@ def operation(
 
 
 def get_indices(metadata: dict[str, np.ndarray], indices: list[int] | slice):
-    return {k: v[..., indices] for k, v in metadata.items()}
+    return {
+        k: v[..., indices] for k, v in metadata.items() if isinstance(v, np.ndarray)
+    }
 
 
 def _operation(

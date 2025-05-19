@@ -4,6 +4,10 @@ import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Iterable
 
+try:
+    from IPython.display import display
+except ImportError:
+    display = None
 
 if TYPE_CHECKING:
     from .Qube import Qube
@@ -29,8 +33,7 @@ def summarize_node(
 
     while True:
         summary = node.summary(**kwargs)
-        if "is_leaf" in node.metadata and node.metadata["is_leaf"]:
-            summary += " 🌿"
+
         paths.append(summary)
         if len(summary) > max_summary_length:
             summary = summary[:max_summary_length] + "..."
@@ -42,6 +45,10 @@ def summarize_node(
         if len(node.children) != 1:
             break
         node = node.children[0]
+
+    # Add a "..." to represent nodes that we don't know about
+    if (not node.children) and (not node.is_leaf):
+        summaries.append("...")
 
     return ", ".join(summaries), ",".join(paths), node
 
@@ -110,6 +117,12 @@ def summarize_node_html(
         if len(node.children) != 1:
             break
         node = node.children[0]
+
+    if (not node.children) and (not node.is_leaf):
+        summary = (
+            '<span class="qubed-node" data-path="" title="Truncated Nodes">...</span>'
+        )
+        summaries.append(summary)
 
     return ", ".join(summaries), node
 
@@ -239,3 +252,20 @@ def node_tree_to_html(
         """.replace("CSS_ID", css_id)
     nodes = "".join(_node_tree_to_html(node=node, depth=depth, info=info, **kwargs))
     return f"{js if include_js else ''}{css if include_css else ''}<pre class='qubed-tree' id='{css_id}'>{nodes}</pre>"
+
+
+def _display(qube: Qube, **kwargs):
+    if display is None:
+        print(qube)
+    else:
+
+        def info(node: Qube):
+            return f"""\
+structural_hash = {node.structural_hash}
+metadata = {dict(node.metadata)}
+is_root = {node.is_root}
+is_leaf = {node.is_leaf}
+"""
+
+        kwargs = {"info": info} | kwargs
+        display(qube.html(**kwargs))

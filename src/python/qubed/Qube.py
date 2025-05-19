@@ -21,6 +21,7 @@ from .metadata import from_nodes
 from .protobuf.adapters import proto_to_qube, qube_to_proto
 from .tree_formatters import (
     HTML,
+    _display,
     node_tree_to_html,
     node_tree_to_string,
 )
@@ -76,14 +77,7 @@ class Qube:
     )
     children: tuple[Qube, ...] = ()
     is_root: bool = False
-
-    def replace(self, **kwargs) -> Qube:
-        return dataclasses.replace(self, **kwargs)
-
-    def summary(self) -> str:
-        if self.is_root:
-            return self.key
-        return f"{self.key}={self.values.summary()}" if self.key != "root" else "root"
+    is_leaf: bool = False
 
     @classmethod
     def make_node(
@@ -93,7 +87,9 @@ class Qube:
         children: Iterable[Qube],
         metadata: dict[str, np.ndarray] = {},
         is_root: bool = False,
+        is_leaf: bool | None = None,
     ) -> Qube:
+        children = tuple(sorted(children, key=lambda n: ((n.key, n.values.min()))))
         if isinstance(values, ValueGroup):
             values = values
         else:
@@ -102,9 +98,10 @@ class Qube:
         return cls(
             key,
             values=values,
-            children=tuple(sorted(children, key=lambda n: ((n.key, n.values.min())))),
+            children=children,
             metadata=frozendict(metadata),
             is_root=is_root,
+            is_leaf=(not len(children)) if is_leaf is None else is_leaf,
         )
 
     @classmethod
@@ -116,6 +113,14 @@ class Qube:
             metadata=metadata,
             is_root=True,
         )
+
+    def replace(self, **kwargs) -> Qube:
+        return dataclasses.replace(self, **kwargs)
+
+    def summary(self) -> str:
+        if self.is_root:
+            return self.key
+        return f"{self.key}={self.values.summary()}" if self.key != "root" else "root"
 
     @classmethod
     def load(cls, path: str | Path) -> Qube:
@@ -174,6 +179,17 @@ class Qube:
             for k, children in d.items():
                 key, values = k.split("=")
                 values = values.split("/")
+                # children == {"..." : {}}
+                # is a special case to represent trees with leaves we don't know about
+                if frozendict(children) == frozendict({"...": {}}):
+                    yield Qube.make_node(
+                        key=key,
+                        values=values,
+                        children={},
+                        is_leaf=False,
+                    )
+
+                # Special case for Wildcard values
                 if values == ["*"]:
                     values = WildcardGroup()
                 else:
@@ -473,7 +489,6 @@ class Qube:
         selection: dict[str, str | list[str] | Callable[[Any], bool]],
         mode: Literal["strict", "relaxed"] = "relaxed",
         consume=False,
-        require_match=False,
     ) -> Qube:
         # Find any bare str values and replace them with [str]
         _selection: dict[str, list[str] | Callable[[Any], bool]] = {}
@@ -506,11 +521,11 @@ class Qube:
                 if mode == "strict":
                     return None
 
-                # If this node doesn't exist in the
                 elif mode == "next_level":
                     return node.replace(
                         children=(),
-                        metadata=self.metadata | {"is_leaf": not bool(self.children)},
+                        metadata=self.metadata
+                        | {"is_leaf": np.array([not bool(node.children)])},
                     )
 
                 elif mode == "relaxed":
@@ -539,23 +554,22 @@ class Qube:
             if consume:
                 selection = {k: v for k, v in selection.items() if k != node.key}
 
-            # prune branches with no matches
-            if require_match and not node.children and not matched:
-                return None
-
             # Prune nodes that had had all their children pruned
             new_children = not_none(
                 select(c, selection, matched) for c in node.children
             )
-            # if node.key == "dataset": print(prune, [(c.key, c.values.values) for c in node.children], [c.key for c in new_children])
 
             if node.children and not new_children:
                 return None
 
+            metadata = dict(node.metadata)
+
+            if mode == "next_level":
+                metadata["is_leaf"] = np.array([not bool(node.children)])
+
             return node.replace(
                 children=new_children,
-                metadata=dict(self.metadata)
-                | ({"is_leaf": not bool(new_children)} if mode == "next_level" else {}),
+                metadata=metadata,
             )
 
         return self.replace(
@@ -659,3 +673,6 @@ class Qube:
             return node.replace(metadata=frozendict({}))
 
         return self.transform(strip)
+
+    def display(self):
+        _display(self)

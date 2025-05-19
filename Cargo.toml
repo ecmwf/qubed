@@ -8,7 +8,8 @@ repository = "https://github.com/ecmwf/qubed"
 # rsfdb = {git = "https://github.com/ecmwf/rsfdb", branch = "develop"}
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-pyo3 = "0.23"
+pyo3 = "0.25"
+lasso = "0.7.3"
 
 [package.metadata.maturin]
 version-from-git = true

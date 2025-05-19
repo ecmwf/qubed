@@ -9,7 +9,7 @@ pre#qube {
         margin-left: 0;
     }
 
-    .qubed-node a {
+    .qubed-level a {
         margin-left: 10px;
         text-decoration: none;
     }
@@ -23,7 +23,7 @@ pre#qube {
         display: block;
     }
 
-    summary:hover,span.leaf:hover {
+    span.qubed-node:hover {
         background-color: #f0f0f0;
     }
 
@@ -35,7 +35,7 @@ pre#qube {
         content: " ▼";
     }
 
-    .leaf {
+    .qubed-level {
         text-overflow: ellipsis;
         overflow: hidden;
         text-wrap: nowrap;
