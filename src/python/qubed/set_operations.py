@@ -126,14 +126,14 @@ def operation(
         if key not in B.metadata:
             raise ValueError(f"A has key {key} but B does not. {A = } {B = }")
 
-        print(f"{key = } {A.metadata[key] = } {B.metadata[key]}")
+        # print(f"{key = } {A.metadata[key] = } {B.metadata[key]}")
         A_val = A.metadata[key]
         B_val = B.metadata[key]
         if A_val == B_val:
-            print(f"{'  ' * depth}Keeping metadata key '{key}' at this level")
+            # print(f"{'  ' * depth}Keeping metadata key '{key}' at this level")
             stayput_metadata[key] = A.metadata[key]
         else:
-            print(f"{'  ' * depth}Pushing down metadata key '{key}' {A_val} {B_val}")
+            # print(f"{'  ' * depth}Pushing down metadata key '{key}' {A_val} {B_val}")
             pushdown_metadata_A[key] = A_val
             pushdown_metadata_B[key] = B_val
 
@@ -143,7 +143,7 @@ def operation(
     # where d is the length of the node values
     for node in A.children:
         N = len(node.values)
-        print(N)
+        # print(N)
         meta = {
             k: np.broadcast_to(v[..., np.newaxis], v.shape + (N,))
             for k, v in pushdown_metadata_A.items()
