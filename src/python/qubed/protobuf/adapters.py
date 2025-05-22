@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING
 
 import numpy as np
 from frozendict import frozendict
 
 from ..value_types import QEnum
-from . import qube_pb2
+
+with warnings.catch_warnings():
+    warnings.filterwarnings(
+        "ignore",
+        "Protobuf gencode version",
+        UserWarning,
+        "google.protobuf.runtime_version",
+    )
+    from . import qube_pb2
+
 
 if TYPE_CHECKING:
     from ..Qube import Qube
