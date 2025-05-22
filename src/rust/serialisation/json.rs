@@ -1,9 +1,27 @@
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
-use serde_json::{Result, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 
-use crate::qube::{Node, NodeId, Qube};
+use crate::{Node, NodeId, Qube};
+
+// Use a newtype wrapper to allow us to implement auto conversion from serde_json::Error to PyErr
+// via a wrapper intermediate
+// see https://pyo3.rs/main/function/error-handling.html#foreign-rust-error-types
+pub struct JSONError(serde_json::Error);
+
+impl From<JSONError> for PyErr {
+    fn from(error: JSONError) -> Self {
+        PyValueError::new_err(format!("{}", error.0))
+    }
+}
+
+impl From<serde_json::Error> for JSONError {
+    fn from(other: serde_json::Error) -> Self {
+        Self(other)
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
@@ -37,10 +55,7 @@ fn add_nodes(qube: &mut Qube, parent: NodeId, nodes: &[JSONQube]) -> Vec<NodeId>
         .collect()
 }
 
-#[pyfunction]
-pub fn parse_qube() -> PyResult<Qube> {
-    let data = r#"{"key": "root", "values": ["root"], "metadata": {}, "children": [{"key": "frequency", "values": "*", "metadata": {}, "children": [{"key": "levtype", "values": "*", "metadata": {}, "children": [{"key": "param", "values": "*", "metadata": {}, "children": [{"key": "levelist", "values": "*", "metadata": {}, "children": [{"key": "domain", "values": ["a", "b", "c", "d"], "metadata": {}, "children": []}]}]}]}]}]}"#;
-
+pub fn from_json(data: &str) -> Result<Qube, JSONError> {
     // Parse the string of data into serde_json::Value.
     let json_qube: JSONQube = serde_json::from_str(data).expect("JSON parsing failed");
 

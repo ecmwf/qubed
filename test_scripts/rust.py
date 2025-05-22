@@ -1,13 +1,21 @@
-from qubed.rust import Qube, parse_qube
+from __future__ import annotations
 
-q = Qube()
-print(q)
+import json
 
-print(f"repr: {q.root!r} str: {q.root}")
+from qubed import Qube as pyQube
+from qubed.rust import Qube as Qube
 
-q = parse_qube()
-print(repr(q))
+q = pyQube.from_tree("""
+root, class=d1
+├── dataset=another-value, generation=1/2/3
+└── dataset=climate-dt/weather-dt, generation=1/2/3/4
+""")
+json_str = json.dumps(q.to_json())
+rust_qube = Qube.from_json(json_str)
+print(repr(rust_qube))
 
-r = q.root
-
-print(f"{q.root = }, {q.children = }")
+expected = """root, class=d1
+├── dataset=another-value, generation=1/2/3
+└── dataset=climate-dt/weather-dt, generation=1/2/3/4"""
+assert repr(rust_qube) == expected
+# print(rs_qube._repr_html_())
