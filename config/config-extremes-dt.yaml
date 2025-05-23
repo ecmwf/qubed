@@ -1,0 +1,6 @@
+---
+type: remote
+host: databridge-prod-catalogue1-ope.ewctest.link
+port: 10000
+engine: remote
+store: remote

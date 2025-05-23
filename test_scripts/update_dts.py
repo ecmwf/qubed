@@ -13,30 +13,35 @@ from time import time
 import psutil
 from qubed import Qube
 from tqdm import tqdm
+import requests
 
 process = psutil.Process()
 
 CHUNK_SIZE = timedelta(days=60)
-FILEPATH = "./full_dt_qube.json"
+FILEPATH = "tests/example_qubes/full_dt.json"
 API = "https://qubed.lumi.apps.dte.destination-earth.eu/api/v1"
 
+with open("config/api.secret", "r") as f:
+    secret = f.read()
 
 def ecmwf_date(d):
     return d.strftime("%Y%m%d")
 
 
-# start_date = datetime.now() - timedelta(days=10)
-start_date = datetime(1990, 1, 1)
+start_date = datetime.now() - timedelta(days=120)
+# start_date = datetime(1990, 1, 1)
 # end_date = datetime.now()
 end_date = datetime(2026, 1, 1)
 
 current_span = [end_date - CHUNK_SIZE, end_date]
 
-qube = Qube.load(FILEPATH)
-# qube = Qube.empty()
+try:
+    qube = Qube.load(FILEPATH)
+except:
+    qube = Qube.empty()
 
 while current_span[0] > start_date:
-    for config in ["config-climate-dt.yaml", "config-extremes-dt.yaml"]:
+    for config in ["config/config-climate-dt.yaml", "config/config-extremes-dt.yaml"]:
         t0 = time()
         start, end = map(ecmwf_date, current_span)
         print(f"Doing {config} {current_span[0].date()} - {current_span[1].date()}")
@@ -81,10 +86,10 @@ while current_span[0] > start_date:
         subqube.print(depth=2)
         print(f"{subqube.n_nodes = }, {subqube.n_leaves = },")
 
-        # requests.post(
-        #         API + "/union/climate-dt/",
-        #         headers = {"Authorization" : "Bearer ?????"},
-        #         json = subqube.to_json())
+        requests.post(
+                API + "/union/climate-dt/",
+                headers = {"Authorization" : f"Bearer {secret}"},
+                json = subqube.to_json())
 
         current_span = [current_span[0] - CHUNK_SIZE, current_span[0]]
         print(
