@@ -3,10 +3,12 @@
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3::types::{PyDict, PyInt, PyList, PyString};
+use python_interface::QubeError;
 use std::collections::HashMap;
+use std::iter;
 use pyo3::prelude::*;
 use std::hash::Hash;
-
+use std::rc::Rc;
 
 use lasso::{Rodeo, Spur};
 use std::num::NonZero;
@@ -15,6 +17,7 @@ use std::ops;
 mod serialisation;
 mod python_interface;
 mod formatters;
+mod set_operations;
 
 // This data structure uses the Newtype Index Pattern
 // See https://matklad.github.io/2018/06/04/newtype-index-pattern.html
@@ -51,9 +54,6 @@ impl ops::Index<StringId> for Qube {
 }
 
 impl NodeId {
-    pub fn new_infallible(value: NonZero<usize>) -> NodeId {
-        NodeId(value)
-    }
     pub fn new(value: usize) -> Option<NodeId> {
         NonZero::new(value).map(NodeId)
     }
@@ -70,7 +70,7 @@ impl ops::Index<StringId> for lasso::Rodeo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Node {
     pub key: StringId,
     pub metadata: HashMap<StringId, Vec<String>>,
@@ -115,9 +115,14 @@ impl Node {
             .map(|v| v.len())
             .sum()
     }
+
+    fn keys<'a>(&'a self, q: &'a Qube) -> impl Iterator<Item = &'a str> {
+        self.children.keys()
+        .map(|s| {&q[*s]})
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[pyclass(subclass, dict)]
 pub struct Qube {
     pub root: NodeId,
@@ -142,7 +147,7 @@ impl Qube {
         StringId(self.strings.get_or_intern(val))
     }
 
-    pub fn add_node(&mut self, parent: NodeId, key: &str, values: &[&str]) -> NodeId {
+    pub(crate) fn add_node(&mut self, parent: NodeId, key: &str, values: &[&str]) -> NodeId {
         let key_id = self.get_or_intern(key);
         let values = values.iter().map(|val| self.get_or_intern(val)).collect();
 
@@ -172,11 +177,59 @@ impl Qube {
         let node = &self[node_id];
         node.summary(&self)
     }
+
+    fn get_node_ref(&self, id: NodeId) -> NodeRef {
+        let node = &self[id];
+        NodeRef { id: id, node: &node, qube: &self }
+    }
+
+    pub fn get_string_id(&self, s: &str) -> Option<StringId> {
+        self.strings.get(s)
+        .map(|id| StringId(id))
+    }
 }
 
 
 #[pymodule]
-fn rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn rust(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Qube>()?;
+    m.add("QubeError", py.get_type::<python_interface::QubeError>())?;
     Ok(())
+}
+
+
+pub struct NodeRef<'a> {
+    pub id: NodeId,
+    pub node: &'a Node,
+    pub qube: &'a Qube,
+}
+
+impl<'a> NodeRef<'a> {
+    pub fn keys(&self) -> impl Iterator<Item = &str> {
+        self.node.keys(self.qube)
+    }
+
+    fn flat_children(&'a self) -> impl Iterator<Item = Self> {
+        self.node.children
+        .values()
+        .flatten()
+        .map(|id| {
+            NodeRef { id: *id, node: &self.qube[*id], qube: self.qube }
+        })
+    }
+
+    fn children_by_key(&'a self, key: &str) -> impl Iterator<Item = Self> {
+        let id = self.qube.get_string_id(key);
+        let children = id
+            .map(|i| self.node.children.get(&i))
+            .flatten();
+
+        children.map(
+            |ids| ids.into_iter().map(
+                |id| {
+                NodeRef { id: *id, node: &self.qube[*id], qube: self.qube }
+        })).into_iter().flatten()
+    }
+
+
 }

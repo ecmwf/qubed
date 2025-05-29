@@ -24,10 +24,23 @@ impl From<serde_json::Error> for JSONError {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(untagged)]
+#[serde(tag = "dtype")]
+enum Ranges {
+    Int64{values: Vec<(i64, i64)>}
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "dtype", rename_all = "lowercase")]
+enum Enum {
+    Str{values: Vec<String>}
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type", rename_all = "lowercase")]
 enum Values {
-    Wildcard(String),
-    Enum(Vec<String>),
+    Wildcard{},
+    Enum(Enum),
+    Range(Ranges)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -43,8 +56,9 @@ fn add_nodes(qube: &mut Qube, parent: NodeId, nodes: &[JSONQube]) -> Vec<NodeId>
         .iter()
         .map(|json_node| {
             let values = match &json_node.values {
-                Values::Wildcard(_) => &vec!["*"],
-                Values::Enum(strings) => &strings.iter().map(|s| s.as_str()).collect(),
+                Values::Wildcard{} => &vec!["*"],
+                Values::Enum(Enum::Str{values}) => &values.iter().map(|s| s.as_str()).collect(),
+                Values::Range(_) => todo!(),
             };
             let node_id = qube.add_node(parent, &json_node.key, values);
 

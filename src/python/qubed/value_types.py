@@ -65,6 +65,20 @@ class ValueGroup(ABC):
 T = TypeVar("T")
 EnumValuesType = FrozenSet[T]
 
+_dtype_map: dict[str, type] = {
+    "str": str,
+    "int64": int,
+    "float64": float,
+    "date": datetime,
+}
+_dtype_map_inv: dict[type, str] = {v: k for k, v in _dtype_map.items()}
+_dtype_formatters = {
+    "str": str,
+    "int64": int,
+    "float64": float,
+    "date": datetime.fromisoformat,
+}
+
 
 @dataclass(frozen=True, order=True)
 class QEnum(ValueGroup):
@@ -76,10 +90,12 @@ class QEnum(ValueGroup):
     values: EnumValuesType
     _dtype: str = "str"
 
-    def __init__(self, obj):
+    def __init__(self, obj, dtype="str"):
         object.__setattr__(self, "values", tuple(sorted(obj)))
         object.__setattr__(
-            self, "dtype", type(self.values[0]) if len(self.values) > 0 else "str"
+            self,
+            "_dtype",
+            dtype,
         )
 
     def __post_init__(self):
@@ -108,7 +124,18 @@ class QEnum(ValueGroup):
         return min(self.values)
 
     def to_json(self):
-        return list(self.values)
+        return {"type": "enum", "dtype": self.dtype(), "values": self.values}
+
+    # @classmethod
+    # def from_json(cls, type: Literal["enum"], dtype: str, values: list):
+    #     dtype_formatter = _dtype_formatters[dtype]
+
+    @classmethod
+    def from_list(cls, obj):
+        example = obj[0]
+        dtype = type(example)
+        assert [type(v) is dtype for v in obj]
+        return cls(obj, dtype=_dtype_map_inv[dtype])
 
 
 @dataclass(frozen=True, order=True)
@@ -389,17 +416,13 @@ class IntRange(Range):
         return ranges
 
 
-def values_from_json(obj) -> ValueGroup:
+def values_from_json(obj: dict | list) -> ValueGroup:
     if isinstance(obj, list):
-        return QEnum(tuple(obj))
+        return QEnum.from_list(obj)
 
-    match obj["dtype"]:
-        case "date":
-            return DateRange(**obj)
-        case "time":
-            return TimeRange(**obj)
-        case "int":
-            return IntRange(**obj)
+    match obj["type"]:
+        case "enum":
+            QEnum.from_json(**obj)
         case _:
             raise ValueError(f"Unknown dtype {obj['dtype']}")
 

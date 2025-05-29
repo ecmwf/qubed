@@ -16,3 +16,29 @@ def test_iter_leaves_simple():
     ]
 
     assert set(make_hashable(q.leaves())) == set(make_hashable(entries))
+
+
+def test_datacubes():
+    q = Qube.from_tree("""
+    root, class=d1
+    ├── date=19920101/19930101/19940101, params=1/2/3
+    └── date=19950101
+        ├── level=1/2/3, params=1/2/3/4
+        └── params=1/2/3/4
+    """)
+    assert len(list(q.datacubes())) == 3
+
+    assert list(q.datacubes()) == [
+        {
+            "class": ["d1"],
+            "date": ["19920101", "19930101", "19940101"],
+            "params": ["1", "2", "3"],
+        },
+        {
+            "class": ["d1"],
+            "date": ["19950101"],
+            "level": ["1", "2", "3"],
+            "params": ["1", "2", "3", "4"],
+        },
+        {"class": ["d1"], "date": ["19950101"], "params": ["1", "2", "3", "4"]},
+    ]

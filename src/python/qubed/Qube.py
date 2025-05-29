@@ -61,7 +61,6 @@ class QubeNamedRoot:
     "Helper class to print a custom root name"
 
     key: str
-    dtype: str = "str"
     children: tuple[Qube, ...] = ()
 
     def summary(self) -> str:
@@ -388,12 +387,13 @@ class Qube:
                 for c in node.children:
                     yield from to_list_of_cubes(c)
 
-            if not node.children:
-                yield {node.key: list(node.values)}
+            else:
+                if not node.children:
+                    yield {node.key: list(node.values)}
 
-            for c in node.children:
-                for sub_cube in to_list_of_cubes(c):
-                    yield {node.key: list(node.values)} | sub_cube
+                for c in node.children:
+                    for sub_cube in to_list_of_cubes(c):
+                        yield {node.key: list(node.values)} | sub_cube
 
         return to_list_of_cubes(self)
 
