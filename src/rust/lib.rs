@@ -147,9 +147,9 @@ impl Qube {
         StringId(self.strings.get_or_intern(val))
     }
 
-    pub(crate) fn add_node(&mut self, parent: NodeId, key: &str, values: &[&str]) -> NodeId {
+    pub(crate) fn add_node(&mut self, parent: NodeId, key: &str, values: impl IntoIterator<Item = impl AsRef<str>>) -> NodeId {
         let key_id = self.get_or_intern(key);
-        let values = values.iter().map(|val| self.get_or_intern(val)).collect();
+        let values = values.into_iter().map(|val| self.get_or_intern(val.as_ref())).collect();
 
         // Create the node object
         let node = Node {

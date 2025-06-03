@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Literal, Self, Sequence
+from typing import Any, Iterable, Iterator, Literal, Mapping, Self, Sequence
 
 import numpy as np
 from frozendict import frozendict
@@ -67,7 +67,7 @@ class QubeNamedRoot:
         return self.key
 
 
-@dataclass(frozen=True, eq=True, order=True, unsafe_hash=True)
+@dataclass(frozen=False, eq=True, order=True, unsafe_hash=True)
 class Qube:
     key: str
     values: ValueGroup
@@ -77,6 +77,8 @@ class Qube:
     children: tuple[Qube, ...] = ()
     is_root: bool = False
     is_leaf: bool = False
+    depth: int = field(default=0, compare=False)
+    shape: tuple[int, ...] = field(default=(), compare=False)
 
     @classmethod
     def make_node(
@@ -84,15 +86,19 @@ class Qube:
         key: str,
         values: Iterable | QEnum | WildcardGroup,
         children: Iterable[Qube],
-        metadata: dict[str, np.ndarray] = {},
+        metadata: Mapping[str, np.ndarray] = {},
         is_root: bool = False,
         is_leaf: bool | None = None,
     ) -> Qube:
-        children = tuple(sorted(children, key=lambda n: ((n.key, n.values.min()))))
         if isinstance(values, ValueGroup):
             values = values
         else:
             values = QEnum(values)
+
+        if not isinstance(values, WildcardGroup) and not is_root:
+            assert len(values) > 0, "Nodes must have at least one value"
+
+        children = tuple(sorted(children, key=lambda n: ((n.key, n.values.min()))))
 
         return cls(
             key,
@@ -105,6 +111,14 @@ class Qube:
 
     @classmethod
     def make_root(cls, children: Iterable[Qube], metadata={}) -> Qube:
+        def update_depth_shape(children, depth, shape):
+            for child in children:
+                child.depth = depth + 1
+                child.shape = shape + (len(child.values),)
+                update_depth_shape(child.children, child.depth, child.shape)
+
+        update_depth_shape(children, depth=0, shape=(1,))
+
         return cls.make_node(
             "root",
             values=QEnum(("root",)),
@@ -127,7 +141,7 @@ class Qube:
             return Qube.from_json(json.load(f))
 
     @classmethod
-    def from_datacube(cls, datacube: dict[str, str | Sequence[str]]) -> Qube:
+    def from_datacube(cls, datacube: Mapping[str, str | Sequence[str]]) -> Qube:
         key_vals = list(datacube.items())[::-1]
 
         children: list[Qube] = []

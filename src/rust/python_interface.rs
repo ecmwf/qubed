@@ -78,6 +78,8 @@ pub enum OneOrMany<T> {
     Many(Vec<T>),
 }
 
+// Todo: Is there a way to rewrite this so that is doesn't allocate?
+// Perhaps by returning an iterator?
 impl<T> Into<Vec<T>> for OneOrMany<T> {
     fn into(self) -> Vec<T> {
         match self {
@@ -108,10 +110,8 @@ impl Qube {
 
         // massage values from T | Vec<T> into Vec<T>
         let values: Vec<String> = values.into();
-        let values_refs: Vec<&str> = values.iter().map(String::as_str).collect();
-
         let mut q = slf.borrow_mut();
-        let node_id = q.add_node(parent.id, key, &values_refs);
+        let node_id = q.add_node(parent.id, key, &values);
         Ok(PyNodeRef { id: node_id, qube: slf.into()})
     }
 
