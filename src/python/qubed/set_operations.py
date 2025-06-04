@@ -437,6 +437,9 @@ def merge_metadata(qubes: list[Qube], axis) -> Iterable[Qube]:
     example = qubes[0]
     node_type = type(example)
 
+    # print(f"merge_metadata --- {axis = }, qubes:")
+    # for qube in qubes: qube.display()
+
     for i in range(len(example.children)):
         group = [q.children[i] for q in qubes]
         group_example = group[0]

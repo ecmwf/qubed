@@ -115,6 +115,10 @@ class Qube:
             for child in children:
                 child.depth = depth + 1
                 child.shape = shape + (len(child.values),)
+                for k, v in child.metadata.items():
+                    assert v.shape == child.shape, (
+                        f"Metadata here should have shape {child.shape} but instead is {v.shape}"
+                    )
                 update_depth_shape(child.children, child.depth, child.shape)
 
         update_depth_shape(children, depth=0, shape=(1,))
@@ -352,7 +356,7 @@ class Qube:
                 yield {self.key: value}
             for child in self.children:
                 for leaf in child.leaves():
-                    if self.key != "root":
+                    if not self.is_root:
                         yield {self.key: value, **leaf}
                     else:
                         yield leaf
@@ -363,7 +367,7 @@ class Qube:
                 yield ({self.key: value}, self)
             for child in self.children:
                 for leaf in child.leaf_nodes():
-                    if self.key != "root":
+                    if not self.is_root:
                         yield ({self.key: value, **leaf[0]}, leaf[1])
                     else:
                         yield leaf
@@ -371,11 +375,6 @@ class Qube:
     def leaves_with_metadata(
         self, indices=()
     ) -> Iterator[tuple[dict[str, str], dict[str, str | np.ndarray]]]:
-        if self.key == "root":
-            for c in self.children:
-                yield from c.leaves_with_metadata(indices=())
-            return
-
         for index, value in enumerate(self.values):
             indexed_metadata = {
                 k: vs[indices + (index,)] for k, vs in self.metadata.items()
@@ -390,14 +389,15 @@ class Qube:
                 for leaf, metadata in child.leaves_with_metadata(
                     indices=indices + (index,)
                 ):
-                    if self.key != "root":
+                    # Don't output the key "root"
+                    if not self.is_root:
                         yield {self.key: value, **leaf}, metadata | indexed_metadata
                     else:
                         yield leaf, metadata
 
     def datacubes(self) -> Iterable[dict[str, Any | list[Any]]]:
         def to_list_of_cubes(node: Qube) -> Iterable[dict[str, Any | list[Any]]]:
-            if node.key == "root":
+            if node.is_root:
                 for c in node.children:
                     yield from to_list_of_cubes(c)
 
@@ -607,7 +607,7 @@ class Qube:
         for c in self.children:
             for k, v in c.axes().items():
                 axes[k].update(v)
-        if self.key != "root":
+        if not self.is_root:
             axes[self.key].update(self.values)
         return dict(axes)
 
@@ -619,7 +619,7 @@ class Qube:
             for k, info in c.axes_info(depth=depth + 1).items():
                 axes[k].combine(info)
 
-        if self.key != "root":
+        if not self.is_root:
             axes[self.key].combine(
                 AxisInfo(
                     key=self.key,

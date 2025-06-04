@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Any, Iterable
 
 import numpy as np
 
@@ -13,15 +13,15 @@ if TYPE_CHECKING:
 def make_node(
     cls,
     key: str,
-    values: Iterator,
-    shape: list[int],
+    values: Iterable[Any],
+    shape: Iterable[int],
     children: tuple[Qube, ...],
     metadata: dict[str, np.ndarray] | None = None,
 ):
     return cls.make_node(
         key=key,
         values=QEnum(values),
-        metadata={k: np.array(v).reshape(shape) for k, v in metadata.items()}
+        metadata={k: np.array(v).reshape(tuple(shape)) for k, v in metadata.items()}
         if metadata is not None
         else {},
         children=children,
@@ -29,7 +29,9 @@ def make_node(
 
 
 def from_nodes(cls, nodes, add_root=True):
-    shape = [len(n["values"]) for n in nodes.values()]
+    shape = [
+        1,
+    ] + [len(n["values"]) for n in nodes.values()]
     nodes = nodes.items()
     *nodes, (key, info) = nodes
     root = make_node(cls, shape=shape, children=(), key=key, **info)

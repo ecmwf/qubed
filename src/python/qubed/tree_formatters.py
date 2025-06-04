@@ -13,6 +13,18 @@ if TYPE_CHECKING:
     from .Qube import Qube
 
 
+def default_info_func(node: Qube):
+    metadata = ", ".join(f"[{k}, {v.dtype}]" for k, v in node.metadata.items())
+    return f"""\
+structural_hash = {node.structural_hash}
+metadata = {metadata}
+is_root = {node.is_root}
+is_leaf = {node.is_leaf}
+shape = {node.shape},
+depth = {node.depth}
+"""
+
+
 @dataclass(frozen=True)
 class HTML:
     html: str
@@ -88,12 +100,7 @@ def summarize_node_html(
     Returns the summary string and the last node in the chain that has multiple children.
     """
     if info is None:
-
-        def info_func(node: Qube, /):
-            return (
-                # f"dtype: {node.dtype}\n"
-                f"metadata: {dict(node.metadata)}\n"
-            )
+        info_func = default_info_func
     else:
         info_func = info
 
@@ -258,14 +265,4 @@ def _display(qube: Qube, **kwargs):
     if display is None:
         print(qube)
     else:
-
-        def info(node: Qube):
-            return f"""\
-structural_hash = {node.structural_hash}
-metadata = {dict(node.metadata)}
-is_root = {node.is_root}
-is_leaf = {node.is_leaf}
-"""
-
-        kwargs = {"info": info} | kwargs
         display(qube.html(**kwargs))
