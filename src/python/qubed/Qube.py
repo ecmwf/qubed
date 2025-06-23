@@ -106,7 +106,17 @@ class Qube:
         )
 
     def replace(self, **kwargs) -> Qube:
-        return dataclasses.replace(self, **kwargs)
+        shallow_dict = {
+            field.name: getattr(self, field.name) for field in dataclasses.fields(self)
+        } | kwargs
+        return self.make_node(
+            key=shallow_dict["key"],
+            values=shallow_dict["values"],
+            children=shallow_dict["children"],
+            metadata=shallow_dict["metadata"],
+            is_root=shallow_dict["is_root"],
+            is_leaf=shallow_dict["is_leaf"],
+        )
 
     def summary(self) -> str:
         if self.is_root:
