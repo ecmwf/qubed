@@ -22,9 +22,9 @@ _field: &_field
     type: enum
     values:
     # - [ai, operational aifs]
-    - [d1, Destine data]
-    # - [od, operations]
-    # - [rd, research]
+    - [d1, "Destine Data"]
+    - [od, "Operational Forecast Data"]
+    - [rd, "Research Data"]
 
 
   type:
@@ -390,14 +390,14 @@ _field: &_field
     # - [layer]
     # - [ml, model levels]
     - [pl, pressure levels]
-    # - [hl, height levels]
+    - [hl, height levels]
     # - [pt, potential temperature]
     # - [pv, potential vorticity]
     - [sfc, surface]
-    # - [sol, surface other (multi)levels]
+    - [sol, surface other (multi)levels, "3D multi-level model"]
     # - [wv, ocean wave]
-    # - [o2d, ocean surface]
-    # - [o3d, ocean model levels]
+    - [o2d, ocean surface]
+    - [o3d, ocean model levels]
     never:
     - type: ssd
 
@@ -786,7 +786,8 @@ _field: &_field
     category: data
     type: enum
     values:
-      - [standard, ]
+      - [standard, "Standard (HEALPIX H128)"]
+      - [high, "High (HEALPIX H1024 or H512)"]
 
 #######################################################################
 

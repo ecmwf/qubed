@@ -35,11 +35,8 @@ mars_language = {}
 
 if "LOCAL_CACHE" in os.environ:
     print("Getting climate and extremes dt data from local files")
-    with open("../tests/example_qubes/climate_dt.json") as f:
+    with open("../tests/example_qubes/full_dt.json") as f:
         qubes["climate-dt"] = Qube.from_json(json.load(f))
-
-    with open("../tests/example_qubes/extremes_dt.json") as f:
-        qubes["climate-dt"] = qubes["climate-dt"] | Qube.from_json(json.load(f))
 
     with open("../tests/example_qubes/od.json") as f:
         qubes["climate-dt"] = qubes["climate-dt"] | Qube.from_json(json.load(f))
@@ -354,7 +351,7 @@ async def get_STAC(
             "descriptions": descriptions,
             # "paths": paths,
             "qube": node_tree_to_html(
-                qube.compress(),
+                qube,
                 collapse=True,
                 depth=10,
                 include_css=False,
