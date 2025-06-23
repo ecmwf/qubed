@@ -14,13 +14,16 @@ if TYPE_CHECKING:
 
 
 def default_info_func(node: Qube):
-    metadata = ", ".join(f"[{k}, {v.dtype}]" for k, v in node.metadata.items())
+    metadata = ", ".join(
+        f"[{k}, {v.dtype}, {v.size} {v.shape[-1]}]" for k, v in node.metadata.items()
+    )
     return f"""\
 structural_hash = {node.structural_hash}
 metadata = {metadata}
 is_root = {node.is_root}
 is_leaf = {node.is_leaf}
 shape = {node.shape},
+len(shape) = {len(node.shape)},
 depth = {node.depth}
 """
 
@@ -201,8 +204,8 @@ def node_tree_to_html(
                 list-style: none;
                 cursor: pointer;
                 text-overflow: ellipsis;
-                overflow: hidden;
-                text-wrap: nowrap;
+                //overflow: hidden;
+                text-wrap: wrap;
                 display: block;
             }
 
@@ -220,8 +223,8 @@ def node_tree_to_html(
 
             .qubed-level {
                 text-overflow: ellipsis;
-                overflow: hidden;
-                text-wrap: nowrap;
+                //overflow: hidden;
+                text-wrap: wrap;
                 display: block;
             }
 
@@ -261,8 +264,21 @@ def node_tree_to_html(
     return f"{js if include_js else ''}{css if include_css else ''}<pre class='qubed-tree' id='{css_id}'>{nodes}</pre>"
 
 
+def is_notebook() -> bool:
+    try:
+        shell = get_ipython().__class__.__name__
+        if shell == "ZMQInteractiveShell":
+            return True  # Jupyter notebook or qtconsole
+        elif shell == "TerminalInteractiveShell":
+            return False  # Terminal running IPython
+        else:
+            return False  # Other type (?)
+    except NameError:
+        return False  # Probably standard Python interpreter
+
+
 def _display(qube: Qube, **kwargs):
-    if display is None:
+    if display is None or not is_notebook():
         print(qube)
     else:
         display(qube.html(**kwargs))
