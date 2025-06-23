@@ -28,24 +28,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 qubes: dict[str, Qube] = {}
-# print("Getting climate and extremes dt data from github")
-# try:
-#     qubes["climate-dt"] = Qube.from_json(
-#         requests.get(
-#             "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/climate_dt.json",
-#         timeout=3).json()
-#     )
-#     qubes["extremes-dt"] = Qube.from_json(
-#         requests.get(
-#             "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/extremes_dt.json",
-#         timeout=3).json()
-#     )
-#     mars_language = yaml.safe_load(
-#         requests.get(
-#             "https://github.com/ecmwf/qubed/raw/refs/heads/main/config/climate-dt/language.yaml",
-#         timeout=3).content
-#     )
-# except:
+
 qubes["climate-dt"] = Qube.empty()
 qubes["extremes-dt"] = Qube.empty()
 mars_language = {}
@@ -67,33 +50,42 @@ if "LOCAL_CACHE" in os.environ:
     with open("../config/language/paramids.yaml", "r") as f:
         params = yaml.safe_load(f)
 else:
-    print("Getting climate and extremes dt data from github")
-    qubes["climate-dt"] = Qube.from_json(
-        requests.get(
-            "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/climate_dt.json",
-            timeout=1,
-        ).json()
-    )
-    qubes["extremes-dt"] = Qube.from_json(
-        requests.get(
-            "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/extremes_dt.json",
-            timeout=1,
-        ).json()
-    )
+    try:
+        print("Getting climate and extremes dt data from github")
+        qubes["climate-dt"] = Qube.from_json(
+            requests.get(
+                "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/climate_dt.json",
+                timeout=1,
+            ).json()
+        )
+        qubes["extremes-dt"] = Qube.from_json(
+            requests.get(
+                "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/extremes_dt.json",
+                timeout=1,
+            ).json()
+        )
 
-    qubes["od"] = Qube.from_json(
-        requests.get(
-            "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/od.json",
-            timeout=1,
-        ).json()
-    )
-    qubes["climate-dt"] = qubes["climate-dt"] | qubes["extremes-dt"] | qubes["od"]
-    mars_language = yaml.safe_load(
-        requests.get(
-            "https://github.com/ecmwf/qubed/raw/refs/heads/main/config/climate-dt/language.yaml",
-            timeout=3,
-        ).content
-    )["_field"]
+        qubes["od"] = Qube.from_json(
+            requests.get(
+                "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/od.json",
+                timeout=1,
+            ).json()
+        )
+        qubes["climate-dt"] = qubes["climate-dt"] | qubes["extremes-dt"] | qubes["od"]
+    except BaseException as e:
+        print(f"Failed to get qubed {e}")
+        qubes["climate-dt"] = Qube.empty()
+
+    try:
+        mars_language = yaml.safe_load(
+            requests.get(
+                "https://github.com/ecmwf/qubed/raw/refs/heads/main/config/language/language.yaml",
+                timeout=3,
+            ).content
+        )["_field"]
+    except BaseException as e:
+        print(f"Failed to get mars_language {e}")
+        mars_language = {}
 
 if "API_KEY" in os.environ:
     api_key = os.environ["API_KEY"]
