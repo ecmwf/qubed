@@ -22,20 +22,29 @@ NB: Currently there are two kinds of values, QEnums, that store a list of values
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 
 # Prevent circular imports while allowing the type checker to know what Qube is
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable, TypeAlias
 
 import numpy as np
 from frozendict import frozendict
 
 from .value_types import QEnum, ValueGroup, WildcardGroup
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
 if TYPE_CHECKING:
     from .Qube import Qube
+
+Metadata: TypeAlias = frozendict[str, np.ndarray]
+Indices: TypeAlias = np.ndarray | tuple[int, ...]
+Shape: TypeAlias = tuple[int, ...]
 
 
 class SetOperation(Enum):
@@ -52,7 +61,7 @@ class ValuesIndices:
     "Helper class to hold the values and indices from a node."
 
     values: ValueGroup
-    indices: tuple[int, ...]
+    indices: Indices
 
     @classmethod
     def from_values(cls, values: ValueGroup):
@@ -70,9 +79,7 @@ def get_indices(
     metadata: frozendict[str, np.ndarray], indices: tuple[int, ...]
 ) -> frozendict[str, np.ndarray]:
     "Given a metadata dict and some indices, return a new metadata dict with only the values indexed by the indices"
-    return frozendict(
-        {k: v[..., indices] for k, v in metadata.items() if isinstance(v, np.ndarray)}
-    )
+    return frozendict({k: v[..., indices] for k, v in metadata.items()})
 
 
 @dataclass(eq=True, frozen=True)
