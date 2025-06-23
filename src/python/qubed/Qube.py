@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Literal, Mapping, Sequence
+from typing import Any, Iterable, Iterator, Literal, Mapping, Self, Sequence
 
 import numpy as np
 from frozendict import frozendict
@@ -39,6 +39,32 @@ class AxisInfo:
     type: Any
     depths: set[int]
     values: set
+
+    def combine(self, other: Self):
+        self.key = other.key
+        self.type = other.type
+        self.depths.update(other.depths)
+        self.values.update(other.values)
+        # print(f"combining {self} and {other} getting {result}")
+
+    def to_json(self):
+        return {
+            "key": self.key,
+            "type": self.type.__name__,
+            "values": list(self.values),
+            "depths": list(self.depths),
+        }
+
+
+@dataclass(frozen=True, eq=True, order=True, unsafe_hash=True)
+class QubeNamedRoot:
+    "Helper class to print a custom root name"
+
+    key: str
+    children: tuple[Qube, ...] = ()
+
+    def summary(self) -> str:
+        return self.key
 
 
 @dataclass(frozen=False, eq=True, order=True, unsafe_hash=True)
@@ -287,15 +313,12 @@ class Qube:
         collapse=True,
         name: str | None = None,
         info: Callable[[Qube], str] | None = None,
-        **kwargs,
     ) -> HTML:
         node = self
         if name is not None:
             node = node.replace(key=name)
         return HTML(
-            node_tree_to_html(
-                node=node, depth=depth, collapse=collapse, info=info, **kwargs
-            )
+            node_tree_to_html(node=node, depth=depth, collapse=collapse, info=info)
         )
 
     def _repr_html_(self) -> str:
@@ -648,7 +671,7 @@ class Qube:
 
         return self.replace(children=tuple(sorted(new_children)))
 
-    def add_metadata(self, **kwargs: Any):
+    def add_metadata(self, **kwargs: dict[str, Any]):
         metadata = {
             k: np.array(
                 [
@@ -665,5 +688,5 @@ class Qube:
 
         return self.transform(strip)
 
-    def display(self, **kwargs):
-        _display(self, **kwargs)
+    def display(self):
+        _display(self)
