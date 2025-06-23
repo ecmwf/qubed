@@ -1,0 +1,1253 @@
+---
+_field: &_field
+
+
+
+# type:
+#     values:
+#         - [fc, ]
+
+
+
+
+  levtype:
+      values:
+          - [pl, ]
+
+  class:
+    description: Class selects the main category of data to be retrieved such as operational, research or AIFS
+    category: data
+    default: od
+    flatten: false
+    type: enum
+    values:
+    # - [ai, operational aifs]
+    - [d1, Destine data]
+    # - [od, operations]
+    # - [rd, research]
+
+
+  type:
+    category: data
+    default: an
+    flatten: false
+    type: enum
+    multiple: true
+    values:
+    # - [3g, 3d variational gradients]
+    # - [3v, 3d variational analysis]
+    # - [4g, 4d variational gradients]
+    # - [4i, 4d variational increments]
+    # - [4v, 4d variational analysis]
+    # - [ab, analysis bias]
+    # - [af, analysis feedback]
+    # - [ai, analysis input]
+    # - [an, analysis]
+    # - [as, adjoint singular vector]
+    # - [bf, bias-corrected forecast]
+    # - [cd, climate distribution]
+    # - [cf, control forecast]
+    # - [ci, clustering information]
+    # - [cl, climatology]
+    # - [cm, cluster means]
+    # - [cr, cluster representative]
+    # - [cs, cluster std deviations]
+    # - [cv, calibration validation forecast]
+    # - [ea, errors in analysis]
+    # - [ed, empirical distribution]
+    # - [ef, errors in first guess]
+    # - [efi, extreme forecast index]
+    # - [efic, extreme forecast index control]
+    # - [em, ensemble mean]
+    # - [eme, ensemble data assimilation model errors]
+    # - [emtm, ensemble mean of temporal mean]
+    # - [ep, event probability]
+    # - [es, ensemble standard deviation]
+    # - [est, ensemble statistics]
+    # - [estdtm, ensemble standard deviation of temporal mean]
+    # - [fa, forecast accumulation]
+    # - [fb, feedback]
+    - [fc, forecast]
+    # - [fcdfb, forecast departures feedback]
+    # - [fcmax, forecast maximum]
+    # - [fcmean, forecast mean]
+    # - [fcmin, forecast minimum]
+    # - [fcstdev, forecast standard deviation]
+    # - [ff, flux forcing realtime]
+    # - [fg, first guess]
+    # - [fp, forecast probability]
+    # - [fsoifb, forecast sensitivity to observations impact feedback]
+    # - [fu, fill-up]
+    # - [fx, flux forcing]
+    # - [ga, gfas analysis]
+    # - [gbf, bias-corrected gridbox]
+    # - [gai, gridded analysis input]
+    # - [go, gridded observations]
+    # - [gsd, gridded satellite data]
+    # - [gwt, weather type gridbox]
+    # - [hcmean, hindcast mean]
+    # - [ia, init. analysis]
+    # - [icp, initial condition perturbation]
+    # - [mpp, model physics perturbation]
+    # - [if, interim forecast]
+    # - [im, images]
+    # - [me, model errors]
+    # - [mfb, mondb feedback]
+    # - [oai, odb analysis input]
+    # - [ob, observations]
+    # - [of, ocean forward]
+    # - [ofb, odb feedback]
+    # - [oi, oi analysis]
+    # - [oldim, old format images]
+    # - [or, ocean reanalysis]
+    # - [pa, perturbed analysis]
+    # - [pb, probability boundary]
+    # - [pd, probability distribution]
+    - [pf, perturbed forecast]
+    # - [pfc, point values]
+    # - [ppm, point value metrics]
+    # - [s3, climate 30 days simulation]
+    # - [ses, scaled ensemble standard deviation]
+    # - [sf, sensitivity forecast]
+    # - [sfb, summary feedback]
+    # - [sfo, simulations with forcing]
+    # - [sg, sensitivity gradient]
+    # - [si, climate simulation]
+    # - [sim, simulated images]
+    # - [sot, shift of tails]
+    # - [ssd, simulated satellite data]
+    # - [sv, singular vector]
+    # - [svar, signal variance]
+    # - [taem, time average ensemble mean]
+    # - [taes, time average ensemble standard deviation]
+    # - [tpa, time processed analysis]
+    # - [tf, trajectory forecast]
+    # - [tu, tube]
+    # - [wem, weighted ensemble mean]
+    # - [wes, weighted ensemble standard deviation]
+    # - [wp, weather parameters]
+
+  stream:
+    description: Stream selects the kind of data to be retrieved, for example the forecast model or the ensemble model.
+    category: data
+    default: oper
+    flatten: false
+    type: enum
+    values:
+    - [clte, climate, Climate run output] # climate-dt
+    - [oper, da, daily archive, atmospheric model] # climate-dt / extremes-dt / on-demand-extremes-dt
+    - [wave, wv, wave model] # climate-dt / extremes-dt
+    - [lwda, long window daily archive] # extremes-dt
+    - [lwwv, long window wave] # extremes-dt
+    - [clmn, climate-monthly, Climate run monthly means output] # climate-dt
+
+    # - [amap, analysis for multianalysis project]
+    # - [ammc, melbourne]
+    # - [cher, ch, chernobyl]
+
+    # - [cnrm, meteo france climate centre]
+    # - [cwao, montreal]
+    # - [dacl, daily climatology]
+    # - [dacw, daily climatology wave]
+    # - [dahc, daily archive hindcast]
+    # - [dcda, atmospheric model (delayed cutoff)]
+    # - [dcwv, wave model (delayed cutoff)]
+    # - [edmm, ensemble data assimilation monthly means]
+    # - [edmo, ensemble data assimilation monthly means of daily means]
+    # - [edzw, offenbach]
+    # - [eefh, extended ensemble forecast hindcast]
+    # - [eefo, extended ensemble prediction system]
+    # - [eehs, extended ensemble forecast hindcast statistics]
+    # - [efas, european flood awareness system (efas)]
+    # - [efcl, european flood awareness system (efas) climatology]
+    # - [efhc, ensemble forecast hindcasts (obsolete)]
+    # - [efho, ensemble forecast hindcast overlap]
+    # - [efhs, ensemble forecast hindcast statistics]
+    # - [efov, ensemble forecast overlap]
+    # - [efrf, european flood awareness system (efas) reforecasts]
+    # - [efse, european flood awareness system (efas) seasonal forecasts]
+    # - [efsr, european flood awareness system (efas) seasonal reforecasts]
+    # - [egrr, exeter, bracknell]
+    # - [ehmm, combined multi-model hindcast monthly means]
+    # - [elda, ensemble long window data assimilation]
+    # - [enda, ensemble data assimilation]
+    # - [enfh, ensemble forecast hindcasts]
+    # - [enfo, ef, ensemble prediction system]
+    # - [enwh, ensemble forecast wave hindcasts]
+    # - [esmm, combined multi-model monthly means]
+    # - [espd, ensemble supplementary data]
+    # - [ewda, ensemble wave data assimilation]
+    # - [ewhc, wave ensemble forecast hindcast (obsolete)]
+    # - [ewho, ensemble forecast wave hindcast overlap]
+    # - [ewla, ensemble wave long window data assimilation]
+    # - [ewmm, ensemble wave data assimilation monthly means]
+    # - [ewmo, ensemble wave data assimilation monthly means of daily means]
+    # - [fgge, fg]
+    # - [fsob, forecast sensitivity to observations]
+    # - [fsow, forecast sensitivity to observations wave]
+    # - [gfas, global fire assimilation system]
+    # - [gfra, global fire assimilation system reanalysis]
+    # - [kwbc, washington]
+    # - [lfpw, paris, toulouse]
+    # - [ma, means archive]
+    # - [maed, multianalysis ensemble data]
+    # - [mawm, wave anomaly means]
+    # - [mawv, multianalysis wave data]
+    # - [mdfa, monthly means of daily forecast accumulations]
+    # - [mfam, anomaly means]
+    # - [mfaw, wave anomalies]
+    # - [mfhm, hindcast means]
+    # - [mfhw, monthly forecast hindcasts wave]
+    # - [mfwm, wave real-time means]
+    # - [mhwm, wave hindcast means]
+    # - [mmaf, multi-model multi-annual forecast]
+    # - [mmam, multi-model multi-annual forecast means]
+    # - [mmaw, multi-model multi-annual forecast wave]
+    # - [mmsa, multi-model seasonal forecast monthly anomalies]
+    # - [mmsf, multi-model seasonal forecast]
+    # - [mmwm, multi-model multi-annual forecast wave means]
+    # - [mnfa, anomalies]
+    # - [mnfc, real-time]
+    # - [mnfh, hindcasts]
+    # - [mnfm, real-time means]
+    # - [mnfw, wave real-time]
+    # - [mnth, mo, monthly, monthly means]
+    # - [mnvr, monthly variance and covariance data using g. boer's step function]
+    # - [moda, monthly means of daily means]
+    # - [mofc, monthly forecast]
+    # - [mofm, monthly forecast means]
+    # - [monr, monthly means using g. boer's step function]
+    # - [mpic, max plank institute]
+    # - [msda, monthly standard deviation and covariance of daily means]
+    # - [msdc, mv, monthly standard deviation and covariance]
+    # - [msmm, multi-model seasonal forecast atmospheric monthly means]
+    # - [mswm, multi-model seasonal forecast wave monthly means]
+    # - [ocda, ocean data assimilation]
+    # - [ocea, ocean]
+    # - [olda, ocean Long window data assimilation]
+    # - [rjtd, tokyo]
+    # - [scda, atmospheric model (short cutoff)]
+    # - [scwv, wave model (short cutoff)]
+    # - [seap, sensitive area prediction]
+    # - [seas, seasonal forecast]
+    # - [sens, sf, sensitivity forecast]
+    # - [sfmm, seasonal forecast atmospheric monthly means]
+    # - [smma, seasonal monthly means anomalies]
+    # - [supd, sd, deterministic supplementary data]
+    # - [swmm, seasonal forecast wave monthly means]
+    # - [toga, tg]
+    # - [ukmo, ukmo climate centre]
+    # - [waef, we, wave ensemble forecast]
+    # - [wamd, wave monthly means of daily means]
+    # - [wamf, wave monthly forecast]
+    # - [wamo, wave monthly means]
+    # - [wams, multi-model seasonal forecast wave]
+    # - [wasf, wave seasonal forecast]
+    # - [wavm, wave model (standalone)]
+    # - [weef, wave extended ensemble forecast]
+    # - [weeh, wave extended ensemble forecast hindcast]
+    # - [wees, wave extended ensemble forecast hindcast statistics]
+    # - [wehs, wave ensemble forecast hindcast statistics]
+    # - [weov, wave ensemble forecast overlap]
+    # - [wfas, global flood awareness system (glofas)]
+    # - [wfcl, global flood awareness system (glofas) climatology]
+    # - [wfrf, global flood awareness system (glofas) reforecasts]
+    # - [wfse, global flood awareness system (glofas) seasonal forecasts]
+    # - [wfsr, global flood awareness system (glofas) seasonal reforecasts]
+    # - [wmfm, wave monthly forecast means]
+    # - [wvhc, wave hindcast]
+  expver:
+    description: Experiment number, 0001 is operational data.
+    category: data
+    default: '0001'
+    flatten: false
+    type: enum
+    values:
+      - ['0001', 'Operational Data']
+      - ['xxxx', 'Experimental Data']
+      - ['xxxy', 'Experimental Data']
+
+  dataset:
+    description: The dataset, for DestinE this is one of climate-dt, extremes-dt, on-demand-extremes-dt
+    multiple: true
+    type: enum
+    values:
+    - [climate-dt, Climate Data]
+    - [extremes-dt, Extremes Data]
+    - [on-demand-extremes-dt, On-Demand Extremes Data]
+
+  model:
+    category: data
+    type: lowercase
+
+  repres:
+    flatten: false
+    multiple: true
+    type: enum
+    values:
+    - gg
+    - sh
+    - ll
+    - np
+    - rl
+
+  obsgroup:
+    category: data
+    multiple: true
+    type: enum
+    values:
+    # - [conventional]
+    - [sat, satellite]
+    - [ers1]
+    - [trmm]
+    - [qscat]
+    - [reo3] # reo3 needs to stay for compatibility
+    # previously in "obsgroups.def"
+    - [hirs, 1,  HIRS ]
+    - [amsua, 2,  AMSUA ]
+    - [amsub, 3,  AMSUB ]
+    - [mhs, 4,  MHS ]
+    - [geos, 5,  GEOS ]
+    - [resat, 6,  RESAT ]
+    - [meris, 7,  MERIS ]
+    - [gpsro, 8,  GPSRO ]
+    - [satob, 9,  SATOB ]
+    - [scatt, 10,  SCATT ]
+    - [ssmi_as, 11,  SSMI ALL-SKY ]
+    - [iasi, 12,  IASI ]
+    - [airs, 13,  AIRS ]
+    - [ssmis_as, 14,  SSMIS ALL-SKY ]
+    - [tmi_as, 15,  TMI ALL-SKY ]
+    - [amsre_as, 16,  AMSRE ALL-SKY ]
+    - [conv, 17,  CONV ]
+    - [smos, 19,  SMOS ]
+    - [windsat_as, 20,  WINDSAT ALL-SKY ]
+    - [ssmi, 21,  SSMI ]
+    - [amsua_as, 22,  AMSUA ALL-SKY ]
+    - [amsre, 23,  AMSRE ]
+    - [tmi, 24,  TMI ]
+    - [ssmis, 25,  SSMIS ]
+    - [gbrad, 26,  GBRAD ]
+    - [mwhs, 27,  MWHS ]
+    - [mwts, 28,  MWTS ]
+    - [mwri_as, 29,  MWRI ALL-SKY ]
+    - [iras, 30,  IRAS ]
+    - [msu, 31,  MSU ]
+    - [ssu, 32,  SSU ]
+    - [vtpr1, 33,  VTPR1 ]
+    - [vtpr2, 34,  VTPR2 ]
+    - [atms, 35,  ATMS ]
+    - [resat_ak, 36,  RESAT AVERAGING KERNELS ]
+    - [cris, 37,  CRIS ]
+    - [wave_ip, 38,  WAVE INTEGRATED PARAMETERS ]
+    - [wave_sp, 39,  WAVE SPECTRA ]
+    - [raingg, 40,  RAINGG ]
+    - [sfc_ms, 41,  SURFACE MULTISENSOR ]
+    - [amsr2_as, 42,  AMSR-2 ALL-SKY ]
+    - [saphir_as, 43,  SAPHIR ALL-SKY ]
+    - [amsub_as, 44,  AMSUB ALL-SKY ]
+    - [mhs_as, 45,  MHS ALL-SKY ]
+    - [dwl, 46,  DOPPLER WIND LIDAR ]
+    - [iris, 47,  IRIS ]
+    - [aatsr, 49,  AATSR ]
+    - [atms_as, 50,  ATMS ALL-SKY ]
+    - [gmi_as, 51,  GMI ALL-SKY ]
+    - [godae_sst, 52,  GODAE SEA SURFACE TEMPERATURES ]
+    - [atovs_ms, 53,  ATOVS MULTISENSOR ]
+    - [atmospheric_composition, 54,  ATMOSPHERIC COMPOSITION ]
+    - [non_sfc_ms, 55,  NON-SURFACE MULTISENSOR ]
+    - [mwts2, 56,  MWTS2 ]
+    - [ssmi_1d, 57,  SSMI 1DVAR TCWV CLOUDY-SKY ]
+    - [mwhs2_as, 58,  MWHS2 ALL-SKY ]
+    - [ssmt2, 59,  SSMT2 ]
+    - [smap, 60,  SMAP ]
+    - [tovs_ms, 61,  TOVS MULTISENSOR ]
+    - [cloud_r, 62,  CLOUD REFLECTIVITY ]
+    - [cloud_l, 63,  CLOUD LIDAR ]
+    - [satellite_lightning, 64,  SATELLITE LIGHTNING ]
+    - [geos_vis, 65,  GEOS VIS ]
+    - [oconv, 66,  OCONV ]
+    - [mwts3_as, 67,  MWTS3 All-sky ]
+    - [giirs, 68,  GIIRS ]
+    - [test, 99,  TEST ]
+
+  reportype:
+    category: data
+    type: any
+    multiple: true
+
+  # rdbprefix
+
+  levtype:
+    description: The Level Type, can be pressure levels, the surface, model levels etc.
+    category: data
+    default: pl
+    flatten: false
+    type: enum
+    values:
+    # - [cat, category]
+    # - [dp, depth]
+    # - [layer]
+    # - [ml, model levels]
+    - [pl, pressure levels]
+    # - [hl, height levels]
+    # - [pt, potential temperature]
+    # - [pv, potential vorticity]
+    - [sfc, surface]
+    # - [sol, surface other (multi)levels]
+    # - [wv, ocean wave]
+    # - [o2d, ocean surface]
+    # - [o3d, ocean model levels]
+    never:
+    - type: ssd
+
+  levelist:
+    category: data
+    multiple: true
+    by: 1
+    default:
+    - 1000
+    - 850
+    - 700
+    - 500
+    - 400
+    - 300
+    never:
+    - levtype: [sfc, o2d]
+    - type: ssd
+    type: enum
+    values:
+        - [1, ]
+        - [5, ]
+        - [10, ]
+        - [20, ]
+        - [30, ]
+        - [50, ]
+        - [70, ]
+        - [100, ]
+        - [150, ]
+        - [200, ]
+        - [250, ]
+        - [300, ]
+        - [400, ]
+        - [500, ]
+        - [600, ]
+        - [700, ]
+        - [850, ]
+        - [925, ]
+        - [1000, ]
+
+  param:
+    category: data
+    default: 129
+    multiple: true
+    type: param
+    never:
+    - type: [tf, ob]
+    values:
+        - [60, "Potential vorticity"]
+        - [129, "Geopotential"]
+        - [130, "Temperature"]
+        - [131, "U component of wind"]
+        - [132, "V component of wind"]
+        - [133, "Specific humidity"]
+        - [135, "Vertical velocity"]
+        - [157, "Relative humidity"]
+        - [246, "Specific cloud liquid water content"]
+
+
+#################################################################
+
+  # year
+  # decade
+  # month
+
+  date:
+    category: data
+    default: 0
+    type: enum
+    multiple: true
+    values:
+    - [20211021, ]
+
+  year:
+    category: data
+    type: to-by-list
+    multiple: true
+    by: 1
+
+  month:
+    category: data
+    flatten: true
+    type: enum
+    multiple: true
+    values:
+    - [1, jan, January]
+    - [2, feb, February]
+    - [3, mar, March]
+    - [4, apr, April]
+    - [5, may, May]
+    - [6, jun, June]
+    - [7, jul, July]
+    - [8, aug, August]
+    - [9, sep, September]
+    - [10, oct, October]
+    - [11, nov, November]
+    - [12, dec, December]
+
+  # verify
+  # refdate
+
+  hdate:
+    category: data
+    multiple: true
+    only:
+    - stream:
+      - enfh
+      - enwh
+      - efho
+      - ehmm
+      - ewho
+      - eefh
+      - weeh
+    type: integer
+
+  offsetdate:
+    category: data
+    multiple: true
+    type: date
+
+  fcmonth:
+    category: data
+    multiple: true
+    by: 1
+    type: to-by-list
+
+  fcperiod:
+    category: data
+    multiple: true
+    type: integer
+
+  time:
+    category: data
+    default: '1200'
+    multiple: true
+    type: enum
+    values:
+      - ["0000", ]
+      - ["0100", ]
+      - ["0200", ]
+      - ["0300", ]
+      - ["0400", ]
+      - ["0500", ]
+      - ["0600", ]
+      - ["0700", ]
+      - ["0800", ]
+      - ["0900", ]
+      - ["1000", ]
+      - ["1100", ]
+      - ["1200", ]
+      - ["1300", ]
+      - ["1400", ]
+      - ["1500", ]
+      - ["1600", ]
+      - ["1700", ]
+      - ["1800", ]
+      - ["1900", ]
+      - ["2000", ]
+      - ["2100", ]
+      - ["2200", ]
+      - ["2300", ]
+
+  offsettime:
+    category: data
+    multiple: true
+    type: time
+
+  # leadtime
+  # opttime
+  # range
+
+  step:
+    description: Specify which forecast we want in hours past the date/time.
+    category: data
+    multiple: true
+    by: 12
+    default: 0
+    type: range
+    never:
+    - dataset:
+      - climate-dt
+    - stream:
+      - msmm
+      - mmsa
+      - swmm
+
+  anoffset:
+    category: data
+    multiple: true
+    type: integer
+
+  reference:
+    category: data
+    multiple: true
+    type: integer
+
+#################################################################
+
+  # cluster
+  # probability
+
+  number:
+    description: Selects a subset of ensemble members
+    category: data
+    multiple: true
+    aliases:
+    - ensemble
+    by: 1
+    only:
+    - type: [pf, cr, cm, fcmean, fcmin, fcmax, fcstdev, sot, fc, wp, 4i, 4v]
+    never:
+    # This is to prevent number with type=fc and stream=oper
+    - stream: [oper, wave]
+    type: to-by-list
+
+  quantile:
+    category: data
+    multiple: true
+    only:
+    - type:
+      - pd
+      - pb
+      - taem
+      - cd
+      # - sot
+    type: to-by-list-quantile
+    denominators: [2,3,4,5,10,100,1000]
+    by: 1
+  domain:
+    description: The large scale geographic region.
+    category: data
+    default: g
+    flatten: false
+    type: enum
+    never:
+    - dataset:
+      - climate-dt
+    values:
+    # - [a, north west europe]
+    # - [b, north east europe, baltic and black sea]
+    - [c, south west europe]
+    - [d, south east europe]
+    - [e, europe]
+    # - [f, fastex]
+    - [g, globe, general european area]
+    # - [h]
+    # - [i]
+    # - [j]
+    # - [k]
+    # - [l]
+    # - [m, mediterranean]
+    # - ['n', northern hemisphere]
+    # - [o]
+    # - [p]
+    # - [q]
+    # - [r]
+    # - [s, southern hemisphere]
+    # - [t, tropics]
+    # - [u, tropics 2]
+    # - [v]
+    # - [w, western atlantic]
+    # - [x]
+    # - ['y']
+    # - [z]
+
+  frequency:
+    category: data
+    multiple: true
+    by: 1
+    only:
+    - param:
+      - '140251'
+    type: to-by-list
+
+  direction:
+    category: data
+    multiple: true
+    by: 1
+    only:
+    - param:
+      - '140251'
+    type: to-by-list
+
+  diagnostic:
+    category: data
+    type: integer
+    multiple: true
+
+  iteration:
+    category: data
+    type: integer
+    multiple: true
+
+  channel:
+    category: data
+    only:
+    - type: ssd
+    type: integer
+    multiple: true
+
+  ident:
+    category: data
+    only:
+    - type: ssd
+    type: integer
+    multiple: true
+
+  instrument:
+    category: data
+    only:
+    - type: ssd
+    type: integer
+    multiple: true
+
+  method:
+    category: data
+    type: integer
+
+  origin:
+    category: data
+    multiple: true
+    type: enum
+    values:
+    - [ammc, 1, melbourne]
+    - [babj, 38, beijing]
+    - [cmcc]
+    - [cnmc, 80]
+    - [consensus, 255]
+    - [crfc, 239, cerfacs]
+    - [cwao, 54, montreal]
+    - [ecmf, 98, ecmwf]
+    - [edzw, dwd, 78, offenbach]
+    - [egrr, 74, exeter, bracknell]
+    - [enmi, 88, oslo]
+    - [fnmo, fnmoc, 58, fleet numerical]
+    - [hadc, 247, hadley centre]
+    - [ifmk, 246]
+    - [ingv, 235]
+    - [knmi, 245]
+    - [kwbc, 7, washington]
+    - [lemm, 214, madrid]
+    - [lfpw, 84, 85, paris, toulouse]
+    - [rjtd, 34, tokyo]
+    - [rksl, 40, seoul]
+    - [sbsj, 46, cptec]
+    - [vuwien, 244, university of vienna]
+
+  system:
+    category: data
+    type: integer
+
+#######################################################################
+# DestinE ClimateDT related keywords
+
+
+  model:
+    type: enum
+    description: Which climate model to use.
+    values:
+      - [ifs-fesom, Integrated Forecast System - FESOM]
+
+  activity:
+    category: data
+    type: enum
+    values:
+      - [story-nudging, ]
+
+  experiment:
+    category: data
+    type: enum
+    values:
+      - [tplus2.0k, ]
+
+  generation:
+    category: data
+    type: enum
+    values:
+      - [1, ]
+
+  realization:
+    category: data
+    type: integer
+    values:
+      - [1, ]
+
+  resolution:
+    category: data
+    type: enum
+    values:
+      - [standard, ]
+
+#######################################################################
+
+_observation: &_observation
+
+  obstype:
+    category: data
+    type: any
+    multiple: true
+
+  obsgroup:
+    category: data
+    type: any
+    multiple: true
+
+#######################################################################
+
+_postproc: &_postproc
+
+  accuracy:
+    category: postproc
+    flatten: false
+    type: [enum, integer]
+    values:
+    - [av]
+    - ['off', normal, auto]
+
+  bitmap:
+    category: postproc
+    flatten: false
+    type: any
+
+  format:
+    category: postproc
+    flatten: false
+    type: enum
+    values:
+    - - grib
+      - grib1
+      - gb
+    - - grib2
+    - - bufr
+      - bf
+    - - grid
+      - gd
+    - odb
+    - ascii
+
+  frame:
+    category: postproc
+    type: integer
+
+  gaussian:
+    category: postproc
+    type: enum
+    values:
+    - reduced
+    - regular
+
+  area:
+    category: postproc
+    flatten: false
+    multiple: true
+    type: [float, enum]
+    values:
+    - ['off', g, global]
+    - [e, europe]
+
+  grid:
+    category: postproc
+    flatten: false
+    multiple: true
+    type: [enum, float, regex]
+    values:
+    - auto
+    - N16
+    - N24
+    - N32
+    - N48
+    - N64
+    - N80
+    - N96
+    - N128
+    - N160
+    - N200
+    - N256
+    - N320
+    - N400
+    - N512
+    - N576
+    - N640
+    - N800
+    - N1024
+    - N1280
+    - N1600
+    - N2000
+    - N4000
+    - N8000
+    regex:
+    - '^[oOfF][1-9][0-9]+$'
+    uppercase: true
+
+  interpolation:
+    category: postproc
+    flatten: false
+    type: enum
+    values:
+    - - linear
+    - - nearest-lsm
+      - nearest lsm
+    - - 'off'
+      - default
+      - any
+
+  packing:
+    category: postproc
+    flatten: false
+    type: enum
+    values:
+    - - so
+      - second order
+    - ['off', av]
+    - [co, complex]
+    - simple
+    - ccsds
+
+  resol:
+    category: postproc
+    flatten: false
+    aliases:
+        - tra
+    type: [enum, integer]
+    values:
+    - - 'off'
+      - av
+      - reduced gaussian 160
+
+  rotation:
+    category: postproc
+    flatten: false
+    multiple: true
+    type: float
+
+  intgrid:
+    category: postproc
+    flatten: false
+    type: [enum, regex]
+    values:
+    - 'off'
+    - auto
+    - N32
+    - N48
+    - N64
+    - N80
+    - N96
+    - N128
+    - N160
+    - N192
+    - N200
+    - N256
+    - N320
+    - N400
+    - N512
+    - N640
+    - N800
+    - N912
+    - N1024
+    - N1280
+    regex:
+    - '^[oOfF][1-9][0-9]+$'
+
+  truncation:
+    category: postproc
+    flatten: false
+    type: [enum, integer]
+    values:
+    - auto
+    - 'off'
+#######################################################################
+
+_obspproc: &_obspproc
+
+  filter:
+    type: any
+    category: postproc
+
+  ident:
+    type: any
+    category: postproc
+
+
+#######################################################################
+
+disseminate:
+  <<: *_field
+  <<: *_postproc
+
+  requirements:
+    type: any
+
+  use:
+    category: data
+    flatten: false
+    multiple: true
+    type: enum
+    values:
+    - bc
+    - monday
+    - tuesday
+    - wednesday
+    - thursday
+    - friday
+    - saturday
+    - sunday
+
+  option:
+    default: normal
+    flatten: false
+    multiple: true
+    type: enum
+    values:
+    - normal
+    - delay
+    - asap
+    - gts
+    - opendata
+
+  compatibility:
+    category: postproc
+    flatten: false
+    multiple: true
+    type: enum
+    values:
+    - 'off'
+    - 'no-local-extension'
+
+  priority:
+    flatten: false
+    type: integer
+
+  target:
+    flatten: false
+    type: any
+
+##############################################################
+
+archive:
+  <<: *_field
+  <<: *_observation
+
+
+  database:
+    flatten: false
+    multiple: true
+    type: any
+
+  source:
+    flatten: false
+    multiple: true
+    type: any
+
+  expect:
+    flatten: false
+    multiple: false
+    type: integer
+
+##############################################################
+
+retrieve:
+
+  <<: *_field
+  <<: *_observation
+  <<: *_postproc
+  <<: *_obspproc
+
+  target:
+    flatten: false
+    multiple: true
+    type: any
+
+  expect:
+    flatten: false
+    multiple: false
+    type: integer
+
+  fieldset:
+    flatten: false
+    multiple: false
+    type: any
+
+  database:
+    flatten: false
+    multiple: true
+    type: any
+
+  optimise:
+    type: enum
+    values:
+    - true
+    - false
+    default:
+      "off"
+
+  padding:
+    flatten: false
+    type: enum
+    values:
+    - none
+    - auto
+
+##############################################################
+
+read:
+  source:
+    flatten: false
+    multiple: true
+    type: any
+
+  <<: *_field
+  <<: *_observation
+  <<: *_postproc
+  <<: *_obspproc
+
+  target:
+    flatten: false
+    multiple: true
+    type: any
+
+  fieldset:
+    flatten: false
+    multiple: false
+    type: any
+
+  _defaults:
+    class: null
+    date: null
+    domain: null
+    expver: null
+    levelist: null
+    levtype: null
+    param: null
+    step: null
+    stream: null
+    time: null
+    type: null
+
+  _options:
+    param:
+      # expand_with:  # In case not type/stream/levtype is provided
+      #   type: an
+      #   stream: oper
+      #   levtype: pl
+      first_rule: true
+##############################################################
+
+get:
+
+  tape:
+    flatten: false
+    multiple: false
+    type: any
+
+  database:
+    flatten: false
+    multiple: true
+    type: any
+
+  target:
+    flatten: false
+    multiple: true
+    type: any
+
+##############################################################
+
+list:
+
+  <<: *_field
+  <<: *_observation
+
+  database:
+    flatten: false
+    multiple: true
+    type: any
+
+  target:
+    flatten: false
+    multiple: true
+    type: any
+
+  _defaults:
+    # class: null
+    date: null
+    domain: null
+    expver: null
+    levelist: null
+    levtype: null
+    param: null
+    step: null
+    stream: null
+    time: null
+    type: null
+
+##############################################################
+
+compute:
+  formula:
+    flatten: false
+    multiple: false
+    type: any
+
+  fieldset:
+    flatten: false
+    multiple: false
+    type: any
+
+##############################################################
+
+write:
+
+  fieldset:
+    flatten: false
+    multiple: false
+    type: any
+
+  target:
+    flatten: false
+    multiple: true
+    type: any
+
+##############################################################
+
+pointdb:
+  lat:
+    multiple: false
+    type: float
+
+  lon:
+    multiple: false
+    type: float
+
+  <<: *_field
+
+  _defaults:
+    class: null
+    date: null
+    domain: null
+    expver: null
+    levelist: null
+    levtype: null
+    param: null
+    step: null
+    stream: null
+    time: null
+    type: null
+
+  _options:
+    param:
+      # expand_with:  # In case not type/stream/levtype is provided
+      #   type: an
+      #   stream: oper
+      #   levtype: pl
+      first_rule: true
+
+end: {}
