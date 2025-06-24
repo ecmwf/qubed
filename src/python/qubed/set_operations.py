@@ -38,7 +38,6 @@ from .value_types import QEnum, ValueGroup, WildcardGroup
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-
 if TYPE_CHECKING:
     from .Qube import Qube
 
@@ -75,9 +74,7 @@ class ValuesIndices:
         return zip(self.indices, self.values)
 
 
-def get_indices(
-    metadata: frozendict[str, np.ndarray], indices: tuple[int, ...]
-) -> frozendict[str, np.ndarray]:
+def get_indices(metadata: Metadata, indices: Indices) -> Metadata:
     "Given a metadata dict and some indices, return a new metadata dict with only the values indexed by the indices"
     return frozendict({k: v[..., indices] for k, v in metadata.items()})
 
@@ -190,111 +187,164 @@ def shallow_set_operation(
     )
 
 
-def operation(
-    A: Qube, B: Qube, operation_type: SetOperation, node_type, depth=0
-) -> Qube | None:
-    # print(f"operation({A}, {B})")
-    assert A.key == B.key, (
-        "The two Qube root nodes must have the same key to perform set operations,"
-        f"would usually be two root nodes. They have {A.key} and {B.key} respectively"
-    )
-    node_key = A.key
-
-    assert A.is_root == B.is_root
-    is_root = A.is_root
-
-    assert A.values == B.values, (
-        f"The two Qube root nodes must have the same values to perform set operations {A.values = }, {B.values = }"
-    )
-    node_values = A.values
-
-    # Group the children of the two nodes by key
+def group_children_by_key(A: Qube, B: Qube) -> dict[str, tuple[list[Qube], list[Qube]]]:
+    """
+    Group the children of A and B by key into a dict {key : ([A nodes], [B nodes])}
+    """
     nodes_by_key: defaultdict[str, tuple[list[Qube], list[Qube]]] = defaultdict(
         lambda: ([], [])
     )
-    new_children: list[Qube] = []
 
+    for node in A.children:
+        nodes_by_key[node.key][0].append(node)
+
+    for node in B.children:
+        nodes_by_key[node.key][1].append(node)
+
+    return nodes_by_key
+
+
+def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
     # Sort out metadata into what can stay at this level and what must move down
     stayput_metadata: dict[str, np.ndarray] = {}
     pushdown_metadata_A: dict[str, np.ndarray] = {}
     pushdown_metadata_B: dict[str, np.ndarray] = {}
+    # print(A.metadata.keys(), B.metadata.keys())
+    # print(f"pushdown_metadata {A.key}")
+
     for key in set(A.metadata.keys()) | set(B.metadata.keys()):
         if key not in A.metadata:
+            print(f"'{key}' is in B but not A, pushing down")
             pushdown_metadata_B[key] = B.metadata[key]
             continue
 
         if key not in B.metadata:
+            print(f"'{key}' is in A but not B, pushing down")
             pushdown_metadata_A[key] = A.metadata[key]
             continue
 
         A_val = A.metadata[key]
         B_val = B.metadata[key]
+
         if np.allclose(A_val, B_val):
-            # print(f"{'  ' * depth}Keeping metadata key '{key}' at this level")
+            # If the metadata is the same we can just go ahead
+            print(f"Keeping metadata key '{key}' at the level of '{A.key}'")
             stayput_metadata[key] = A.metadata[key]
+
+        elif A.structural_hash == B.structural_hash:
+            # If the metadata is different but the subtrees have the same structure
+            # there's no point pushing it down
+            # This occurs for a merge like
+            # expver=2, foo=bar, param=1
+            # expver=2, foo=bar, param=1
+            # where the two have different metadata at the expver level
+            # Instead we let the leftmost metadata win here
+            print(
+                f"Keeping just the A metadata for key '{key}' at the level of '{A.key}' "
+                "because the subtrees are identical"
+            )
+            stayput_metadata[key] = A.metadata[key]
+
         else:
-            # print(f"{'  ' * depth}Pushing down metadata key '{key}' {A_val} {B_val}")
+            # In this case that the metadata is different and the trees are different
+            # we push the metadata down one level
+            # print(f"Pushing down metadata key '{key}' from '{A.key}' to '{A.children[0].key}'")
             pushdown_metadata_A[key] = A_val
             pushdown_metadata_B[key] = B_val
+
+    if logger.getEffectiveLevel() <= logging.DEBUG and stayput_metadata:
+        print(f"keeping metadata at level '{A.key}': {list(stayput_metadata.keys())}")
 
     # Add all the metadata that needs to be pushed down to the child nodes
     # When pushing down the metadata we need to account for the fact it now affects more values
     # So expand the metadata entries from shape (a, b, ..., c) to (a, b, ..., c, d)
     # where d is the length of the node values
+    def added_axis(size: int, metadata: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+        return {
+            k: np.broadcast_to(v[..., np.newaxis], v.shape + (size,))
+            for k, v in metadata.items()
+        }
+
+    A_children = []
     for node in A.children:
         N = len(node.values)
-        meta = {
-            k: np.broadcast_to(v[..., np.newaxis], v.shape + (N,))
-            for k, v in pushdown_metadata_A.items()
-        }
-        node = node.replace(metadata=node.metadata | meta)
-        nodes_by_key[node.key][0].append(node)
+        node = node.replace(metadata=node.metadata | added_axis(N, pushdown_metadata_A))
+        A_children.append(node)
+    A = A.replace(children=A_children)
 
+    B_children = []
     for node in B.children:
         N = len(node.values)
-        meta = {
-            k: np.broadcast_to(v[..., np.newaxis], v.shape + (N,))
-            for k, v in pushdown_metadata_B.items()
-        }
-        node = node.replace(metadata=node.metadata | meta)
-        nodes_by_key[node.key][1].append(node)
+        node = node.replace(metadata=node.metadata | added_axis(N, pushdown_metadata_B))
+        B_children.append(node)
+    B = B.replace(children=B_children)
 
-    # print(f"{nodes_by_key = }")
+    return frozendict(stayput_metadata), A, B
+
+
+def operation(
+    A: Qube, B: Qube, operation_type: SetOperation, node_type, depth=0
+) -> Qube | None:
+    if logger.getEffectiveLevel() <= logging.DEBUG:
+        print("operation --- input qubes")
+        A.display()
+        B.display()
+
+    assert A.key == B.key
+    assert A.is_root == B.is_root
+    assert A.values == B.values
+    assert A.is_root == B.is_root
+    assert A.depth == B.depth
+
+    new_children: list[Qube] = []
+
+    # Identify any metadata attached to A and B that differs and push it down one level
+    stayput_metadata, A, B = pushdown_metadata(A, B)
+
+    # Group the children of A and B into node groups with common keys
+    nodes_by_key = group_children_by_key(A, B)
 
     # For every node group, perform the set operation
-    for key, (A_nodes, B_nodes) in nodes_by_key.items():
+    for A_nodes, B_nodes in nodes_by_key.values():
         output = list(
             _operation(A_nodes, B_nodes, operation_type, node_type, depth + 1)
         )
-        # print(f"{'  '*depth}_operation {operation_type.name} {A_nodes} {B_nodes} out = [{output}]")
         new_children.extend(output)
 
     # print(f"{'  '*depth}operation {operation_type.name} [{A}] [{B}] new_children = [{new_children}]")
 
-    # If there are now no children as a result of the operation, return nothing.
+    # If there are now no children as a result of the operation
+    # we can prune this branch by returning None or an empty root node
     if (A.children or B.children) and not new_children:
-        if A.key == "root":
+        if A.is_root:
             return node_type.make_root(children=())
         else:
             return None
 
-    # Whenever we modify children we should recompress them
-    # But since `operation` is already recursive, we only need to compress this level not all levels
-    # Hence we use the non-recursive _compress method
+    # Whenever we modify children need to recompress them
     new_children = list(compress_children(new_children))
 
-    # The values and key are the same so we just replace the children
-    if A.key == "root":
-        return node_type.make_root(
-            children=new_children,
-            metadata=stayput_metadata,
-        )
-    return node_type.make_node(
-        key=node_key,
-        values=node_values,
+    out = A.replace(
         children=new_children,
         metadata=stayput_metadata,
-        is_root=is_root,
+    )
+    if logger.getEffectiveLevel() <= logging.DEBUG:
+        print("operation --- output qube")
+        out.display()
+
+    return out
+
+
+def recursively_take_from_metadata(q: Qube, axis: int, indices: Indices) -> Qube:
+    """
+    Perform np.take(m, indices, axis=axis) on all metadata recursively
+    """
+    metadata = frozendict(
+        {k: v.take(indices, axis=axis) for k, v in q.metadata.items()}
+    )
+    return q.replace(
+        metadata=metadata,
+        children=[recursively_take_from_metadata(c, axis, indices) for c in q.children],
     )
 
 
@@ -306,10 +356,21 @@ def _operation(
     depth: int,
 ) -> Iterable[Qube]:
     """
-    This operation assumes that we've found two nodes that match and now want to do a set operation on their children. Hence we take in two lists of child nodes all of which have the same key but different values.
-    We then loop over all pairs of children from each list and compute the intersection.
+    This operation get called from `operation` when we've found two nodes that match and now need
+    to do the set operation on their children.
+    Hence we take in two lists of child nodes all of which have
+    the same key but different values. We then loop over all pairs of children from each list
+      and compute the intersection.
     """
-    # print(f"_operation({A}, {B})")
+    if logger.getEffectiveLevel() <= logging.DEBUG:
+        print(f"depth={depth} _operation({operation_type}) - A ---")
+        for q in A:
+            q.display()
+        print("- B ----")
+        for q in B:
+            q.display()
+        print("----")
+
     keep_only_A, keep_intersection, keep_only_B = operation_type.value
 
     # We're going to progressively remove values from the starting nodes as we do intersections
@@ -322,10 +383,10 @@ def _operation(
     }
 
     def make_new_node(source: Qube, values_indices: ValuesIndices):
-        return source.replace(
+        node = source.replace(
             values=values_indices.values,
-            metadata=get_indices(source.metadata, values_indices.indices),
         )
+        return recursively_take_from_metadata(node, node.depth, values_indices.indices)
 
     # Iterate over all pairs (node_A, node_B) and perform the shallow set operation
     # Update our copy of the original node to remove anything that appears in an intersection
@@ -367,9 +428,20 @@ def _operation(
                 )
 
     if keep_only_A:
+        # print("only_A")
         for node, vi in only_a.items():
             if vi.values:
-                yield make_new_node(node, vi)
+                node = make_new_node(node, vi)
+                # node.display()
+                yield node
+
+    if keep_only_B:
+        # print("only_B")
+        for node, vi in only_b.items():
+            if vi.values:
+                node = make_new_node(node, vi)
+                # node.display()
+                yield node
 
     if keep_only_B:
         for node, vi in only_b.items():
@@ -379,12 +451,16 @@ def _operation(
 
 def compress_children(children: Iterable[Qube], depth=0) -> tuple[Qube, ...]:
     """
-    Helper method tht only compresses a set of nodes, and doesn't do it recursively.
+    Helper method that only compresses a set of nodes, and doesn't do it recursively.
     Used in Qubed.compress but also to maintain compression in the set operations above.
     """
+    if logger.getEffectiveLevel() <= logging.DEBUG:
+        print("compress_children --- qubes:")
+        for qube in children:
+            qube.display()
+
     # Take the set of new children and see if any have identical key, metadata and children
     # the values may different and will be collapsed into a single node
-
     identical_children = defaultdict(list)
     for child in children:
         # only care about the key and children of each node, ignore values
@@ -397,78 +473,182 @@ def compress_children(children: Iterable[Qube], depth=0) -> tuple[Qube, ...]:
         # If the group is size one just keep it
         if len(child_list) == 1:
             new_child = child_list.pop()
-
         else:
-            example = child_list[0]
-            node_type = type(example)
-            value_type = type(example.values)
-
-            assert all(isinstance(child.values, value_type) for child in child_list), (
-                f"All nodes to be grouped must have the same value type, expected {value_type}"
-            )
-
-            # We know the children of this group of nodes all have the same structure
-            # but we still need to merge the metadata across them
-            # children = example.children
-            children = merge_metadata(child_list, example.depth)
-
-            # Do we need to recusively compress here?
-            # children = compress_children(children, depth=depth+1)
-
-            if value_type is QEnum:
-                values = QEnum(set(v for child in child_list for v in child.values))
-            elif value_type is WildcardGroup:
-                values = example.values
-            else:
-                raise ValueError(f"Unknown value type: {value_type}")
-
-            new_child = node_type.make_node(
-                key=example.key,
-                metadata=example.metadata,
-                values=values,
-                children=children,
-            )
+            new_child = merge_values(child_list)
 
         new_children.append(new_child)
 
     return tuple(sorted(new_children, key=lambda n: ((n.key, n.values.min()))))
 
 
-def merge_metadata(qubes: list[Qube], axis) -> Iterable[Qube]:
+def merge_values(qubes: list[Qube]) -> Qube:
     """
-    Given a list of qubes with identical structure,
-    match up the children of each node and merge the metadata
+    Given a list of qubes with identical keys and child structure but values that must be merged,
+    merge the values and metadata.
+
+    i.e these two subtrees are a candidate for merging:
+    class=od/rd, foo=bar/baz, param=1
+    class=xd, foo=bar/baz, param=1
+
+    And doing so gives:
+    class=od/rd/xd, foo=bar/baz, param=1
+
+    """
+    example = qubes[0]
+    value_type = type(example.values)
+    axis = example.depth
+
+    if logger.getEffectiveLevel() <= logging.DEBUG:
+        print(f"merge_values --- {axis = }, input qubes:")
+        for qube in qubes:
+            qube.display()
+
+    # Merge the values
+    if value_type is QEnum:
+        # To deal with non-monotonic groups like expver=1/2/3, expver=2/4
+        # We compute the sorting indices that we have to apply to the metadata to fix it
+        # The use of np.unique here both sorts and removes duplicates
+        values = [v for q in qubes for v in q.values]
+        _, sorting_indices = np.unique(values, return_index=True)
+        values = QEnum(values)
+
+    elif value_type is WildcardGroup:
+        values = example.values
+        sorting_indices = None  # Indicate that we want all the values
+    else:
+        raise ValueError(f"Unknown value type: {value_type}")
+
+    # Recursively concatenate the metadata
+    # This computes the new metadata, shape and children recursively
+    node = concat_metadata(qubes, axis, sorting_indices)
+
+    # Then we can just swap in the new values and we're done.
+    out = node.replace(
+        values=values,
+    )
+    if logger.getEffectiveLevel() <= logging.DEBUG:
+        print("output qube:")
+        out.display()
+
+    return out
+
+
+def concat_metadata(
+    qubes: list[Qube], axis: int, sorting_indices: Indices | None
+) -> Qube:
+    """
+    Given a list of qubes with identical keys, values, and child structure,
+    recursively merge the metadata.
+
+    To use the example from the docstring of merge_values, we would get:
+    class=*, foo=bar/baz, param=1
+    class=*, foo=bar/baz, param=1
+
+    where * denotes that we don't check those values and the remaining subtrees
+    are identical.
+
+    The result would be
+
+    class=*, foo=bar/baz, param=1
+
+    But crucially the metadata attached to these nodes has been concatenated. For example,
+    metadata attached to the leaf of:
+
+    class=od/rd, foo=bar/baz, param=1
+
+    has shape (..., 2, 2, 1) and merging that with metadata attached to the leaf of
+    class=xd, foo=bar/baz, param=1
+
+    will yield
+    class=od/rd/xd, foo=bar/baz, param=1
+    with shape (..., 3, 2, 1)
+
+    The ... is a placeholder for the full shape doing back up to the root, i.e
+    root, a=1, b=2/2, class=od/rd/xd, foo=bar/baz, param=1
+    has shape (1, 1, 2, 3, 2, 1)
     """
     # Group the children of each qube and merge them
     # Exploit the fact that they have the same shape and ordering
     example = qubes[0]
-    node_type = type(example)
 
-    # print(f"merge_metadata --- {axis = }, qubes:")
+    # print(f"concat_metadata --- {axis = }, qubes:")
     # for qube in qubes: qube.display()
 
+    # Compute the shape and metadata for this level using a shallow merge
+    shape, metadata = shallow_concat_metadata(
+        current_shape=example.shape,
+        metadata_list=[q.metadata for q in qubes],
+        concatenation_axis=axis,
+        sorting_indices=sorting_indices,
+    )
+
+    # Compute the children recursively
+    # This relies on children of nodes being deterministically ordered
+    # The assert inside the loop will fire if that isn't true.
+    children = []
     for i in range(len(example.children)):
         group = [q.children[i] for q in qubes]
-        group_example = group[0]
+
+        # Double check the important invariant
         assert len(set((c.structural_hash for c in group))) == 1
 
-        # Collect metadata by key
-        metadata_groups = {
-            k: [q.metadata[k] for q in group] for k in group_example.metadata.keys()
+        child = concat_metadata(group, axis, sorting_indices)
+        children.append(child)
+
+    return example.replace(
+        # Key is guaranteed the same
+        # Values are guaranteed the same
+        metadata=metadata,
+        children=children,
+        shape=shape,
+    )
+
+
+def shallow_concat_metadata(
+    current_shape: Shape,
+    metadata_list: list[Metadata],
+    concatenation_axis: int,
+    sorting_indices: Indices | None,
+) -> tuple[Shape, Metadata]:
+    """
+    Given a list of qubes, non-recursively merge the metadata.
+    Return the new shape and merged metadata.
+    """
+    example = metadata_list[0]
+
+    # Collect metadata by key
+    metadata_groups = {k: [m[k] for m in metadata_list] for k in example.keys()}
+
+    # print("shallow_concat_metadata")
+    # print(f"{concatenation_axis = }")
+    # print(f"{sorting_indices = }")
+    # for k, metadata_group in metadata_groups.items():
+    #     print(k, metadata_group)
+
+    # Concatenate the metadata together and sort it according the given indices
+    def _concate_metadata_group(
+        group: list[np.ndarray], axis: int, sorting_indices: Indices | None
+    ):
+        concatenated = np.concatenate(group, axis=axis)
+        if sorting_indices is None:
+            return concatenated
+        return concatenated.take(sorting_indices, axis=axis)
+
+    metadata: frozendict[str, np.ndarray] = frozendict(
+        {
+            k: _concate_metadata_group(group, concatenation_axis, sorting_indices)
+            for k, group in metadata_groups.items()
         }
+    )
 
-        # Concatenate the metadata together
-        metadata: frozendict[str, np.ndarray] = frozendict(
-            {
-                k: np.concatenate(metadata_group, axis=axis)
-                for k, metadata_group in metadata_groups.items()
-            }
-        )
+    if metadata:
+        shape = next(iter(metadata.values())).shape
+        # print(f"new shape {shape}")
+    else:
+        shape = current_shape
 
-        group_children = merge_metadata(group, axis)
-        yield node_type.make_node(
-            key=group_example.key,
-            metadata=metadata,
-            values=group_example.values,
-            children=group_children,
-        )
+    # print(f"shallow_concat_metadata --- {axis = }, out:")
+    # print(f"{shape = }")
+    # print(f"{[v.shape for v in metadata.values()]}")
+
+    return shape, metadata

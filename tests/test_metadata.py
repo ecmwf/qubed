@@ -37,29 +37,29 @@ def test_one_shot_construction():
     )
 
 
-# def test_piecemeal_construction():
-#     """
-#     Check that a qube with metadata contructed piece by piece has the correct entries.
-#     """
-#     entries = [
-#         ({"class": "od", "expver": 1, "stream": "a"}, {"number": 0}),
-#         ({"class": "od", "expver": 1, "stream": "b"}, {"number": 1}),
-#         ({"class": "od", "expver": 1, "stream": "c"}, {"number": 2}),
-#         ({"class": "od", "expver": 2, "stream": "a"}, {"number": 3}),
-#         ({"class": "od", "expver": 2, "stream": "b"}, {"number": 4}),
-#         ({"class": "od", "expver": 2, "stream": "c"}, {"number": 5}),
-#         ({"class": "rd", "expver": 1, "stream": "a"}, {"number": 6}),
-#         ({"class": "rd", "expver": 1, "stream": "b"}, {"number": 7}),
-#         ({"class": "rd", "expver": 1, "stream": "c"}, {"number": 8}),
-#         ({"class": "rd", "expver": 2, "stream": "a"}, {"number": 9}),
-#         ({"class": "rd", "expver": 2, "stream": "b"}, {"number": 10}),
-#         ({"class": "rd", "expver": 2, "stream": "c"}, {"number": 11}),
-#     ]
-#     q = Qube.empty()
-#     for request, metadata in entries:
-#         q = q | Qube.from_datacube(request).add_metadata(**metadata)
+def test_piecemeal_construction():
+    """
+    Check that a qube with metadata contructed piece by piece has the correct entries.
+    """
+    entries = [
+        ({"class": "od", "expver": 1, "stream": "a"}, {"number": 0}),
+        ({"class": "od", "expver": 1, "stream": "b"}, {"number": 1}),
+        ({"class": "od", "expver": 1, "stream": "c"}, {"number": 2}),
+        ({"class": "od", "expver": 2, "stream": "a"}, {"number": 3}),
+        ({"class": "od", "expver": 2, "stream": "b"}, {"number": 4}),
+        ({"class": "od", "expver": 2, "stream": "c"}, {"number": 5}),
+        ({"class": "rd", "expver": 1, "stream": "a"}, {"number": 6}),
+        ({"class": "rd", "expver": 1, "stream": "b"}, {"number": 7}),
+        ({"class": "rd", "expver": 1, "stream": "c"}, {"number": 8}),
+        ({"class": "rd", "expver": 2, "stream": "a"}, {"number": 9}),
+        ({"class": "rd", "expver": 2, "stream": "b"}, {"number": 10}),
+        ({"class": "rd", "expver": 2, "stream": "c"}, {"number": 11}),
+    ]
+    q = Qube.empty()
+    for request, metadata in entries:
+        q = q | Qube.from_datacube(request).add_metadata(**metadata)
 
-#     assert make_set(q.leaves_with_metadata()) == make_set(entries)
+    assert make_set(q.leaves_with_metadata()) == make_set(entries)
 
 
 # def test_non_monotonic_ordering():
