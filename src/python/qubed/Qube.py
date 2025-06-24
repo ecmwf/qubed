@@ -63,6 +63,8 @@ class Qube:
         metadata: Mapping[str, np.ndarray] = {},
         is_root: bool = False,
         is_leaf: bool | None = None,
+        depth: int | None = None,
+        shape: tuple[int, ...] | None = None,
     ) -> Qube:
         if isinstance(values, ValueGroup):
             values = values
@@ -81,6 +83,8 @@ class Qube:
             metadata=frozendict(metadata),
             is_root=is_root,
             is_leaf=(not len(children)) if is_leaf is None else is_leaf,
+            depth=depth if depth is not None else 0,
+            shape=shape if shape is not None else (),
         )
 
     @classmethod
@@ -109,14 +113,7 @@ class Qube:
         shallow_dict = {
             field.name: getattr(self, field.name) for field in dataclasses.fields(self)
         } | kwargs
-        return self.make_node(
-            key=shallow_dict["key"],
-            values=shallow_dict["values"],
-            children=shallow_dict["children"],
-            metadata=shallow_dict["metadata"],
-            is_root=shallow_dict["is_root"],
-            is_leaf=shallow_dict["is_leaf"],
-        )
+        return self.make_node(**shallow_dict)
 
     def summary(self) -> str:
         if self.is_root:
@@ -273,11 +270,9 @@ class Qube:
     def empty(cls) -> Qube:
         return Qube.make_root([])
 
-    def __str_helper__(self, depth=None, name=None) -> str:
+    def __str_helper__(self, depth=None, name: str | None = None) -> str:
         node = self
-        if name is not None:
-            node = node.replace(key=name)
-        out = "".join(node_tree_to_string(node=node, depth=depth))
+        out = "".join(node_tree_to_string(node=node, depth=depth, name=name))
         if out[-1] == "\n":
             out = out[:-1]
         return out
@@ -299,12 +294,14 @@ class Qube:
         info: Callable[[Qube], str] | None = None,
         **kwargs,
     ) -> HTML:
-        node = self
-        if name is not None:
-            node = node.replace(key=name)
         return HTML(
             node_tree_to_html(
-                node=node, depth=depth, collapse=collapse, info=info, **kwargs
+                node=self,
+                depth=depth,
+                collapse=collapse,
+                info=info,
+                name=name,
+                **kwargs,
             )
         )
 
@@ -675,5 +672,5 @@ class Qube:
 
         return self.transform(strip)
 
-    def display(self, **kwargs):
-        _display(self, **kwargs)
+    def display(self, name: str | None = None, **kwargs):
+        _display(self, name=name, **kwargs)

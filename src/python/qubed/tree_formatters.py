@@ -68,8 +68,12 @@ def summarize_node(
     return ", ".join(summaries), ",".join(paths), node
 
 
-def node_tree_to_string(node: Qube, prefix: str = "", depth=None) -> Iterable[str]:
+def node_tree_to_string(
+    node: Qube, prefix: str = "", name: str | None = None, depth=None
+) -> Iterable[str]:
     summary, path, node = summarize_node(node)
+    if name is not None:
+        summary = f"{name}: {summary}"
 
     if depth is not None and depth <= 0:
         yield summary + " - ...\n"
@@ -142,10 +146,14 @@ def _node_tree_to_html(
     prefix: str = "",
     depth=1,
     connector="",
+    name: str | None = None,
     info: Callable[[Qube], str] | None = None,
     **kwargs,
 ) -> Iterable[str]:
     summary, node = summarize_node_html(node, info=info, **kwargs)
+
+    if name is not None:
+        summary = f"<span title='name' class='name'>{name}:</span> {summary}"
 
     if len(node.children) == 0:
         yield f'<span class="qubed-level">{connector}{summary}</span>'
@@ -173,6 +181,7 @@ def node_tree_to_html(
     depth=1,
     include_css=True,
     include_js=True,
+    name: str | None = None,
     css_id=None,
     info: Callable[[Qube], str] | None = None,
     **kwargs,
@@ -190,6 +199,7 @@ def node_tree_to_html(
             font-family: SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,Courier,monospace;
             font-size: 12px;
             line-height: 1.4;
+            padding-left: 1ch; // Match jupyter print padding
 
             details {
                 margin-left: 0;
@@ -233,6 +243,10 @@ def node_tree_to_html(
               content: "";
             }
 
+            span.name {
+                font-weight: bold;
+            }
+
         }
         </style>
         """.replace("CSS_ID", css_id)
@@ -260,7 +274,9 @@ def node_tree_to_html(
         nodes.forEach(n => n.addEventListener("click", nodeOnClick));
         </script>
         """.replace("CSS_ID", css_id)
-    nodes = "".join(_node_tree_to_html(node=node, depth=depth, info=info, **kwargs))
+    nodes = "".join(
+        _node_tree_to_html(node=node, depth=depth, info=info, name=name, **kwargs)
+    )
     return f"{js if include_js else ''}{css if include_css else ''}<pre class='qubed-tree' id='{css_id}'>{nodes}</pre>"
 
 
@@ -277,8 +293,8 @@ def is_notebook() -> bool:
         return False  # Probably standard Python interpreter
 
 
-def _display(qube: Qube, **kwargs):
+def _display(qube: Qube, name: str | None = None, **kwargs):
     if display is None or not is_notebook():
-        print(qube)
+        qube.print(name=name)
     else:
-        display(qube.html(**kwargs))
+        display(qube.html(name=name, **kwargs))

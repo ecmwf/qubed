@@ -23,9 +23,11 @@ NB: Currently there are two kinds of values, QEnums, that store a list of values
 from __future__ import annotations
 
 import logging
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
+from itertools import count
 
 # Prevent circular imports while allowing the type checker to know what Qube is
 from typing import TYPE_CHECKING, Any, Iterable, TypeAlias
@@ -35,15 +37,37 @@ from frozendict import frozendict
 
 from .value_types import QEnum, ValueGroup, WildcardGroup
 
+if TYPE_CHECKING:
+    from .Qube import Qube
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-if TYPE_CHECKING:
-    from .Qube import Qube
 
 Metadata: TypeAlias = frozendict[str, np.ndarray]
 Indices: TypeAlias = np.ndarray | tuple[int, ...]
 Shape: TypeAlias = tuple[int, ...]
+
+
+class Padder:
+    "A small helper class to print out some padding that varies with the stack depth"
+
+    base_size = None
+
+    def pad(self, size=2) -> str:
+        """Get stack size for caller's frame."""
+        frame = sys._getframe(size)
+
+        for size in count(size):
+            frame = frame.f_back
+            if not frame:
+                if self.base_size is None:
+                    self.base_size = size
+                return (size - self.base_size) * "    "
+        return ""
+
+
+pad = Padder().pad
 
 
 class SetOperation(Enum):
@@ -286,9 +310,9 @@ def operation(
     A: Qube, B: Qube, operation_type: SetOperation, node_type, depth=0
 ) -> Qube | None:
     if logger.getEffectiveLevel() <= logging.DEBUG:
-        print("operation --- input qubes")
-        A.display()
-        B.display()
+        print(f"{pad()}operation({operation_type.name}, depth={depth})")
+        A.display(name=pad() + "A")
+        B.display(name=pad() + "B")
 
     assert A.key == B.key
     assert A.is_root == B.is_root
@@ -317,8 +341,12 @@ def operation(
     # we can prune this branch by returning None or an empty root node
     if (A.children or B.children) and not new_children:
         if A.is_root:
+            if logger.getEffectiveLevel() <= logging.DEBUG:
+                print("output: root")
             return node_type.make_root(children=())
         else:
+            if logger.getEffectiveLevel() <= logging.DEBUG:
+                print("output: None")
             return None
 
     # Whenever we modify children need to recompress them
@@ -329,8 +357,7 @@ def operation(
         metadata=stayput_metadata,
     )
     if logger.getEffectiveLevel() <= logging.DEBUG:
-        print("operation --- output qube")
-        out.display()
+        out.display(name=f"{pad()}output")
 
     return out
 
@@ -363,13 +390,11 @@ def _operation(
       and compute the intersection.
     """
     if logger.getEffectiveLevel() <= logging.DEBUG:
-        print(f"depth={depth} _operation({operation_type}) - A ---")
-        for q in A:
-            q.display()
-        print("- B ----")
-        for q in B:
-            q.display()
-        print("----")
+        print(f"{pad()}_operation({operation_type.name}, depth={depth})")
+        for i, q in enumerate(A):
+            q.display(name=f"{pad()}A_{i}")
+        for i, q in enumerate(B):
+            q.display(name=f"{pad()}B_{i}")
 
     keep_only_A, keep_intersection, keep_only_B = operation_type.value
 
@@ -383,10 +408,20 @@ def _operation(
     }
 
     def make_new_node(source: Qube, values_indices: ValuesIndices):
-        node = source.replace(
-            values=values_indices.values,
-        )
-        return recursively_take_from_metadata(node, node.depth, values_indices.indices)
+        # Check if anything has changed
+        if source.values != values_indices.values:
+            node = source.replace(
+                values=values_indices.values,
+            )
+            if logger.getEffectiveLevel() <= logging.DEBUG:
+                print(
+                    f"{pad()}recursively_take_from_metadata axis={node.depth} indices={values_indices.indices}"
+                )
+                node.display(f"{pad()}input")
+            return recursively_take_from_metadata(
+                node, node.depth, values_indices.indices
+            )
+        return source
 
     # Iterate over all pairs (node_A, node_B) and perform the shallow set operation
     # Update our copy of the original node to remove anything that appears in an intersection
@@ -398,6 +433,7 @@ def _operation(
             only_a[node_a] = set_ops_result.only_A
             only_b[node_b] = set_ops_result.only_B
 
+            # If there was a non empty intersection we need to go deeper!
             if (
                 set_ops_result.intersection_A.values
                 and set_ops_result.intersection_B.values
@@ -416,7 +452,12 @@ def _operation(
                     # Consider Qube(root, a=1, b=1/2) - Qube(root, a=1, b=1)
                     # We can easily throw away the whole a node by accident here!
                     if keep_intersection or result.children:
+                        if logger.getEffectiveLevel() <= logging.DEBUG:
+                            result.display(f"{pad()} intersection out")
                         yield result
+
+            # If the intersection is empty we're done
+            # the other bits will get emitted later from only_a and only_b
             elif (
                 not set_ops_result.intersection_A.values
                 and not set_ops_result.intersection_B.values
@@ -428,36 +469,31 @@ def _operation(
                 )
 
     if keep_only_A:
-        # print("only_A")
         for node, vi in only_a.items():
             if vi.values:
                 node = make_new_node(node, vi)
-                # node.display()
+                if logger.getEffectiveLevel() <= logging.DEBUG:
+                    node.display(f"{pad()} only_A out")
                 yield node
 
     if keep_only_B:
-        # print("only_B")
         for node, vi in only_b.items():
             if vi.values:
                 node = make_new_node(node, vi)
-                # node.display()
+                if logger.getEffectiveLevel() <= logging.DEBUG:
+                    node.display(f"{pad()} only_B out")
                 yield node
 
-    if keep_only_B:
-        for node, vi in only_b.items():
-            if vi.values:
-                yield make_new_node(node, vi)
 
-
-def compress_children(children: Iterable[Qube], depth=0) -> tuple[Qube, ...]:
+def compress_children(children: Iterable[Qube]) -> tuple[Qube, ...]:
     """
     Helper method that only compresses a set of nodes, and doesn't do it recursively.
     Used in Qubed.compress but also to maintain compression in the set operations above.
     """
     if logger.getEffectiveLevel() <= logging.DEBUG:
-        print("compress_children --- qubes:")
-        for qube in children:
-            qube.display()
+        print(f"{pad()}compress_children")
+        for i, qube in enumerate(children):
+            qube.display(f"{pad()}in_{i}")
 
     # Take the set of new children and see if any have identical key, metadata and children
     # the values may different and will be collapsed into a single node
@@ -478,7 +514,11 @@ def compress_children(children: Iterable[Qube], depth=0) -> tuple[Qube, ...]:
 
         new_children.append(new_child)
 
-    return tuple(sorted(new_children, key=lambda n: ((n.key, n.values.min()))))
+    out = tuple(sorted(new_children, key=lambda n: ((n.key, n.values.min()))))
+    if logger.getEffectiveLevel() <= logging.DEBUG:
+        for i, qube in enumerate(out):
+            qube.display(f"{pad()}out_{i}")
+    return out
 
 
 def merge_values(qubes: list[Qube]) -> Qube:
@@ -499,9 +539,9 @@ def merge_values(qubes: list[Qube]) -> Qube:
     axis = example.depth
 
     if logger.getEffectiveLevel() <= logging.DEBUG:
-        print(f"merge_values --- {axis = }, input qubes:")
-        for qube in qubes:
-            qube.display()
+        print(f"{pad()}merge_values --- {axis = }")
+        for i, qube in enumerate(qubes):
+            qube.display(f"{pad()}in_{i}")
 
     # Merge the values
     if value_type is QEnum:
@@ -509,7 +549,7 @@ def merge_values(qubes: list[Qube]) -> Qube:
         # We compute the sorting indices that we have to apply to the metadata to fix it
         # The use of np.unique here both sorts and removes duplicates
         values = [v for q in qubes for v in q.values]
-        _, sorting_indices = np.unique(values, return_index=True)
+        values, sorting_indices = np.unique(values, return_index=True)
         values = QEnum(values)
 
     elif value_type is WildcardGroup:
@@ -527,8 +567,7 @@ def merge_values(qubes: list[Qube]) -> Qube:
         values=values,
     )
     if logger.getEffectiveLevel() <= logging.DEBUG:
-        print("output qube:")
-        out.display()
+        out.display(f"{pad()}out")
 
     return out
 

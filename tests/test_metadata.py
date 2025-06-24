@@ -62,43 +62,43 @@ def test_piecemeal_construction():
     assert make_set(q.leaves_with_metadata()) == make_set(entries)
 
 
-# def test_non_monotonic_ordering():
-#     """
-#     Metadata concatenation when you have non-monotonic groups is tricky.
-#     Consider expver=1/3 + expver=2/4
-#     """
-#     q = Qube.from_tree("root, class=1, expver=1/3, param=1").add_metadata(number=1)
-#     r = Qube.from_tree("root, class=1, expver=2/4, param=1").add_metadata(number=2)
-#     union = q | r
-#     qset = union.leaves_with_metadata()
-#     assert make_set(qset) == make_set(
-#         [
-#             ({"class": "1", "expver": "1", "param": "1"}, {"number": 1}),
-#             ({"class": "1", "expver": "2", "param": "1"}, {"number": 2}),
-#             ({"class": "1", "expver": "3", "param": "1"}, {"number": 1}),
-#             ({"class": "1", "expver": "4", "param": "1"}, {"number": 2}),
-#         ]
-#     )
+def test_non_monotonic_ordering():
+    """
+    Metadata concatenation when you have non-monotonic groups is tricky.
+    Consider expver=1/3 + expver=2/4
+    """
+    q = Qube.from_tree("root, class=1, expver=1/3, param=1").add_metadata(number=1)
+    r = Qube.from_tree("root, class=1, expver=2/4, param=1").add_metadata(number=2)
+    union = q | r
+    qset = union.leaves_with_metadata()
+    assert make_set(qset) == make_set(
+        [
+            ({"class": "1", "expver": "1", "param": "1"}, {"number": 1}),
+            ({"class": "1", "expver": "2", "param": "1"}, {"number": 2}),
+            ({"class": "1", "expver": "3", "param": "1"}, {"number": 1}),
+            ({"class": "1", "expver": "4", "param": "1"}, {"number": 2}),
+        ]
+    )
 
 
-# def test_overlapping_and_non_monotonic():
-#     """
-#     Non-monotonic groups with repeats are even worse, here we say the leftmost qube wins.
-#     Consider expver=1/2/3 + expver=2/4 where the former has metadata number=1 and the later number=1
-#     We should see an expver=2 with number=1 in the output
-#     """
-#     q = Qube.from_tree("root, class=1, expver=1/2/3, param=1").add_metadata(number=1)
-#     r = Qube.from_tree("root, class=1, expver=2/4, param=1").add_metadata(number=2)
-#     union = q | r
-#     qset = union.leaves_with_metadata()
-#     assert make_set(qset) == make_set(
-#         [
-#             ({"class": "1", "expver": "1", "param": "1"}, {"number": 1}),
-#             ({"class": "1", "expver": "2", "param": "1"}, {"number": 1}),
-#             ({"class": "1", "expver": "3", "param": "1"}, {"number": 1}),
-#             ({"class": "1", "expver": "4", "param": "1"}, {"number": 2}),
-#         ]
-#     )
+def test_overlapping_and_non_monotonic():
+    """
+    Non-monotonic groups with repeats are even worse, here we say the leftmost qube wins.
+    Consider expver=1/2/3 + expver=2/4 where the former has metadata number=1 and the later number=2
+    We should see an expver=2 with number=1 in the output
+    """
+    q = Qube.from_tree("root, class=1, expver=1/2/3, param=1").add_metadata(number=1)
+    r = Qube.from_tree("root, class=1, expver=2/4, param=1").add_metadata(number=2)
+    union = q | r
+    qset = union.leaves_with_metadata()
+    assert make_set(qset) == make_set(
+        [
+            ({"class": "1", "expver": "1", "param": "1"}, {"number": 1}),
+            ({"class": "1", "expver": "2", "param": "1"}, {"number": 1}),
+            ({"class": "1", "expver": "3", "param": "1"}, {"number": 1}),
+            ({"class": "1", "expver": "4", "param": "1"}, {"number": 2}),
+        ]
+    )
 
 
 def test_simple_union():
