@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Literal, Mapping, Self, Sequence
+from typing import Any, Iterable, Iterator, Literal, Mapping, Sequence
 
 import numpy as np
 from frozendict import frozendict
@@ -40,32 +40,6 @@ class AxisInfo:
     depths: set[int]
     values: set
 
-    def combine(self, other: Self):
-        self.key = other.key
-        self.type = other.type
-        self.depths.update(other.depths)
-        self.values.update(other.values)
-        # print(f"combining {self} and {other} getting {result}")
-
-    def to_json(self):
-        return {
-            "key": self.key,
-            "type": self.type.__name__,
-            "values": list(self.values),
-            "depths": list(self.depths),
-        }
-
-
-@dataclass(frozen=True, eq=True, order=True, unsafe_hash=True)
-class QubeNamedRoot:
-    "Helper class to print a custom root name"
-
-    key: str
-    children: tuple[Qube, ...] = ()
-
-    def summary(self) -> str:
-        return self.key
-
 
 @dataclass(frozen=False, eq=True, order=True, unsafe_hash=True)
 class Qube:
@@ -89,6 +63,8 @@ class Qube:
         metadata: Mapping[str, np.ndarray] = {},
         is_root: bool = False,
         is_leaf: bool | None = None,
+        depth: int | None = None,
+        shape: tuple[int, ...] | None = None,
     ) -> Qube:
         if isinstance(values, ValueGroup):
             values = values
@@ -107,6 +83,8 @@ class Qube:
             metadata=frozendict(metadata),
             is_root=is_root,
             is_leaf=(not len(children)) if is_leaf is None else is_leaf,
+            depth=depth if depth is not None else 0,
+            shape=shape if shape is not None else (),
         )
 
     @classmethod
@@ -115,10 +93,10 @@ class Qube:
             for child in children:
                 child.depth = depth + 1
                 child.shape = shape + (len(child.values),)
-                for k, v in child.metadata.items():
-                    assert v.shape == child.shape, (
-                        f"Metadata here should have shape {child.shape} but instead is {v.shape}"
-                    )
+                # for k, v in child.metadata.items():
+                #     assert v.shape == child.shape, (
+                #         f"Metadata here should have shape {child.shape} but instead is {v.shape}"
+                #     )
                 update_depth_shape(child.children, child.depth, child.shape)
 
         update_depth_shape(children, depth=0, shape=(1,))
@@ -129,10 +107,14 @@ class Qube:
             children=children,
             metadata=metadata,
             is_root=True,
+            shape=(1,),
         )
 
     def replace(self, **kwargs) -> Qube:
-        return dataclasses.replace(self, **kwargs)
+        shallow_dict = {
+            field.name: getattr(self, field.name) for field in dataclasses.fields(self)
+        } | kwargs
+        return self.make_node(**shallow_dict)
 
     def summary(self) -> str:
         if self.is_root:
@@ -289,11 +271,9 @@ class Qube:
     def empty(cls) -> Qube:
         return Qube.make_root([])
 
-    def __str_helper__(self, depth=None, name=None) -> str:
+    def __str_helper__(self, depth=None, name: str | None = None) -> str:
         node = self
-        if name is not None:
-            node = node.replace(key=name)
-        out = "".join(node_tree_to_string(node=node, depth=depth))
+        out = "".join(node_tree_to_string(node=node, depth=depth, name=name))
         if out[-1] == "\n":
             out = out[:-1]
         return out
@@ -313,12 +293,17 @@ class Qube:
         collapse=True,
         name: str | None = None,
         info: Callable[[Qube], str] | None = None,
+        **kwargs,
     ) -> HTML:
-        node = self
-        if name is not None:
-            node = node.replace(key=name)
         return HTML(
-            node_tree_to_html(node=node, depth=depth, collapse=collapse, info=info)
+            node_tree_to_html(
+                node=self,
+                depth=depth,
+                collapse=collapse,
+                info=info,
+                name=name,
+                **kwargs,
+            )
         )
 
     def _repr_html_(self) -> str:
@@ -652,7 +637,7 @@ class Qube:
         ├── time=0600, many identical keys, param=8,78,79
         ├── time=0600, many identical keys, param=8,78,79
         └── time=0600, many identical keys, param=8,78,79
-        This tree compresses dow n
+        This tree compresses down
 
         """
 
@@ -671,16 +656,22 @@ class Qube:
 
         return self.replace(children=tuple(sorted(new_children)))
 
-    def add_metadata(self, **kwargs: dict[str, Any]):
-        metadata = {
-            k: np.array(
-                [
-                    v,
-                ]
-            )
-            for k, v in kwargs.items()
-        }
-        return self.replace(metadata=metadata)
+    def add_metadata(self, metadata: dict[str, np.ndarray], depth=0):
+        if depth == 0:
+            new_metadata = dict(self.metadata)
+            for k, v in metadata.items():
+                try:
+                    v = np.array(v).reshape(self.shape)
+                except ValueError:
+                    raise ValueError(
+                        f"Given metadata can't be reshaped to {self.shape} because it has shape {np.array(v).shape}!"
+                    )
+                new_metadata[k] = v
+            self.metadata = frozendict(new_metadata)
+        else:
+            for child in self.children:
+                child.add_metadata(metadata, depth - 1)
+        return self
 
     def strip_metadata(self) -> Qube:
         def strip(node):
@@ -688,5 +679,20 @@ class Qube:
 
         return self.transform(strip)
 
-    def display(self):
-        _display(self)
+    def display(self, name: str | None = None, **kwargs):
+        _display(self, name=name, **kwargs)
+
+    def compare_metadata(self, B: Qube) -> bool:
+        if not self.key == B.key:
+            return False
+        if not self.values == B.values:
+            return False
+        for k in self.metadata.keys():
+            if k not in B.metadata:
+                return False
+            if not np.array_equal(self.metadata[k], B.metadata[k]):
+                return False
+        for A_child, B_child in zip(self.children, B.children):
+            if not A_child.compare_metadata(B_child):
+                return False
+        return True

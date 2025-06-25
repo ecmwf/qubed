@@ -14,13 +14,16 @@ if TYPE_CHECKING:
 
 
 def default_info_func(node: Qube):
-    metadata = ", ".join(f"[{k}, {v.dtype}]" for k, v in node.metadata.items())
+    metadata = ", ".join(
+        f"[{k}, {v.dtype}, {v.size} {v.shape[-1]}]" for k, v in node.metadata.items()
+    )
     return f"""\
 structural_hash = {node.structural_hash}
 metadata = {metadata}
 is_root = {node.is_root}
 is_leaf = {node.is_leaf}
 shape = {node.shape},
+len(shape) = {len(node.shape)},
 depth = {node.depth}
 """
 
@@ -65,8 +68,12 @@ def summarize_node(
     return ", ".join(summaries), ",".join(paths), node
 
 
-def node_tree_to_string(node: Qube, prefix: str = "", depth=None) -> Iterable[str]:
+def node_tree_to_string(
+    node: Qube, prefix: str = "", name: str | None = None, depth=None
+) -> Iterable[str]:
     summary, path, node = summarize_node(node)
+    if name is not None:
+        summary = f"{name}: {summary}"
 
     if depth is not None and depth <= 0:
         yield summary + " - ...\n"
@@ -139,10 +146,14 @@ def _node_tree_to_html(
     prefix: str = "",
     depth=1,
     connector="",
+    name: str | None = None,
     info: Callable[[Qube], str] | None = None,
     **kwargs,
 ) -> Iterable[str]:
     summary, node = summarize_node_html(node, info=info, **kwargs)
+
+    if name is not None:
+        summary = f"<span title='name' class='name'>{name}:</span> {summary}"
 
     if len(node.children) == 0:
         yield f'<span class="qubed-level">{connector}{summary}</span>'
@@ -170,6 +181,7 @@ def node_tree_to_html(
     depth=1,
     include_css=True,
     include_js=True,
+    name: str | None = None,
     css_id=None,
     info: Callable[[Qube], str] | None = None,
     **kwargs,
@@ -187,6 +199,7 @@ def node_tree_to_html(
             font-family: SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,Courier,monospace;
             font-size: 12px;
             line-height: 1.4;
+            padding-left: 1ch; // Match jupyter print padding
 
             details {
                 margin-left: 0;
@@ -201,8 +214,8 @@ def node_tree_to_html(
                 list-style: none;
                 cursor: pointer;
                 text-overflow: ellipsis;
-                overflow: hidden;
-                text-wrap: nowrap;
+                //overflow: hidden;
+                text-wrap: wrap;
                 display: block;
             }
 
@@ -220,14 +233,18 @@ def node_tree_to_html(
 
             .qubed-level {
                 text-overflow: ellipsis;
-                overflow: hidden;
-                text-wrap: nowrap;
+                //overflow: hidden;
+                text-wrap: wrap;
                 display: block;
             }
 
             summary::-webkit-details-marker {
               display: none;
               content: "";
+            }
+
+            span.name {
+                font-weight: bold;
             }
 
         }
@@ -257,12 +274,27 @@ def node_tree_to_html(
         nodes.forEach(n => n.addEventListener("click", nodeOnClick));
         </script>
         """.replace("CSS_ID", css_id)
-    nodes = "".join(_node_tree_to_html(node=node, depth=depth, info=info, **kwargs))
+    nodes = "".join(
+        _node_tree_to_html(node=node, depth=depth, info=info, name=name, **kwargs)
+    )
     return f"{js if include_js else ''}{css if include_css else ''}<pre class='qubed-tree' id='{css_id}'>{nodes}</pre>"
 
 
-def _display(qube: Qube, **kwargs):
-    if display is None:
-        print(qube)
+def is_notebook() -> bool:
+    try:
+        shell = get_ipython().__class__.__name__
+        if shell == "ZMQInteractiveShell":
+            return True  # Jupyter notebook or qtconsole
+        elif shell == "TerminalInteractiveShell":
+            return False  # Terminal running IPython
+        else:
+            return False  # Other type (?)
+    except NameError:
+        return False  # Probably standard Python interpreter
+
+
+def _display(qube: Qube, name: str | None = None, **kwargs):
+    if display is None or not is_notebook():
+        qube.print(name=name)
     else:
-        display(qube.html(**kwargs))
+        display(qube.html(name=name, **kwargs))
