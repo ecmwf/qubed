@@ -70,6 +70,11 @@ class Padder:
 pad = Padder().pad
 
 
+def dprint(s):
+    if logger.getEffectiveLevel() <= logging.DEBUG:
+        print(f"{pad()}{s}")
+
+
 class SetOperation(Enum):
     "Map from set operations to which combination of (A - B), (A ∩ B), (B - A) we need."
 
@@ -238,12 +243,12 @@ def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
 
     for key in set(A.metadata.keys()) | set(B.metadata.keys()):
         if key not in A.metadata:
-            print(f"'{key}' is in B but not A, pushing down")
+            dprint(f"'{key}' is in B but not A, pushing down from {A.key}")
             pushdown_metadata_B[key] = B.metadata[key]
             continue
 
         if key not in B.metadata:
-            print(f"'{key}' is in A but not B, pushing down")
+            dprint(f"'{key}' is in A but not B, pushing down from {A.key}")
             pushdown_metadata_A[key] = A.metadata[key]
             continue
 
@@ -252,7 +257,7 @@ def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
 
         if np.allclose(A_val, B_val):
             # If the metadata is the same we can just go ahead
-            print(f"Keeping metadata key '{key}' at the level of '{A.key}'")
+            dprint(f"Keeping metadata key '{key}={A_val}' at the level of '{A.key}'")
             stayput_metadata[key] = A.metadata[key]
 
         elif A.structural_hash == B.structural_hash:
@@ -549,7 +554,12 @@ def merge_values(qubes: list[Qube]) -> Qube:
         # We compute the sorting indices that we have to apply to the metadata to fix it
         # The use of np.unique here both sorts and removes duplicates
         values = [v for q in qubes for v in q.values]
-        values, sorting_indices = np.unique(values, return_index=True)
+        _, sorting_indices = np.unique(values, return_index=True)
+
+        # numpy has tendancy to modify types like strings so instead of taking the values
+        # that come out of np.unique, we compute them ourselves using the sorting indices
+        values = [values[i] for i in sorting_indices]
+
         values = QEnum(values)
 
     elif value_type is WildcardGroup:
@@ -572,6 +582,59 @@ def merge_values(qubes: list[Qube]) -> Qube:
     return out
 
 
+# TODO: reuse this code above in the other place I do pushdowns
+# TODO: Do we really need to do pushdowns in two places in the code?
+def pushdown_metadata_many(qubes: list[Qube]) -> list[Qube]:
+    # Identify any metadata attached to A and B that differs and push it down one level
+    metadata_list = [q.metadata for q in qubes]
+    example_metadata = qubes[0].metadata
+
+    common_metadata_keys = set(
+        k
+        for k in example_metadata.keys()
+        if all(k in other.keys() for other in metadata_list[1:])
+    )
+
+    # All the metadata that needs to be pushed down to the child nodes
+    # When pushing down the metadata we need to account for the fact it now affects more values
+    # So expand the metadata entries from shape (a, b, ..., c) to (a, b, ..., c, d)
+    # where d is the length of the node values
+    def added_axis(size: int, metadata: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+        return {
+            k: np.broadcast_to(v[..., np.newaxis], v.shape + (size,))
+            for k, v in metadata.items()
+        }
+
+    # Pushdown any keys that aren't in the common set
+    new_qubes = []
+    for i, qube in enumerate(qubes):
+        keys_to_pushdown = [
+            k for k in qube.metadata.keys() if k not in common_metadata_keys
+        ]
+        pushdown_metadata = {k: qube.metadata[k] for k in keys_to_pushdown}
+
+        new_children = []
+        for child in qube.children:
+            N = len(child.values)
+            new_child = child.replace(
+                metadata=child.metadata | added_axis(N, pushdown_metadata)
+            )
+            new_children.append(new_child)
+
+        new_qubes.append(
+            qubes[i].replace(
+                metadata={
+                    k: bauble
+                    for k, bauble in qubes[i].metadata.items()
+                    if k not in keys_to_pushdown
+                },
+                children=new_children,  # children with pushed down metadata
+            )
+        )
+
+    return new_qubes
+
+
 def concat_metadata(
     qubes: list[Qube], axis: int, sorting_indices: Indices | None
 ) -> Qube:
@@ -580,6 +643,7 @@ def concat_metadata(
     recursively merge the metadata.
 
     To use the example from the docstring of merge_values, we would get:
+    class=*, foo=bar/baz, param=1
     class=*, foo=bar/baz, param=1
     class=*, foo=bar/baz, param=1
 
@@ -612,6 +676,8 @@ def concat_metadata(
 
     # print(f"concat_metadata --- {axis = }, qubes:")
     # for qube in qubes: qube.display()
+
+    qubes = pushdown_metadata_many(qubes)
 
     # Compute the shape and metadata for this level using a shallow merge
     shape, metadata = shallow_concat_metadata(

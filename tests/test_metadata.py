@@ -57,7 +57,7 @@ def test_piecemeal_construction():
     ]
     q = Qube.empty()
     for request, metadata in entries:
-        q = q | Qube.from_datacube(request).add_metadata(**metadata)
+        q = q | Qube.from_datacube(request).add_metadata(metadata)
 
     assert make_set(q.leaves_with_metadata()) == make_set(entries)
 
@@ -67,8 +67,12 @@ def test_non_monotonic_ordering():
     Metadata concatenation when you have non-monotonic groups is tricky.
     Consider expver=1/3 + expver=2/4
     """
-    q = Qube.from_tree("root, class=1, expver=1/3, param=1").add_metadata(number=1)
-    r = Qube.from_tree("root, class=1, expver=2/4, param=1").add_metadata(number=2)
+    q = Qube.from_tree("root, class=1, expver=1/3, param=1").add_metadata(
+        dict(number=1)
+    )
+    r = Qube.from_tree("root, class=1, expver=2/4, param=1").add_metadata(
+        dict(number=2)
+    )
     union = q | r
     qset = union.leaves_with_metadata()
     assert make_set(qset) == make_set(
@@ -87,8 +91,12 @@ def test_overlapping_and_non_monotonic():
     Consider expver=1/2/3 + expver=2/4 where the former has metadata number=1 and the later number=2
     We should see an expver=2 with number=1 in the output
     """
-    q = Qube.from_tree("root, class=1, expver=1/2/3, param=1").add_metadata(number=1)
-    r = Qube.from_tree("root, class=1, expver=2/4, param=1").add_metadata(number=2)
+    q = Qube.from_tree("root, class=1, expver=1/2/3, param=1").add_metadata(
+        dict(number=1)
+    )
+    r = Qube.from_tree("root, class=1, expver=2/4, param=1").add_metadata(
+        dict(number=2)
+    )
     union = q | r
     qset = union.leaves_with_metadata()
     assert make_set(qset) == make_set(
@@ -99,6 +107,15 @@ def test_overlapping_and_non_monotonic():
             ({"class": "1", "expver": "4", "param": "1"}, {"number": 2}),
         ]
     )
+
+
+def test_metadata_keys_at_different_levels():
+    q = Qube.from_tree("root, a=foo, b=1/2").add_metadata({"m": [1, 2]}, depth=2)
+    r = Qube.from_tree("root, a=bar, b=1/2").add_metadata({"m": [3]}, depth=1)
+    expected = r = Qube.from_tree("root, a=bar/foo, b=1/2").add_metadata(
+        {"m": [3, 3, 1, 2]}, depth=2
+    )
+    expected.compare_metadata(q | r)
 
 
 def test_simple_union():

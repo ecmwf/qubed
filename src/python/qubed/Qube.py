@@ -93,10 +93,10 @@ class Qube:
             for child in children:
                 child.depth = depth + 1
                 child.shape = shape + (len(child.values),)
-                for k, v in child.metadata.items():
-                    assert v.shape == child.shape, (
-                        f"Metadata here should have shape {child.shape} but instead is {v.shape}"
-                    )
+                # for k, v in child.metadata.items():
+                #     assert v.shape == child.shape, (
+                #         f"Metadata here should have shape {child.shape} but instead is {v.shape}"
+                #     )
                 update_depth_shape(child.children, child.depth, child.shape)
 
         update_depth_shape(children, depth=0, shape=(1,))
@@ -107,6 +107,7 @@ class Qube:
             children=children,
             metadata=metadata,
             is_root=True,
+            shape=(1,),
         )
 
     def replace(self, **kwargs) -> Qube:
@@ -636,7 +637,7 @@ class Qube:
         ├── time=0600, many identical keys, param=8,78,79
         ├── time=0600, many identical keys, param=8,78,79
         └── time=0600, many identical keys, param=8,78,79
-        This tree compresses dow n
+        This tree compresses down
 
         """
 
@@ -655,16 +656,22 @@ class Qube:
 
         return self.replace(children=tuple(sorted(new_children)))
 
-    def add_metadata(self, **kwargs: Any):
-        metadata = {
-            k: np.array(
-                [
-                    v,
-                ]
-            )
-            for k, v in kwargs.items()
-        }
-        return self.replace(metadata=metadata)
+    def add_metadata(self, metadata: dict[str, np.ndarray], depth=0):
+        if depth == 0:
+            new_metadata = dict(self.metadata)
+            for k, v in metadata.items():
+                try:
+                    v = np.array(v).reshape(self.shape)
+                except ValueError:
+                    raise ValueError(
+                        f"Given metadata can't be reshaped to {self.shape} because it has shape {np.array(v).shape}!"
+                    )
+                new_metadata[k] = v
+            self.metadata = frozendict(new_metadata)
+        else:
+            for child in self.children:
+                child.add_metadata(metadata, depth - 1)
+        return self
 
     def strip_metadata(self) -> Qube:
         def strip(node):
@@ -674,3 +681,18 @@ class Qube:
 
     def display(self, name: str | None = None, **kwargs):
         _display(self, name=name, **kwargs)
+
+    def compare_metadata(self, B: Qube) -> bool:
+        if not self.key == B.key:
+            return False
+        if not self.values == B.values:
+            return False
+        for k in self.metadata.keys():
+            if k not in B.metadata:
+                return False
+            if not np.array_equal(self.metadata[k], B.metadata[k]):
+                return False
+        for A_child, B_child in zip(self.children, B.children):
+            if not A_child.compare_metadata(B_child):
+                return False
+        return True
