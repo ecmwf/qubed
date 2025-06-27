@@ -25,4 +25,4 @@ jobs:
           python -m pip install ".[dev,docs]"
       - name: Test
         run: |
-          sphinx-build . _build
+          sphinx-build docs docs/_build
