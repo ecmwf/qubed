@@ -14,17 +14,26 @@ if TYPE_CHECKING:
 
 
 def default_info_func(node: Qube):
-    metadata = ", ".join(
-        f"[{k}, {v.dtype}, {v.size} {v.shape[-1]}]" for k, v in node.metadata.items()
-    )
+    shape = tuple(map(str, node.shape))
+    if len(shape) > 5:
+        shape = f"(..., {', '.join(shape[-5:])})"
+
+    if node.metadata:
+        metadata = "Metadata Summary (key, dtype, size)\n" + ",\n".join(
+            f"{k}, {v.dtype}, {v.size}, {v.ravel()[:5]}"
+            for k, v in node.metadata.items()
+        )
+    else:
+        metadata = ""
+
     return f"""\
-structural_hash = {node.structural_hash}
-metadata = {metadata}
-is_root = {node.is_root}
-is_leaf = {node.is_leaf}
-shape = {node.shape},
-len(shape) = {len(node.shape)},
-depth = {node.depth}
+Values dtype = {node.values.dtype}
+Number of values = {len(node.values)}
+Structural Hash = {node.structural_hash}
+Node shape = {node.shape},
+Node depth = {node.depth}
+
+{metadata}
 """
 
 

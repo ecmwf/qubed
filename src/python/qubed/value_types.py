@@ -113,6 +113,7 @@ class QEnum(ValueGroup):
     def __contains__(self, value: Any) -> bool:
         return value in self.values
 
+    @property
     def dtype(self):
         return self._dtype
 

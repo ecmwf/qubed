@@ -37,3 +37,6 @@ html_static_path = ["_static"]
 myst_enable_extensions = [
     "attrs_inline",
 ]
+
+# myst_nb options
+nb_execution_raise_on_error = True

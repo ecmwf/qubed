@@ -656,10 +656,12 @@ class Qube:
 
         return self.replace(children=tuple(sorted(new_children)))
 
-    def add_metadata(self, metadata: dict[str, np.ndarray], depth=0):
+    def add_metadata(self, metadata: dict[str, Any | list[Any] | np.ndarray], depth=0):
         if depth == 0:
             new_metadata = dict(self.metadata)
             for k, v in metadata.items():
+                if not isinstance(v, np.ndarray) or isinstance(v, list):
+                    v = [v]
                 try:
                     v = np.array(v).reshape(self.shape)
                 except ValueError:
@@ -696,3 +698,16 @@ class Qube:
             if not A_child.compare_metadata(B_child):
                 return False
         return True
+
+    def expand(self) -> Qube:
+        def _expand(q: Qube) -> Iterable[Qube]:
+            q = q.expand()
+            for v in q.values:
+                yield q.replace(values=QEnum([v]))
+
+        new_children = [
+            expanded_child
+            for child in self.children
+            for expanded_child in _expand(child)
+        ]
+        return self.replace(children=new_children)

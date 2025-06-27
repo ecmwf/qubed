@@ -54,6 +54,8 @@ docs = [
     "sphinx-autobuild",
     "jupyterlab",
     "ipykernel",
+    "scipy",
+    "objsize",
 ]
 
 dev = [
