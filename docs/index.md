@@ -44,7 +44,3 @@ q | r # Does a union between q and r
 
 
 To get a little more background on the motivation and structure of a Qube go to [Background](background.md), for a more hands on intro, go to [Quickstart](quickstart.md).
-
-```{code-cell} python3
-raise ValueError("Test assertion)
-```
