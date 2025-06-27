@@ -8,6 +8,7 @@ import functools
 import json
 from collections import defaultdict
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
@@ -411,13 +412,13 @@ class Qube:
                     raise KeyError(
                         f"Key '{key}' not found in children of '{current.key}', available keys are {[c.key for c in current.children]}"
                     )
-            return Qube.make_root(current.children)
+            return Qube.make_root(deepcopy(current.children))
 
         elif isinstance(args, tuple) and len(args) == 2:
             key, value = args
             for c in self.children:
                 if c.key == key and value in c.values:
-                    return Qube.make_root(c.children)
+                    return Qube.make_root(deepcopy(c.children))
             raise KeyError(f"Key '{key}' not found in children of {self.key}")
         else:
             raise ValueError(f"Unknown key type {args}")

@@ -125,11 +125,12 @@ class QEnum(ValueGroup):
         return min(self.values)
 
     def to_json(self):
-        return {"type": "enum", "dtype": self.dtype(), "values": self.values}
+        return {"type": "enum", "dtype": self.dtype, "values": self.values}
 
-    # @classmethod
-    # def from_json(cls, type: Literal["enum"], dtype: str, values: list):
-    #     dtype_formatter = _dtype_formatters[dtype]
+    @classmethod
+    def from_json(cls, type: Literal["enum"], dtype: str, values: list):
+        dtype_formatter = _dtype_formatters[dtype]
+        return QEnum([dtype_formatter(v) for v in values])
 
     @classmethod
     def from_list(cls, obj):
@@ -423,7 +424,7 @@ def values_from_json(obj: dict | list) -> ValueGroup:
 
     match obj["type"]:
         case "enum":
-            QEnum.from_json(**obj)
+            return QEnum.from_json(**obj)
         case _:
             raise ValueError(f"Unknown dtype {obj['dtype']}")
 

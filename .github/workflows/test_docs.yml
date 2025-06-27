@@ -25,4 +25,4 @@ jobs:
           python -m pip install ".[dev,docs]"
       - name: Test
         run: |
-          sphinx-build docs docs/_build
+          sphinx-build --define nb_execution_raise_on_error=True docs docs/_build
