@@ -1,4 +1,4 @@
-from . import protobuf
+from . import examples, protobuf
 from .Qube import Qube
 
-__all__ = ["Qube", "protobuf"]
+__all__ = ["Qube", "protobuf", "examples"]
