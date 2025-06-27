@@ -32,6 +32,7 @@ from itertools import count
 # Prevent circular imports while allowing the type checker to know what Qube is
 from typing import TYPE_CHECKING, Any, Iterable, TypeAlias
 
+import line_profiler
 import numpy as np
 from frozendict import frozendict
 
@@ -233,6 +234,7 @@ def group_children_by_key(A: Qube, B: Qube) -> dict[str, tuple[list[Qube], list[
     return nodes_by_key
 
 
+@line_profiler.profile
 def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
     # Sort out metadata into what can stay at this level and what must move down
     stayput_metadata: dict[str, np.ndarray] = {}
@@ -255,7 +257,7 @@ def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
         A_val = A.metadata[key]
         B_val = B.metadata[key]
 
-        if np.allclose(A_val, B_val):
+        if np.array_equal(A_val, B_val):
             # If the metadata is the same we can just go ahead
             dprint(f"Keeping metadata key '{key}={A_val}' at the level of '{A.key}'")
             stayput_metadata[key] = A.metadata[key]
