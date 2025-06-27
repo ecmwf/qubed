@@ -39,5 +39,5 @@ myst_enable_extensions = [
 ]
 
 # myst_nb options
-# use sphinx-build --define nb_execution_raise_on_error=True . _build
+# use sphinx-build --define nb_execution_raise_on_error=1 . _build
 # nb_execution_raise_on_error = True
