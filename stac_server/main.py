@@ -1,6 +1,7 @@
 import json
 import os
 from collections import defaultdict
+from typing import Mapping
 
 import requests
 import yaml
@@ -27,19 +28,16 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-qubes: dict[str, Qube] = {}
-
-qubes["climate-dt"] = Qube.empty()
-qubes["extremes-dt"] = Qube.empty()
+qube = Qube.empty()
 mars_language = {}
 
 if "LOCAL_CACHE" in os.environ:
     print("Getting climate and extremes dt data from local files")
     with open("../tests/example_qubes/full_dt.json") as f:
-        qubes["climate-dt"] = Qube.from_json(json.load(f))
+        qube = Qube.from_json(json.load(f))
 
     with open("../tests/example_qubes/od.json") as f:
-        qubes["climate-dt"] = qubes["climate-dt"] | Qube.from_json(json.load(f))
+        qube = qube | Qube.from_json(json.load(f))
 
     with open("../config/language/language.yaml", "r") as f:
         mars_language = yaml.safe_load(f)["_field"]
@@ -49,29 +47,22 @@ if "LOCAL_CACHE" in os.environ:
 else:
     try:
         print("Getting climate and extremes dt data from github")
-        qubes["climate-dt"] = Qube.from_json(
+        qube = Qube.from_json(
             requests.get(
-                "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/climate_dt.json",
-                timeout=1,
-            ).json()
-        )
-        qubes["extremes-dt"] = Qube.from_json(
-            requests.get(
-                "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/extremes_dt.json",
+                "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/full_dt.json",
                 timeout=1,
             ).json()
         )
 
-        qubes["od"] = Qube.from_json(
+        qube = qube | Qube.from_json(
             requests.get(
                 "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/od.json",
                 timeout=1,
             ).json()
         )
-        qubes["climate-dt"] = qubes["climate-dt"] | qubes["extremes-dt"] | qubes["od"]
     except BaseException as e:
         print(f"Failed to get qubed {e}")
-        qubes["climate-dt"] = Qube.empty()
+        qube = Qube.empty()
 
     try:
         mars_language = yaml.safe_load(
@@ -91,12 +82,6 @@ else:
         api_key = f.read()
 
 print("Ready to serve requests!")
-
-
-def validate_key(key: str):
-    if key not in qubes:
-        raise HTTPException(status_code=404, detail=f"Qube {key} not found")
-    return key
 
 
 async def get_body_json(request: Request):
@@ -125,6 +110,11 @@ async def favicon():
     return FileResponse("favicon.ico")
 
 
+@app.get("/api/v1/{path:path}")
+async def deprecated():
+    raise HTTPException(status_code=410, detail="/api/v1 is now deprecated, use v2")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     return templates.TemplateResponse(
@@ -134,36 +124,26 @@ async def read_root(request: Request):
             "config": {
                 "message": "Hello from the dev server!",
             },
-            "api_url": os.environ.get("API_URL", "/api/v1/"),
+            "api_url": os.environ.get("API_URL", "/api/v2/"),
         },
     )
 
 
-@app.get("/api/v1/keys/")
-async def keys():
-    return list(qubes.keys())
-
-
-@app.get("/api/v1/get/{key}/")
+@app.get("/api/v2/get/")
 async def get(
-    key: str = Depends(validate_key),
     request: dict[str, str | list[str]] = Depends(parse_request),
 ):
-    return qubes[key].to_json()
+    return qube.to_json()
 
 
-@app.post("/api/v1/union/{key}/")
+@app.post("/api/v2/union/")
 async def union(
-    key: str,
     credentials: HTTPAuthorizationCredentials = Depends(validate_api_key),
     body_json=Depends(get_body_json),
 ):
-    if key not in qubes:
-        qubes[key] = Qube.empty()
-
-    q = Qube.from_json(body_json)
-    qubes[key] = qubes[key] | q
-    return qubes[key].to_json()
+    global qube
+    qube = qube | Qube.from_json(body_json)
+    return qube.to_json()
 
 
 def follow_query(request: dict[str, str | list[str]], qube: Qube):
@@ -185,35 +165,32 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
     ]
 
 
-@app.get("/api/v1/select/{key}/")
+@app.get("/api/v2/select/")
 async def select(
-    key: str = Depends(validate_key),
-    request: dict[str, str | list[str]] = Depends(parse_request),
+    request: Mapping[str, str | list[str]] = Depends(parse_request),
 ):
-    q = qubes[key].select(request)
-    return q.to_json()
+    return qube.select(request).to_json()
 
 
-@app.get("/api/v1/query/{key}")
+@app.get("/api/v2/query")
 async def query(
-    key: str = Depends(validate_key),
     request: dict[str, str | list[str]] = Depends(parse_request),
 ):
-    qube, paths = follow_query(request, qubes[key])
+    _, paths = follow_query(request, qube)
     return paths
 
 
-@app.get("/api/v1/basicstac/{key}/{filters:path}")
-async def basic_stac(filters: str, key: str = Depends(validate_key)):
+@app.get("/api/v2/basicstac/{filters:path}")
+async def basic_stac(filters: str):
     pairs = filters.strip("/").split("/")
     request = dict(p.split("=") for p in pairs if "=" in p)
 
-    qube, _ = follow_query(request, qubes[key])
+    q, _ = follow_query(request, qube)
 
     def make_link(child_request):
         """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
         kvs = [f"{key}={value}" for key, value in child_request.items()]
-        href = f"/api/v1/basicstac/{key}/{'/'.join(kvs)}"
+        href = f"/api/v2/basicstac/{'/'.join(kvs)}"
         last_key, last_value = list(child_request.items())[-1]
 
         return {
@@ -253,21 +230,20 @@ async def basic_stac(filters: str, key: str = Depends(validate_key)):
         else "/".join(f"{k}={v}" for k, v in request.items()),
         "title": f"{this_key}={this_value}",
         "description": value_info,
-        "links": [make_link(leaf) for leaf in qube.leaves()],
+        "links": [make_link(leaf) for leaf in q.leaves()],
         # "debug": {
-        #     "qube": str(qube),
+        #     "qube": str(q),
         # },
     }
 
     return stac_collection
 
 
-@app.get("/api/v1/stac/{key}/")
+@app.get("/api/v2/stac/")
 async def get_STAC(
-    key: str = Depends(validate_key),
     request: dict[str, str | list[str]] = Depends(parse_request),
 ):
-    qube, paths = follow_query(request, qubes[key])
+    q, paths = follow_query(request, qube)
     kvs = [
         f"{k}={','.join(v)}" if isinstance(v, list) else f"{k}={v}"
         for k, v in request.items()
@@ -317,7 +293,6 @@ async def get_STAC(
                     ),
                     "enum": values,
                     "value_descriptions": value_descriptions,
-                    # "paths": paths,
                 }
             },
         }
@@ -351,7 +326,7 @@ async def get_STAC(
             "descriptions": descriptions,
             # "paths": paths,
             "qube": node_tree_to_html(
-                qube,
+                q,
                 collapse=True,
                 depth=10,
                 include_css=False,
