@@ -15,6 +15,7 @@ body {
 
 }
 
+
 #viewer {
     display: flex;
     flex-direction: row;
@@ -101,8 +102,14 @@ canvas {
     border-color: var(--accent-color);
 }
 
-summary h2 {
-    display: inline;
+
+summary {
+    h2 {
+        display: inline;
+    }
+}
+details[open] summary:has(> h2) {
+    margin-bottom: 0.5em;
 }
 
 .json-pre {
@@ -164,12 +171,25 @@ button:hover {
     cursor: pointer;
 }
 
-.checkbox-label {
+label.key-value {
     font-size: 16px;
     color: #333;
+
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+
+    span {
+        justify-self: flex-start;
+    }
+
+    code {
+        background-color: #d7d6d626;
+        margin-left: auto;
+    }
 }
 
-.checkbox-container:hover .checkbox-label {
+.checkbox-container:hover .key-value {
     color: var(--accent-color);
 }
 

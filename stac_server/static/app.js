@@ -180,11 +180,11 @@ function renderCheckboxList(link) {
           ${variable.enum
             .map((value, index) => {
               const labelText = value_descriptions[index]
-                ? `${value} - ${value_descriptions[index]}`
+                ? `<span>${value_descriptions[index]}</span> <code>${value}</code>`
                 : value;
               return `
                 <div class="checkbox-container">
-                  <label class="checkbox-label">
+                  <label class="key-value">
                   <input type="checkbox" class="item-checkbox" value="${value}" ${
                 variable.enum.length === 1 ? "checked" : ""
               }>
