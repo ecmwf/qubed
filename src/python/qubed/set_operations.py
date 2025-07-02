@@ -32,7 +32,6 @@ from itertools import count
 # Prevent circular imports while allowing the type checker to know what Qube is
 from typing import TYPE_CHECKING, Any, Iterable, TypeAlias
 
-import line_profiler
 import numpy as np
 from frozendict import frozendict
 
@@ -103,6 +102,9 @@ class ValuesIndices:
     def enumerate(self) -> Iterable[tuple[Any, int]]:
         return zip(self.indices, self.values)
 
+    def __len__(self):
+        return len(self.values)
+
 
 def get_indices(metadata: Metadata, indices: Indices) -> Metadata:
     "Given a metadata dict and some indices, return a new metadata dict with only the values indexed by the indices"
@@ -134,6 +136,7 @@ class SetOpResult:
     only_B: ValuesIndices
 
 
+# @line_profiler.profile
 def shallow_qenum_set_operation(A: ValuesIndices, B: ValuesIndices) -> SetOpResult:
     """
     For two sets of values, partition the overlap into four groups:
@@ -234,7 +237,7 @@ def group_children_by_key(A: Qube, B: Qube) -> dict[str, tuple[list[Qube], list[
     return nodes_by_key
 
 
-@line_profiler.profile
+# @line_profiler.profile
 def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
     # Sort out metadata into what can stay at this level and what must move down
     stayput_metadata: dict[str, np.ndarray] = {}
@@ -245,12 +248,12 @@ def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
 
     for key in set(A.metadata.keys()) | set(B.metadata.keys()):
         if key not in A.metadata:
-            dprint(f"'{key}' is in B but not A, pushing down from {A.key}")
+            # dprint(f"'{key}' is in B but not A, pushing down from {A.key}")
             pushdown_metadata_B[key] = B.metadata[key]
             continue
 
         if key not in B.metadata:
-            dprint(f"'{key}' is in A but not B, pushing down from {A.key}")
+            # dprint(f"'{key}' is in A but not B, pushing down from {A.key}")
             pushdown_metadata_A[key] = A.metadata[key]
             continue
 
@@ -283,8 +286,8 @@ def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
             pushdown_metadata_A[key] = A_val
             pushdown_metadata_B[key] = B_val
 
-    if logger.getEffectiveLevel() <= logging.DEBUG and stayput_metadata:
-        print(f"keeping metadata at level '{A.key}': {list(stayput_metadata.keys())}")
+    # if logger.getEffectiveLevel() <= logging.DEBUG and stayput_metadata:
+    #     print(f"keeping metadata at level '{A.key}': {list(stayput_metadata.keys())}")
 
     # Add all the metadata that needs to be pushed down to the child nodes
     # When pushing down the metadata we need to account for the fact it now affects more values
@@ -313,13 +316,14 @@ def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
     return frozendict(stayput_metadata), A, B
 
 
+# @line_profiler.profile
 def operation(
     A: Qube, B: Qube, operation_type: SetOperation, node_type, depth=0
 ) -> Qube | None:
-    if logger.getEffectiveLevel() <= logging.DEBUG:
-        print(f"{pad()}operation({operation_type.name}, depth={depth})")
-        A.display(name=pad() + "A")
-        B.display(name=pad() + "B")
+    # if logger.getEffectiveLevel() <= logging.DEBUG:
+    #     print(f"{pad()}operation({operation_type.name}, depth={depth})")
+    #     A.display(name=pad() + "A")
+    #     B.display(name=pad() + "B")
 
     assert A.key == B.key
     assert A.is_root == B.is_root
@@ -348,12 +352,12 @@ def operation(
     # we can prune this branch by returning None or an empty root node
     if (A.children or B.children) and not new_children:
         if A.is_root:
-            if logger.getEffectiveLevel() <= logging.DEBUG:
-                print("output: root")
+            # if logger.getEffectiveLevel() <= logging.DEBUG:
+            #     print("output: root")
             return node_type.make_root(children=())
         else:
-            if logger.getEffectiveLevel() <= logging.DEBUG:
-                print("output: None")
+            # if logger.getEffectiveLevel() <= logging.DEBUG:
+            #     print("output: None")
             return None
 
     # Whenever we modify children need to recompress them
@@ -363,8 +367,8 @@ def operation(
         children=new_children,
         metadata=stayput_metadata,
     )
-    if logger.getEffectiveLevel() <= logging.DEBUG:
-        out.display(name=f"{pad()}output")
+    # if logger.getEffectiveLevel() <= logging.DEBUG:
+    #     out.display(name=f"{pad()}output")
 
     return out
 
@@ -382,6 +386,7 @@ def recursively_take_from_metadata(q: Qube, axis: int, indices: Indices) -> Qube
     )
 
 
+# @line_profiler.profile
 def _operation(
     A: list[Qube],
     B: list[Qube],
@@ -396,12 +401,12 @@ def _operation(
     the same key but different values. We then loop over all pairs of children from each list
       and compute the intersection.
     """
-    if logger.getEffectiveLevel() <= logging.DEBUG:
-        print(f"{pad()}_operation({operation_type.name}, depth={depth})")
-        for i, q in enumerate(A):
-            q.display(name=f"{pad()}A_{i}")
-        for i, q in enumerate(B):
-            q.display(name=f"{pad()}B_{i}")
+    # if logger.getEffectiveLevel() <= logging.DEBUG:
+    #     print(f"{pad()}_operation({operation_type.name}, depth={depth})")
+    #     for i, q in enumerate(A):
+    #         q.display(name=f"{pad()}A_{i}")
+    #     for i, q in enumerate(B):
+    #         q.display(name=f"{pad()}B_{i}")
 
     keep_only_A, keep_intersection, keep_only_B = operation_type.value
 
@@ -420,11 +425,11 @@ def _operation(
             node = source.replace(
                 values=values_indices.values,
             )
-            if logger.getEffectiveLevel() <= logging.DEBUG:
-                print(
-                    f"{pad()}recursively_take_from_metadata axis={node.depth} indices={values_indices.indices}"
-                )
-                node.display(f"{pad()}input")
+            # if logger.getEffectiveLevel() <= logging.DEBUG:
+            #     print(
+            #         f"{pad()}recursively_take_from_metadata axis={node.depth} indices={values_indices.indices}"
+            #     )
+            #     node.display(f"{pad()}input")
             return recursively_take_from_metadata(
                 node, node.depth, values_indices.indices
             )
@@ -459,8 +464,8 @@ def _operation(
                     # Consider Qube(root, a=1, b=1/2) - Qube(root, a=1, b=1)
                     # We can easily throw away the whole a node by accident here!
                     if keep_intersection or result.children:
-                        if logger.getEffectiveLevel() <= logging.DEBUG:
-                            result.display(f"{pad()} intersection out")
+                        # if logger.getEffectiveLevel() <= logging.DEBUG:
+                        #     result.display(f"{pad()} intersection out")
                         yield result
 
             # If the intersection is empty we're done
@@ -479,28 +484,29 @@ def _operation(
         for node, vi in only_a.items():
             if vi.values:
                 node = make_new_node(node, vi)
-                if logger.getEffectiveLevel() <= logging.DEBUG:
-                    node.display(f"{pad()} only_A out")
+                # if logger.getEffectiveLevel() <= logging.DEBUG:
+                #     node.display(f"{pad()} only_A out")
                 yield node
 
     if keep_only_B:
         for node, vi in only_b.items():
             if vi.values:
                 node = make_new_node(node, vi)
-                if logger.getEffectiveLevel() <= logging.DEBUG:
-                    node.display(f"{pad()} only_B out")
+                # if logger.getEffectiveLevel() <= logging.DEBUG:
+                #     node.display(f"{pad()} only_B out")
                 yield node
 
 
+# @line_profiler.profile
 def compress_children(children: Iterable[Qube]) -> tuple[Qube, ...]:
     """
     Helper method that only compresses a set of nodes, and doesn't do it recursively.
     Used in Qubed.compress but also to maintain compression in the set operations above.
     """
-    if logger.getEffectiveLevel() <= logging.DEBUG:
-        print(f"{pad()}compress_children")
-        for i, qube in enumerate(children):
-            qube.display(f"{pad()}in_{i}")
+    # if logger.getEffectiveLevel() <= logging.DEBUG:
+    #     print(f"{pad()}compress_children")
+    #     for i, qube in enumerate(children):
+    #         qube.display(f"{pad()}in_{i}")
 
     # Take the set of new children and see if any have identical key, metadata and children
     # the values may different and will be collapsed into a single node
@@ -522,12 +528,13 @@ def compress_children(children: Iterable[Qube]) -> tuple[Qube, ...]:
         new_children.append(new_child)
 
     out = tuple(sorted(new_children, key=lambda n: ((n.key, n.values.min()))))
-    if logger.getEffectiveLevel() <= logging.DEBUG:
-        for i, qube in enumerate(out):
-            qube.display(f"{pad()}out_{i}")
+    # if logger.getEffectiveLevel() <= logging.DEBUG:
+    #     for i, qube in enumerate(out):
+    #         qube.display(f"{pad()}out_{i}")
     return out
 
 
+# @line_profiler.profile
 def merge_values(qubes: list[Qube]) -> Qube:
     """
     Given a list of qubes with identical keys and child structure but values that must be merged,
@@ -545,10 +552,10 @@ def merge_values(qubes: list[Qube]) -> Qube:
     value_type = type(example.values)
     axis = example.depth
 
-    if logger.getEffectiveLevel() <= logging.DEBUG:
-        print(f"{pad()}merge_values --- {axis = }")
-        for i, qube in enumerate(qubes):
-            qube.display(f"{pad()}in_{i}")
+    # if logger.getEffectiveLevel() <= logging.DEBUG:
+    #     print(f"{pad()}merge_values --- {axis = }")
+    #     for i, qube in enumerate(qubes):
+    #         qube.display(f"{pad()}in_{i}")
 
     # Merge the values
     if value_type is QEnum:
@@ -578,8 +585,8 @@ def merge_values(qubes: list[Qube]) -> Qube:
     out = node.replace(
         values=values,
     )
-    if logger.getEffectiveLevel() <= logging.DEBUG:
-        out.display(f"{pad()}out")
+    # if logger.getEffectiveLevel() <= logging.DEBUG:
+    #     out.display(f"{pad()}out")
 
     return out
 
