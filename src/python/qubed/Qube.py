@@ -486,7 +486,7 @@ class Qube:
 
     def select(
         self,
-        selection: dict[str, str | list[str] | Callable[[Any], bool]],
+        selection: Mapping[str, str | list[str] | Callable[[Any], bool]],
         mode: Literal["strict", "relaxed"] = "relaxed",
         consume=False,
     ) -> Qube:
