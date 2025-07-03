@@ -40,10 +40,11 @@ if "LOCAL_CACHE" in os.environ:
         qube = qube | Qube.from_json(json.load(f))
 
     with open("../config/language/language.yaml", "r") as f:
-        mars_language = yaml.safe_load(f)["_field"]
+        mars_language = yaml.safe_load(f)
 
     with open("../config/language/paramids.yaml", "r") as f:
         params = yaml.safe_load(f)
+
 else:
     try:
         print("Getting climate and extremes dt data from github")
@@ -75,11 +76,18 @@ else:
         print(f"Failed to get mars_language {e}")
         mars_language = {}
 
+mars_language["param"]["values"] = [
+    [str(id), *sorted([s.capitalize() for s in other_values][::-1], key=len)]
+    for id, other_values in params.items()
+]
+
 if "API_KEY" in os.environ:
     api_key = os.environ["API_KEY"]
+    print(f"Got api key from env: {api_key}")
 else:
     with open("api_key.secret", "r") as f:
         api_key = f.read()
+    print(f"Got api_key from local file {api_key}")
 
 print("Ready to serve requests!")
 
@@ -255,30 +263,18 @@ async def get_STAC(
         href_template = f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
 
         print(f"{key_name = }")
-        if key_name == "param":
-            print(params)
-            values_from_mars_language = params
-            value_descriptions = [
-                max(params.get(int(v), [""]), key=len) for v in values
-            ]
-            print(value_descriptions)
-        else:
-            values_from_mars_language = mars_language.get(key_name, {}).get(
-                "values", []
-            )
+        values_from_mars_language = mars_language.get(key_name, {}).get("values", [])
 
-            if all(isinstance(v, list) for v in values_from_mars_language):
-                value_descriptions_dict = {
-                    k: v[-1]
-                    for v in values_from_mars_language
-                    if len(v) > 1
-                    for k in v[:-1]
-                }
-                value_descriptions = [
-                    value_descriptions_dict.get(v, "") for v in values
-                ]
-                if not any(value_descriptions):
-                    value_descriptions = None
+        if all(isinstance(v, list) for v in values_from_mars_language):
+            value_descriptions_dict = {
+                k: v[-1]
+                for v in values_from_mars_language
+                if len(v) > 1
+                for k in v[:-1]
+            }
+            value_descriptions = [value_descriptions_dict.get(v, "") for v in values]
+            if not any(value_descriptions):
+                value_descriptions = None
 
         return {
             "title": key_name,
