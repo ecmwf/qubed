@@ -262,7 +262,6 @@ async def get_STAC(
         """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
         href_template = f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
 
-        print(f"{key_name = }")
         values_from_mars_language = mars_language.get(key_name, {}).get("values", [])
 
         if all(isinstance(v, list) for v in values_from_mars_language):

@@ -739,7 +739,9 @@ model:
   type: enum
   description: Which climate model to use.
   values:
-    - [ifs-fesom, Integrated Forecast System - FESOM]
+    - [ifs-fesom, Integrated Forecast System + FESOM Ocean Model]
+    - [ifs-nemo, Integrated Forecast System + NEMO Ocean Model]
+    - [icon, "ICON Weather Model"]
 
 activity:
   category: data
