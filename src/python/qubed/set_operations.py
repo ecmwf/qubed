@@ -237,7 +237,6 @@ def group_children_by_key(A: Qube, B: Qube) -> dict[str, tuple[list[Qube], list[
     return nodes_by_key
 
 
-# @line_profiler.profile
 def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
     # Sort out metadata into what can stay at this level and what must move down
     stayput_metadata: dict[str, np.ndarray] = {}
