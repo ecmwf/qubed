@@ -25,6 +25,13 @@ COPY stac_server/requirements.txt /code/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
 COPY ./src /code/qubed/src
+
+# Used to provide language.yaml metadata, this could probably be pulled from a database eventually
+COPY ./config /code/qubed/config
+
+# Used to bootstrap the frontend with a bit of data, could be removed eventually
+COPY ./tests/example_qubes /code/qubed/tests/example_qubes
+
 COPY ./pyproject.toml /code/qubed/
 COPY ./Cargo.toml /code/qubed/
 COPY ./README.md /code/qubed/

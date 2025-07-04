@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from frozendict import frozendict
 from qubed import Qube
 from qubed.tree_formatters import node_tree_to_html
+from pathlib import Path
 
 app = FastAPI()
 security = HTTPBearer()
@@ -31,50 +32,20 @@ templates = Jinja2Templates(directory="templates")
 qube = Qube.empty()
 mars_language = {}
 
-if "LOCAL_CACHE" in os.environ:
-    print("Getting climate and extremes dt data from local files")
-    with open("../tests/example_qubes/full_dt.json") as f:
-        qube = Qube.from_json(json.load(f))
+prefix = Path(os.environ.get("QUBED_DATA_PREFIX", "../"))
+# For docker containers the prefix is usually /code/qubed
 
-    with open("../tests/example_qubes/od.json") as f:
-        qube = qube | Qube.from_json(json.load(f))
+with open(prefix / "tests/example_qubes/full_dt.json") as f:
+    qube = Qube.from_json(json.load(f))
 
-    with open("../config/language/language.yaml", "r") as f:
-        mars_language = yaml.safe_load(f)
+with open(prefix / "tests/example_qubes/od.json") as f:
+    qube = qube | Qube.from_json(json.load(f))
 
-    with open("../config/language/paramids.yaml", "r") as f:
-        params = yaml.safe_load(f)
+with open(prefix / "config/language/language.yaml", "r") as f:
+    mars_language = yaml.safe_load(f)
 
-else:
-    try:
-        print("Getting climate and extremes dt data from github")
-        qube = Qube.from_json(
-            requests.get(
-                "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/full_dt.json",
-                timeout=1,
-            ).json()
-        )
-
-        qube = qube | Qube.from_json(
-            requests.get(
-                "https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/od.json",
-                timeout=1,
-            ).json()
-        )
-    except BaseException as e:
-        print(f"Failed to get qubed {e}")
-        qube = Qube.empty()
-
-    try:
-        mars_language = yaml.safe_load(
-            requests.get(
-                "https://github.com/ecmwf/qubed/raw/refs/heads/main/config/language/language.yaml",
-                timeout=3,
-            ).content
-        )["_field"]
-    except BaseException as e:
-        print(f"Failed to get mars_language {e}")
-        mars_language = {}
+with open(prefix /  "config/language/paramids.yaml", "r") as f:
+    params = yaml.safe_load(f)
 
 mars_language["param"]["values"] = [
     [str(id), *sorted([s.capitalize() for s in other_values][::-1], key=len)]
@@ -83,14 +54,13 @@ mars_language["param"]["values"] = [
 
 if "API_KEY" in os.environ:
     api_key = os.environ["API_KEY"]
-    print(f"Got api key from env: {api_key}")
+    print(f"Got api key from env key API_KEY")
 else:
     with open("api_key.secret", "r") as f:
         api_key = f.read()
-    print(f"Got api_key from local file {api_key}")
+    print(f"Got api_key from local file 'api_key.secret'")
 
 print("Ready to serve requests!")
-
 
 async def get_body_json(request: Request):
     return await request.json()
@@ -108,7 +78,7 @@ def parse_request(request: Request) -> dict[str, str | list[str]]:
 
 
 def validate_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    if credentials.credentials != api_key:
+    if credentials.credentials != api_key.strip():
         raise HTTPException(status_code=403, detail="Incorrect API Key")
     return credentials
 

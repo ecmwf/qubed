@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -e
+
 branch=`git rev-parse --abbrev-ref HEAD`
 
 if [[ $branch = "main" ]]
@@ -7,4 +10,4 @@ else
     namespace="qubed-$branch"
 fi
 
-kubectl -n $namespace logs deployment/stac-server
+kubectl -n $namespace logs -f deployment/stac-server

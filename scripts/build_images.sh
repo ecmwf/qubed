@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -e
 
 sudo docker login eccr.ecmwf.int

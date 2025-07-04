@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -e
+
 branch=`git rev-parse --abbrev-ref HEAD`
 
 if [[ $branch = "main" ]]
