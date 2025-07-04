@@ -3,7 +3,6 @@ import os
 from collections import defaultdict
 from typing import Mapping
 
-import requests
 import yaml
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -45,8 +44,16 @@ with open(prefix / "tests/example_qubes/od.json") as f:
 with open(prefix / "config/language/language.yaml", "r") as f:
     mars_language = yaml.safe_load(f)
 
-with open(prefix /  "config/language/paramids.yaml", "r") as f:
+with open(prefix / "config/language/paramids.yaml", "r") as f:
     params = yaml.safe_load(f)
+
+# Coerce value codes to lowercase
+for key in mars_language.keys():
+    if "values" in mars_language[key]:
+        mars_language[key]["values"] = [
+            [str(v[0]).lower(), *v[1:]] for v in mars_language[key]["values"]
+        ]
+
 
 mars_language["param"]["values"] = [
     [str(id), *sorted([s.capitalize() for s in other_values][::-1], key=len)]
@@ -55,13 +62,14 @@ mars_language["param"]["values"] = [
 
 if "API_KEY" in os.environ:
     api_key = os.environ["API_KEY"]
-    print(f"Got api key from env key API_KEY")
+    print("Got api key from env key API_KEY")
 else:
     with open("api_key.secret", "r") as f:
         api_key = f.read()
-    print(f"Got api_key from local file 'api_key.secret'")
+    print("Got api_key from local file 'api_key.secret'")
 
 print("Ready to serve requests!")
+
 
 async def get_body_json(request: Request):
     return await request.json()
@@ -99,13 +107,15 @@ async def read_root(request: Request):
     config = {
         "request": request,
         "api_url": os.environ.get("API_URL", "/api/v2/"),
-        "branch" : os.environ.get("branch", "local"),
+        "branch": os.environ.get("branch", "local"),
         "message": "",
         "last_database_update": "",
     }
 
     if config["branch"] != "Main":
-        config["message"] = Markup(f"This server was built from the {config['branch']} branch of <a href='https://github.com/ecmwf/qubed'>qubed</a>. Here is <a href='https://qubed.lumi.apps.dte.destination-earth.eu/'>the stable deployment</a>")
+        config["message"] = Markup(
+            f"This server was built from the {config['branch']} branch of <a href='https://github.com/ecmwf/qubed'>qubed</a>. Here is <a href='https://qubed.lumi.apps.dte.destination-earth.eu/'>the stable deployment</a>"
+        )
 
     return templates.TemplateResponse("index.html", config)
 
