@@ -620,11 +620,11 @@ domain:
   values:
   # - [a, north west europe]
   # - [b, north east europe, baltic and black sea]
-  - [c, south west europe]
-  - [d, south east europe]
-  - [e, europe]
+  - [c, South West Europe]
+  - [d, South East Europe]
+  - [e, Europe]
   # - [f, fastex]
-  - [g, globe, general european area]
+  - [g, globe, General European Area]
   # - [h]
   # - [i]
   # - [j]
@@ -743,17 +743,37 @@ model:
     - [ifs-nemo, Integrated Forecast System + NEMO Ocean Model]
     - [icon, "ICON Weather Model"]
 
+# https://github.com/ecmwf/eccodes/blob/develop/definitions/grib2/destine_activity.table
+
 activity:
   category: data
   type: enum
   values:
-    - [story-nudging, ]
+     - ["cmip6", "Coupled Model Intercomparison Project Phase 6"]
+     - ["scenariomip", "Scenario Model Intercomparison Project"]
+     - ["highresmip", "High Resolution Model Intercomparison Project"]
+     - ["story-nudging", "Climate storylines by nudging to reanalysis"]
+     - ["baseline", "Baseline simulations for climate model evaluation"]
+     - ["projections", "Future climate projections"]
 
+# https://github.com/ecmwf/eccodes/blob/develop/definitions/grib2/destine_experiment.table
 experiment:
   category: data
   type: enum
   values:
-    - [tplus2.0k, ]
+    - [hist, "Historical"]
+    - [cont, "Control"]
+    - [amip, "Atmospheric Model Intercomparison Project"]
+    - [SSP1-1.9, "Shared Socio-economic Pathways 1-1.9"]
+    - [SSP1-2.6, "Shared Socio-economic Pathways 1-2.6"]
+    - [SSP2-4.5, "Shared Socio-economic Pathways 2-4.5"]
+    - [SSP3-7.0, "Shared Socio-economic Pathways 3-7.0"]
+    - [SSP5-8.5, "Shared Socio-economic Pathways 5-8.5"]
+    - [Tplus1.5K, "Warmer world at 1.5 degrees K above pre-industrial temperatures"]
+    - [Tplus2.0K, "Warmer world at 2.0 degrees K above pre-industrial temperatures"]
+    - [Tplus3.0K, "Warmer world at 3.0 degrees K above pre-industrial temperatures"]
+    - [Tplus4.0K, "Warmer world at 4.0 degrees K above pre-industrial temperatures"]
+    - [abrupt4xco2, "CO2 abruptly quadrupled and then held constant"]
 
 generation:
   category: data
@@ -767,9 +787,10 @@ realization:
   values:
     - [1, ]
 
+# https://github.com/ecmwf/eccodes/blob/develop/definitions/grib2/destine_resolution.table
 resolution:
   category: data
   type: enum
   values:
-    - [standard, "Standard (HEALPIX H128)"]
-    - [high, "High (HEALPIX H1024 or H512)"]
+    - [standard, "Standard resolution model output with longer availability"]
+    - [high, "High resolution model output with limited availability"]
