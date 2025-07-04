@@ -6,17 +6,17 @@ levtype:
   flatten: false
   type: enum
   values:
-  # - [cat, category]
-  # - [dp, depth]
-  # - [layer]
-  # - [ml, model levels]
+  - [cat, category]
+  - [dp, depth]
+  - [layer]
+  - [ml, model levels]
   - [pl, pressure levels]
   - [hl, height levels]
-  # - [pt, potential temperature]
-  # - [pv, potential vorticity]
+  - [pt, potential temperature]
+  - [pv, potential vorticity]
   - [sfc, surface]
   - [sol, surface other (multi)levels, "3D multi-level model"]
-  # - [wv, ocean wave]
+  - [wv, ocean wave]
   - [o2d, ocean surface]
   - [o3d, ocean model levels]
   never:
@@ -29,7 +29,7 @@ class:
   flatten: false
   type: enum
   values:
-  - [ai, operational aifs]
+  - [ai, "Operational AIFS"]
   - [d1, "Destine Data"]
   - [od, "Operational Forecast Data"]
   - [rd, "Research Data"]

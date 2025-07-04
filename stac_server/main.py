@@ -1,6 +1,7 @@
 import json
 import os
 from collections import defaultdict
+from pathlib import Path
 from typing import Mapping
 
 import yaml
@@ -11,10 +12,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from frozendict import frozendict
+from markupsafe import Markup
 from qubed import Qube
 from qubed.tree_formatters import node_tree_to_html
-from pathlib import Path
-from markupsafe import Markup
 
 app = FastAPI()
 security = HTTPBearer()
