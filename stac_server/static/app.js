@@ -146,8 +146,15 @@ async function createCatalogItem(link, itemsContainer) {
     itemDiv.dataset.key = link.title;
     itemDiv.dataset.keyType = variable.type;
 
+    function capitalize(val) {
+      return String(val).charAt(0).toUpperCase() + String(val).slice(1);
+    }
+
     itemDiv.innerHTML = `
-      <h3 class="item-title">${link.title || "No title available"}</h3>
+      <h3 class="item-title">${
+        capitalize(link.title) || "No title available"
+      }</h3>
+      <button class="all">*</button>
       <p class="item-type">Key Type: ${itemDiv.dataset.keyType || "Unknown"}</p>
       <p class="item-description">${
         variable.description ? variable.description.slice(0, 100) : ""
@@ -155,8 +162,25 @@ async function createCatalogItem(link, itemsContainer) {
     `;
 
     if (variable.enum && variable.enum.length > 0) {
-      const listContainer = renderCheckboxList(link);
-      itemDiv.appendChild(listContainer);
+      const checkbox_list = renderCheckboxList(link);
+      itemDiv.appendChild(checkbox_list);
+
+      itemDiv.querySelector("button.all").addEventListener("click", () => {
+        let new_state;
+        if (checkbox_list.hasAttribute("disabled")) {
+          checkbox_list.removeAttribute("disabled");
+          itemDiv.querySelectorAll("input").forEach((c) => {
+            c.removeAttribute("checked");
+            c.removeAttribute("disabled");
+          });
+        } else {
+          checkbox_list.setAttribute("disabled", "");
+          itemDiv.querySelectorAll("input").forEach((c) => {
+            c.setAttribute("checked", "true");
+            c.setAttribute("disabled", "");
+          });
+        }
+      });
     } else {
       const any = `<input type="text" name="${link.title}">`;
       const anyNode = document.createRange().createContextualFragment(any);
@@ -174,30 +198,39 @@ function renderCheckboxList(link) {
   const variable = variables[key];
   const value_descriptions = variable.value_descriptions || [];
 
-  const listContainerHTML = `
-      <div class="item-list-container">
-        <div class="scrollable-list">
-          ${variable.enum
-            .map((value, index) => {
-              const labelText = value_descriptions[index]
-                ? `<span>${value_descriptions[index]}</span> <code>${value}</code>`
-                : value;
-              return `
-                <div class="checkbox-container">
-                  <label class="key-value">
-                  <input type="checkbox" class="item-checkbox" value="${value}" ${
-                variable.enum.length === 1 ? "checked" : ""
-              }>
-                  ${labelText}
-                  </label>
-                </div>
-              `;
-            })
-            .join("")}
-        </div>
-      </div>
-    `;
+  function renderCheckbox(key, value, human_readable_value) {
+    const id = `${key}=${value}`;
 
+    let human_label, code_label;
+    if (human_readable_value) {
+      human_label = `<label for="${id}">${human_readable_value}</label>`;
+      code_label = `<label class="code" for="${id}"><code>${value}</code></label>`;
+    } else {
+      human_label = `<label for="${id}">${value}</label>`;
+      code_label = `<label class="code"><code></code></label>`;
+    }
+
+    // Pre-check the box if there's only one option
+    const checked = variable.enum.length === 1 ? "checked" : "";
+
+    const checkbox = `<input type="checkbox" class="item-checkbox" value="${value}" id="${key}=${value}" ${checked}>`;
+
+    return `
+        <div class="checkbox-row">
+        ${checkbox}
+        ${human_label}
+        ${code_label}
+        </div>
+    `;
+  }
+
+  const checkboxes = variable.enum
+    .map((value, index) =>
+      renderCheckbox(key, value, value_descriptions[index])
+    )
+    .join("");
+
+  const listContainerHTML = `<div class="checkbox-container">${checkboxes}</div>`;
   return document.createRange().createContextualFragment(listContainerHTML)
     .firstElementChild;
 }
