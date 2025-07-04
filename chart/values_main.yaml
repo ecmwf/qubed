@@ -1,3 +1,5 @@
+branch: Main
+
 stacServer:
   enabled: true
   replicas: 1

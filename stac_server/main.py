@@ -15,6 +15,7 @@ from frozendict import frozendict
 from qubed import Qube
 from qubed.tree_formatters import node_tree_to_html
 from pathlib import Path
+from markupsafe import Markup
 
 app = FastAPI()
 security = HTTPBearer()
@@ -95,16 +96,18 @@ async def deprecated():
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
-            "config": {
-                "message": "Hello from the dev server!",
-            },
-            "api_url": os.environ.get("API_URL", "/api/v2/"),
-        },
-    )
+    config = {
+        "request": request,
+        "api_url": os.environ.get("API_URL", "/api/v2/"),
+        "branch" : os.environ.get("branch", "local"),
+        "message": "",
+        "last_database_update": "",
+    }
+
+    if config["branch"] != "Main":
+        config["message"] = Markup(f"This server was built from the {config['branch']} branch of <a href='https://github.com/ecmwf/qubed'>qubed</a>. Here is <a href='https://qubed.lumi.apps.dte.destination-earth.eu/'>the stable deployment</a>")
+
+    return templates.TemplateResponse("index.html", config)
 
 
 @app.get("/api/v2/get/")

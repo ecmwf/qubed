@@ -28,6 +28,8 @@ spec:
               value: "https://{{ .Values.ingress.hostname }}/api/v2/"
             - name: QUBED_DATA_PREFIX
               value: "/code/qubed"
+            - name: branch
+              value: {{ .Values.branch }}
           ports:
             - containerPort: {{ .Values.stacServer.servicePort }}
 ---

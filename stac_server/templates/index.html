@@ -16,10 +16,10 @@
 <body>
     <div id="viewer">
         <div id="catalog-list">
-            <h2>STAC Items</h2>
-            <p>{{ config.get('message', '')}}</p>
+            <h2>Qubed Cataloque Browser</h2>
+            <p>{{message}}</p>
             <p>Select one <strong>or multiple</strong> items and then click next to iteratively build up a full request.</p>
-            <p>Last database update: <time>{{config.get('last_database_update', '')}}</time></p>
+            <p>Last database update: <time>{{last_database_update}}</time></p>
             <div class="sidebar-header">
                 <button id="previous-btn">Previous</button>
                 <a id="stac-anchor"><button id="stac-btn">Raw STAC</button></a>
@@ -41,7 +41,7 @@
 
             <!-- Container to show the current tree -->
             <h2>Currently Selected Tree</h2></summary>
-            <p>This shows the data <a href="https://qubed.readthedocs.io/en/latest/quickstart.html">qube</a> that matches with the current query. The leaves are the next set if available selections you can make. </p>
+            <p>This shows the data <a href="https://qubed.readthedocs.io/en/latest/quickstart.html">qube</a> that matches the current query. The leaves are the next set of available selections you can make. </p>
             <pre id = "qube"></pre>
 
             <details>
