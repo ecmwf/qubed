@@ -2,7 +2,7 @@ stacServer:
   enabled: true
   replicas: 1
   image:
-    repository: "eccr.ecmwf.int/qubed/stac_server"
+    repository: "eccr.ecmwf.int/qubed/stac_server_main"
     tag: "latest"
     pullPolicy: Always
   servicePort: 80
