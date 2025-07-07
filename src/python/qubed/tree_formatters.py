@@ -71,7 +71,7 @@ def summarize_node(
         node = node.children[0]
 
     # Add a "..." to represent nodes that we don't know about
-    if (not node.children) and (not node.is_leaf):
+    if (not node.children) and (not node.is_leaf()):
         summaries.append("...")
 
     return ", ".join(summaries), ",".join(paths), node
@@ -141,7 +141,7 @@ def summarize_node_html(
             break
         node = node.children[0]
 
-    if (not node.children) and (not node.is_leaf):
+    if (not node.children) and (not node.is_leaf()):
         summary = (
             '<span class="qubed-node" data-path="" title="Truncated Nodes">...</span>'
         )

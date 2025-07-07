@@ -4,10 +4,9 @@ from typing import TYPE_CHECKING, Any, Iterable
 
 import numpy as np
 
-from .value_types import QEnum
-
 if TYPE_CHECKING:
     from .Qube import Qube
+from .value_types import QEnum
 
 
 def make_node(

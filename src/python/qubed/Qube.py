@@ -20,12 +20,14 @@ from frozendict import frozendict
 from . import set_operations
 from .metadata import from_nodes
 from .protobuf.adapters import proto_to_qube, qube_to_proto
+from .selection import select
 from .tree_formatters import (
     HTML,
     _display,
     node_tree_to_html,
     node_tree_to_string,
 )
+from .types import NodeType
 from .value_types import (
     QEnum,
     ValueGroup,
@@ -46,12 +48,11 @@ class AxisInfo:
 class Qube:
     key: str
     values: ValueGroup
+    type: NodeType
     metadata: frozendict[str, np.ndarray] = field(
         default_factory=lambda: frozendict({}), compare=False
     )
     children: tuple[Qube, ...] = ()
-    is_root: bool = False
-    is_leaf: bool = False
     depth: int = field(default=0, compare=False)
     shape: tuple[int, ...] = field(default=(), compare=False)
 
@@ -61,9 +62,8 @@ class Qube:
         key: str,
         values: Iterable | QEnum | WildcardGroup,
         children: Iterable[Qube],
+        type: NodeType | None = None,
         metadata: Mapping[str, np.ndarray] = {},
-        is_root: bool = False,
-        is_leaf: bool | None = None,
         depth: int | None = None,
         shape: tuple[int, ...] | None = None,
     ) -> Qube:
@@ -72,18 +72,20 @@ class Qube:
         else:
             values = QEnum(values)
 
-        if not isinstance(values, WildcardGroup) and not is_root:
+        if not isinstance(values, WildcardGroup) and type is not NodeType.Root:
             assert len(values) > 0, "Nodes must have at least one value"
 
         children = tuple(sorted(children, key=lambda n: ((n.key, n.values.min()))))
+
+        if type is None:
+            type = NodeType.Leaf if len(children) == 0 else NodeType.Stem
 
         return cls(
             key,
             values=values,
             children=children,
+            type=type,
             metadata=frozendict(metadata),
-            is_root=is_root,
-            is_leaf=(not len(children)) if is_leaf is None else is_leaf,
             depth=depth if depth is not None else 0,
             shape=shape if shape is not None else (),
         )
@@ -94,10 +96,6 @@ class Qube:
             for child in children:
                 child.depth = depth + 1
                 child.shape = shape + (len(child.values),)
-                # for k, v in child.metadata.items():
-                #     assert v.shape == child.shape, (
-                #         f"Metadata here should have shape {child.shape} but instead is {v.shape}"
-                #     )
                 update_depth_shape(child.children, child.depth, child.shape)
 
         update_depth_shape(children, depth=0, shape=(1,))
@@ -105,11 +103,17 @@ class Qube:
         return cls.make_node(
             "root",
             values=QEnum(("root",)),
+            type=NodeType.Root,
             children=children,
             metadata=metadata,
-            is_root=True,
             shape=(1,),
         )
+
+    def is_leaf(self) -> bool:
+        return self.type is NodeType.Leaf
+
+    def is_root(self) -> bool:
+        return self.type is NodeType.Root
 
     def replace(self, **kwargs) -> Qube:
         shallow_dict = {
@@ -118,9 +122,9 @@ class Qube:
         return self.make_node(**shallow_dict)
 
     def summary(self) -> str:
-        if self.is_root:
+        if self.is_root():
             return self.key
-        return f"{self.key}={self.values.summary()}" if self.key != "root" else "root"
+        return f"{self.key}={self.values.summary()}"
 
     @classmethod
     def load(cls, path: str | Path) -> Qube:
@@ -148,12 +152,21 @@ class Qube:
     @classmethod
     def from_json(cls, json: dict) -> Qube:
         def from_json(json: dict, depth=0) -> Qube:
+            children = tuple(from_json(c, depth + 1) for c in json["children"])
+
+            if depth == 0:
+                type = NodeType.Root
+            elif len(children) == 0:
+                type = NodeType.Leaf
+            else:
+                type = NodeType.Stem
+
             return Qube.make_node(
                 key=json["key"],
                 values=values_from_json(json["values"]),
+                type=type,
                 metadata=frozendict(json["metadata"]) if "metadata" in json else {},
-                children=(from_json(c, depth + 1) for c in json["children"]),
-                is_root=(depth == 0),
+                children=children,
             )
 
         return from_json(json)
@@ -185,8 +198,8 @@ class Qube:
                     yield Qube.make_node(
                         key=key,
                         values=values,
+                        type=NodeType.Stem,
                         children={},
-                        is_leaf=False,
                     )
 
                 # Special case for Wildcard values
@@ -317,22 +330,22 @@ class Qube:
         return Qube.make_root([Qube.make_node(key, values_enum, self.children)])
 
     def __or__(self, other: Qube) -> Qube:
-        return set_operations.operation(
+        return set_operations.set_operation(
             self, other, set_operations.SetOperation.UNION, type(self)
         )
 
     def __and__(self, other: Qube) -> Qube:
-        return set_operations.operation(
+        return set_operations.set_operation(
             self, other, set_operations.SetOperation.INTERSECTION, type(self)
         )
 
     def __sub__(self, other: Qube) -> Qube:
-        return set_operations.operation(
+        return set_operations.set_operation(
             self, other, set_operations.SetOperation.DIFFERENCE, type(self)
         )
 
     def __xor__(self, other: Qube) -> Qube:
-        return set_operations.operation(
+        return set_operations.set_operation(
             self, other, set_operations.SetOperation.SYMMETRIC_DIFFERENCE, type(self)
         )
 
@@ -342,7 +355,7 @@ class Qube:
                 yield {self.key: value}
             for child in self.children:
                 for leaf in child.leaves():
-                    if not self.is_root:
+                    if not self.is_root():
                         yield {self.key: value, **leaf}
                     else:
                         yield leaf
@@ -353,7 +366,7 @@ class Qube:
                 yield ({self.key: value}, self)
             for child in self.children:
                 for leaf in child.leaf_nodes():
-                    if not self.is_root:
+                    if not self.is_root():
                         yield ({self.key: value, **leaf[0]}, leaf[1])
                     else:
                         yield leaf
@@ -376,14 +389,14 @@ class Qube:
                     indices=indices + (index,)
                 ):
                     # Don't output the key "root"
-                    if not self.is_root:
+                    if not self.is_root():
                         yield {self.key: value, **leaf}, metadata | indexed_metadata
                     else:
                         yield leaf, metadata
 
     def datacubes(self) -> Iterable[dict[str, Any | list[Any]]]:
         def to_list_of_cubes(node: Qube) -> Iterable[dict[str, Any | list[Any]]]:
-            if node.is_root:
+            if node.type is NodeType.Root:
                 for c in node.children:
                     yield from to_list_of_cubes(c)
 
@@ -490,93 +503,7 @@ class Qube:
         mode: Literal["strict", "relaxed"] = "relaxed",
         consume=False,
     ) -> Qube:
-        # Find any bare str values and replace them with [str]
-        _selection: dict[str, list[str] | Callable[[Any], bool]] = {}
-        for k, v in selection.items():
-            if isinstance(v, list):
-                _selection[k] = v
-            elif callable(v):
-                _selection[k] = v
-            else:
-                _selection[k] = [v]
-
-        def not_none(xs):
-            return tuple(x for x in xs if x is not None)
-
-        def select(
-            node: Qube,
-            selection: dict[str, list[str] | Callable[[Any], bool]],
-            matched: bool,
-        ) -> Qube | None:
-            # If this node has no children but there are still parts of the request
-            # that have not been consumed, then prune this whole branch
-            if consume and not node.children and selection:
-                return None
-
-            # If the key isn't in the selection then what we do depends on the mode:
-            # In strict mode we just stop here
-            # In next_level mode we include the next level down so you can tell what keys to add next
-            # In relaxed mode we skip the key if it't not in the request and carry on
-            if node.key not in selection:
-                if mode == "strict":
-                    return None
-
-                elif mode == "next_level":
-                    return node.replace(
-                        children=(),
-                        metadata=self.metadata
-                        | {"is_leaf": np.array([not bool(node.children)])},
-                    )
-
-                elif mode == "relaxed":
-                    pass
-                else:
-                    raise ValueError(f"Unknown mode argument {mode}")
-
-            # If the key IS in the selection then check if the values match
-            if node.key in _selection:
-                # If the key is specified, check if any of the values match
-                selection_criteria = _selection[node.key]
-                if callable(selection_criteria):
-                    values = QEnum((c for c in node.values if selection_criteria(c)))
-                elif isinstance(selection_criteria, list):
-                    values = QEnum((c for c in selection_criteria if c in node.values))
-                else:
-                    raise ValueError(f"Unknown selection type {selection_criteria}")
-
-                # Here modes don't matter because we've explicitly filtered on this key and found nothing
-                if not values:
-                    return None
-
-                matched = True
-                node = node.replace(values=values)
-
-            if consume:
-                selection = {k: v for k, v in selection.items() if k != node.key}
-
-            # Prune nodes that had had all their children pruned
-            new_children = not_none(
-                select(c, selection, matched) for c in node.children
-            )
-
-            if node.children and not new_children:
-                return None
-
-            metadata = dict(node.metadata)
-
-            if mode == "next_level":
-                metadata["is_leaf"] = np.array([not bool(node.children)])
-
-            return node.replace(
-                children=new_children,
-                metadata=metadata,
-            )
-
-        return self.replace(
-            children=not_none(
-                select(c, _selection, matched=False) for c in self.children
-            )
-        )
+        return select(self, selection, mode, consume)
 
     def span(self, key: str) -> list[str]:
         """
@@ -593,7 +520,7 @@ class Qube:
         for c in self.children:
             for k, v in c.axes().items():
                 axes[k].update(v)
-        if not self.is_root:
+        if not self.is_root():
             axes[self.key].update(self.values)
         return dict(axes)
 
@@ -605,7 +532,7 @@ class Qube:
             for k, info in c.axes_info(depth=depth + 1).items():
                 axes[k].combine(info)
 
-        if not self.is_root:
+        if not self.is_root():
             axes[self.key].combine(
                 AxisInfo(
                     key=self.key,
@@ -644,7 +571,7 @@ class Qube:
 
         def union(a: Qube, b: Qube) -> Qube:
             b = type(self).make_root(children=(b,))
-            out = set_operations.operation(
+            out = set_operations.set_operation(
                 a, b, set_operations.SetOperation.UNION, type(self)
             )
             return out

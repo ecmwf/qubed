@@ -316,7 +316,7 @@ def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
 
 
 # @line_profiler.profile
-def operation(
+def set_operation(
     A: Qube, B: Qube, operation_type: SetOperation, node_type, depth=0
 ) -> Qube | None:
     # if logger.getEffectiveLevel() <= logging.DEBUG:
@@ -325,9 +325,8 @@ def operation(
     #     B.display(name=pad() + "B")
 
     assert A.key == B.key
-    assert A.is_root == B.is_root
+    assert A.type == B.type
     assert A.values == B.values
-    assert A.is_root == B.is_root
     assert A.depth == B.depth
 
     new_children: list[Qube] = []
@@ -341,7 +340,7 @@ def operation(
     # For every node group, perform the set operation
     for A_nodes, B_nodes in nodes_by_key.values():
         output = list(
-            _operation(A_nodes, B_nodes, operation_type, node_type, depth + 1)
+            _set_operation(A_nodes, B_nodes, operation_type, node_type, depth + 1)
         )
         new_children.extend(output)
 
@@ -350,7 +349,7 @@ def operation(
     # If there are now no children as a result of the operation
     # we can prune this branch by returning None or an empty root node
     if (A.children or B.children) and not new_children:
-        if A.is_root:
+        if A.is_root():
             # if logger.getEffectiveLevel() <= logging.DEBUG:
             #     print("output: root")
             return node_type.make_root(children=())
@@ -386,7 +385,7 @@ def recursively_take_from_metadata(q: Qube, axis: int, indices: Indices) -> Qube
 
 
 # @line_profiler.profile
-def _operation(
+def _set_operation(
     A: list[Qube],
     B: list[Qube],
     operation_type: SetOperation,
@@ -449,7 +448,7 @@ def _operation(
                 set_ops_result.intersection_A.values
                 and set_ops_result.intersection_B.values
             ):
-                result = operation(
+                result = set_operation(
                     make_new_node(node_a, set_ops_result.intersection_A),
                     make_new_node(node_b, set_ops_result.intersection_B),
                     operation_type,
@@ -765,3 +764,53 @@ def shallow_concat_metadata(
     # print(f"{[v.shape for v in metadata.values()]}")
 
     return shape, metadata
+
+
+def inplace_set_operation(
+    A: Qube, B: Qube, operation_type: SetOperation, node_type, depth=0
+) -> Qube | None:
+    assert A.key == B.key
+    assert A.type == B.type
+    assert A.values == B.values
+    assert A.depth == B.depth
+
+    new_children: list[Qube] = []
+
+    # Identify any metadata attached to A and B that differs and push it down one level
+    stayput_metadata, A, B = pushdown_metadata(A, B)
+
+    # Group the children of A and B into node groups with common keys
+    nodes_by_key = group_children_by_key(A, B)
+
+    # For every node group, perform the set operation
+    for A_nodes, B_nodes in nodes_by_key.values():
+        output = list(
+            _set_operation(A_nodes, B_nodes, operation_type, node_type, depth + 1)
+        )
+        new_children.extend(output)
+
+    # print(f"{'  '*depth}operation {operation_type.name} [{A}] [{B}] new_children = [{new_children}]")
+
+    # If there are now no children as a result of the operation
+    # we can prune this branch by returning None or an empty root node
+    if (A.children or B.children) and not new_children:
+        if A.is_root():
+            # if logger.getEffectiveLevel() <= logging.DEBUG:
+            #     print("output: root")
+            return node_type.make_root(children=())
+        else:
+            # if logger.getEffectiveLevel() <= logging.DEBUG:
+            #     print("output: None")
+            return None
+
+    # Whenever we modify children need to recompress them
+    new_children = list(compress_children(new_children))
+
+    out = A.replace(
+        children=new_children,
+        metadata=stayput_metadata,
+    )
+    # if logger.getEffectiveLevel() <= logging.DEBUG:
+    #     out.display(name=f"{pad()}output")
+
+    return out
