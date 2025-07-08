@@ -5,22 +5,29 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-import json
 from collections import defaultdict
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import cached_property
-from pathlib import Path
-from typing import Any, Iterable, Iterator, Literal, Mapping, Sequence
+from typing import Any, Iterable, Iterator, Literal, Mapping
 
 import numpy as np
 from frozendict import frozendict
 
 from . import set_operations
 from .metadata import from_nodes
-from .protobuf.adapters import proto_to_qube, qube_to_proto
+from .protobuf.adapters import from_protobuf, to_protobuf
 from .selection import select
+from .serialisation import (
+    from_datacube,
+    from_dict,
+    from_json,
+    from_tree,
+    load,
+    to_dict,
+    to_json,
+)
 from .tree_formatters import (
     HTML,
     _display,
@@ -32,7 +39,6 @@ from .value_types import (
     QEnum,
     ValueGroup,
     WildcardGroup,
-    values_from_json,
 )
 
 
@@ -67,6 +73,10 @@ class Qube:
         depth: int | None = None,
         shape: tuple[int, ...] | None = None,
     ) -> Qube:
+        """
+        The only safe way to make new qubed nodes, this enforces various invariants on the qubed.
+        Specifically the ordering of the children must be deterministic and the same for all nodes with identical children.
+        """
         if isinstance(values, ValueGroup):
             values = values
         else:
@@ -126,160 +136,23 @@ class Qube:
             return self.key
         return f"{self.key}={self.values.summary()}"
 
-    @classmethod
-    def load(cls, path: str | Path) -> Qube:
-        with open(path, "r") as f:
-            return Qube.from_json(json.load(f))
+    # Serialisation methods, see serialisation.py
+    from_datacube = classmethod(from_datacube)
 
-    @classmethod
-    def from_datacube(cls, datacube: Mapping[str, str | Sequence[str]]) -> Qube:
-        key_vals = list(datacube.items())[::-1]
+    from_dict = classmethod(from_dict)
+    to_dict = to_dict
 
-        children: list[Qube] = []
-        for key, values in key_vals:
-            values_group: ValueGroup
-            if values == "*":
-                values_group = WildcardGroup()
-            elif isinstance(values, list):
-                values_group = QEnum(values)
-            else:
-                values_group = QEnum([values])
+    from_json = classmethod(from_json)
+    to_json = to_json
 
-            children = [cls.make_node(key, values_group, children)]
+    from_nodes = classmethod(from_nodes)  # See metadata.py
 
-        return cls.make_root(children)
+    load = classmethod(load)
 
-    @classmethod
-    def from_json(cls, json: dict) -> Qube:
-        def from_json(json: dict, depth=0) -> Qube:
-            children = tuple(from_json(c, depth + 1) for c in json["children"])
+    from_protobuf = classmethod(from_protobuf)
+    to_protobuf = to_protobuf
 
-            if depth == 0:
-                type = NodeType.Root
-            elif len(children) == 0:
-                type = NodeType.Leaf
-            else:
-                type = NodeType.Stem
-
-            return Qube.make_node(
-                key=json["key"],
-                values=values_from_json(json["values"]),
-                type=type,
-                metadata=frozendict(json["metadata"]) if "metadata" in json else {},
-                children=children,
-            )
-
-        return from_json(json)
-
-    @classmethod
-    def from_nodes(cls, nodes: dict[str, dict], add_root: bool = True):
-        return from_nodes(cls, nodes, add_root)
-
-    def to_json(self) -> dict:
-        def to_json(node: Qube) -> dict:
-            return {
-                "key": node.key,
-                "values": node.values.to_json(),
-                "metadata": dict(node.metadata),
-                "children": [to_json(c) for c in node.children],
-            }
-
-        return to_json(self)
-
-    @classmethod
-    def from_dict(cls, d: dict) -> Qube:
-        def from_dict(d: dict) -> Iterator[Qube]:
-            for k, children in d.items():
-                key, values = k.split("=")
-                values = values.split("/")
-                # children == {"..." : {}}
-                # is a special case to represent trees with leaves we don't know about
-                if frozendict(children) == frozendict({"...": {}}):
-                    yield Qube.make_node(
-                        key=key,
-                        values=values,
-                        type=NodeType.Stem,
-                        children={},
-                    )
-
-                # Special case for Wildcard values
-                if values == ["*"]:
-                    values = WildcardGroup()
-                else:
-                    values = QEnum(values)
-
-                yield Qube.make_node(
-                    key=key,
-                    values=values,
-                    children=from_dict(children),
-                )
-
-        return Qube.make_root(list(from_dict(d)))
-
-    def to_dict(self) -> dict:
-        def to_dict(q: Qube) -> tuple[str, dict]:
-            key = f"{q.key}={','.join(str(v) for v in q.values)}"
-            return key, dict(to_dict(c) for c in q.children)
-
-        return to_dict(self)[1]
-
-    @classmethod
-    def from_protobuf(cls, msg: bytes) -> Qube:
-        return proto_to_qube(cls, msg)
-
-    def to_protobuf(self) -> bytes:
-        return qube_to_proto(self)
-
-    @classmethod
-    def from_tree(cls, tree_str):
-        lines = tree_str.splitlines()
-        stack = []
-        root = {}
-
-        initial_indent = None
-        for line in lines:
-            if not line.strip():
-                continue
-            # Remove tree characters and measure indent level
-            stripped = line.lstrip(" │├└─")
-            indent = (len(line) - len(stripped)) // 4
-            if initial_indent is None:
-                initial_indent = indent
-            indent = indent - initial_indent
-
-            # Split multiple key=value parts into nested structure
-            keys = [item.strip() for item in stripped.split(",")]
-            current = bottom = {}
-            for key in reversed(keys):
-                current = {key: current}
-
-            # Adjust the stack to current indent level
-            # print(len(stack), stack)
-            while len(stack) > indent:
-                stack.pop()
-
-            if stack:
-                # Add to the dictionary at current stack level
-                parent = stack[-1]
-                key = list(current.keys())[0]
-                if key in parent:
-                    raise ValueError(
-                        f"This function doesn't yet support reading in uncompressed trees, repeated key is {key}"
-                    )
-                parent[key] = current[key]
-            else:
-                # Top level
-                key = list(current.keys())[0]
-                if root:
-                    raise ValueError(
-                        f"This function doesn't yet support reading in uncompressed trees, repeated key is {key}"
-                    )
-                root = current[key]
-
-            # Push to the stack
-            stack.append(bottom)
-
-        return cls.from_dict(root)
+    from_tree = classmethod(from_tree)
 
     @classmethod
     def empty(cls) -> Qube:
@@ -330,24 +203,32 @@ class Qube:
         return Qube.make_root([Qube.make_node(key, values_enum, self.children)])
 
     def __or__(self, other: Qube) -> Qube:
-        return set_operations.set_operation(
+        out = set_operations.set_operation(
             self, other, set_operations.SetOperation.UNION, type(self)
         )
+        assert out is not None
+        return out
 
     def __and__(self, other: Qube) -> Qube:
-        return set_operations.set_operation(
+        out = set_operations.set_operation(
             self, other, set_operations.SetOperation.INTERSECTION, type(self)
         )
+        assert out is not None
+        return out
 
     def __sub__(self, other: Qube) -> Qube:
-        return set_operations.set_operation(
+        out = set_operations.set_operation(
             self, other, set_operations.SetOperation.DIFFERENCE, type(self)
         )
+        assert out is not None
+        return out
 
     def __xor__(self, other: Qube) -> Qube:
-        return set_operations.set_operation(
+        out = set_operations.set_operation(
             self, other, set_operations.SetOperation.SYMMETRIC_DIFFERENCE, type(self)
         )
+        assert out is not None
+        return out
 
     def leaves(self) -> Iterable[dict[str, str]]:
         for value in self.values:

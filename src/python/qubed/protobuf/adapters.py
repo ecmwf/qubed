@@ -117,7 +117,7 @@ def _qube_to_proto(q: Qube) -> qube_pb2.Qube:
     )
 
 
-def qube_to_proto(q: Qube) -> bytes:
+def to_protobuf(q: Qube) -> bytes:
     return _qube_to_proto(q).SerializeToString()
 
 
@@ -135,7 +135,7 @@ def _proto_to_qube(cls: type, msg: qube_pb2.Qube) -> Qube:
     )
 
 
-def proto_to_qube(cls: type, wire: bytes) -> Qube:
+def from_protobuf(cls: type, wire: bytes) -> Qube:
     msg = qube_pb2.Qube()
     msg.ParseFromString(wire)
     return _proto_to_qube(cls, msg)
