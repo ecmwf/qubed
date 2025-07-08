@@ -794,23 +794,9 @@ def inplace_set_operation(
     # If there are now no children as a result of the operation
     # we can prune this branch by returning None or an empty root node
     if (A.children or B.children) and not new_children:
-        if A.is_root():
-            # if logger.getEffectiveLevel() <= logging.DEBUG:
-            #     print("output: root")
-            return node_type.make_root(children=())
-        else:
-            # if logger.getEffectiveLevel() <= logging.DEBUG:
-            #     print("output: None")
-            return None
+        return None
 
     # Whenever we modify children need to recompress them
     new_children = list(compress_children(new_children))
-
-    out = A.replace(
-        children=new_children,
-        metadata=stayput_metadata,
-    )
-    # if logger.getEffectiveLevel() <= logging.DEBUG:
-    #     out.display(name=f"{pad()}output")
-
-    return out
+    A.children = tuple(sorted(new_children, key=lambda n: ((n.key, n.values.min()))))
+    A.metadata = stayput_metadata
