@@ -800,3 +800,95 @@ def inplace_set_operation(
     new_children = list(compress_children(new_children))
     A.children = tuple(sorted(new_children, key=lambda n: ((n.key, n.values.min()))))
     A.metadata = stayput_metadata
+
+
+def _inplace_set_operation(
+    A: list[Qube],
+    B: list[Qube],
+    operation_type: SetOperation,
+    node_type,
+    depth: int,
+) -> Iterable[Qube]:
+    """ """
+    keep_only_A, keep_intersection, keep_only_B = operation_type.value
+
+    # We're going to progressively remove values from the starting nodes as we do intersections
+    # So we make a node -> ValuesIndices mapping here for both a and b
+    only_a: dict[Qube, ValuesIndices] = {
+        n: ValuesIndices.from_values(n.values) for n in A
+    }
+    only_b: dict[Qube, ValuesIndices] = {
+        n: ValuesIndices.from_values(n.values) for n in B
+    }
+
+    def make_new_node(source: Qube, values_indices: ValuesIndices):
+        # Check if anything has changed
+        if source.values != values_indices.values:
+            node = source.replace(
+                values=values_indices.values,
+            )
+            return recursively_take_from_metadata(
+                node, node.depth, values_indices.indices
+            )
+        return source
+
+    # Iterate over all pairs (node_A, node_B) and perform the shallow set operation
+    # Update our copy of the original node to remove anything that appears in an intersection
+    for node_a in A:
+        for node_b in B:
+            set_ops_result = shallow_set_operation(only_a[node_a], only_b[node_b])
+
+            # Save reduced values back to nodes
+            only_a[node_a] = set_ops_result.only_A
+            only_b[node_b] = set_ops_result.only_B
+
+            # If there was a non empty intersection we need to go deeper!
+            if (
+                set_ops_result.intersection_A.values
+                and set_ops_result.intersection_B.values
+            ):
+                result = set_operation(
+                    make_new_node(node_a, set_ops_result.intersection_A),
+                    make_new_node(node_b, set_ops_result.intersection_B),
+                    operation_type,
+                    node_type,
+                    depth=depth + 1,
+                )
+                if result is not None:
+                    # If we're doing a difference or xor we might want to throw away the intersection
+                    # However we can only do this once we get to the leaf nodes, otherwise we'll
+                    # throw away nodes too early!
+                    # Consider Qube(root, a=1, b=1/2) - Qube(root, a=1, b=1)
+                    # We can easily throw away the whole a node by accident here!
+                    if keep_intersection or result.children:
+                        # if logger.getEffectiveLevel() <= logging.DEBUG:
+                        #     result.display(f"{pad()} intersection out")
+                        yield result
+
+            # If the intersection is empty we're done
+            # the other bits will get emitted later from only_a and only_b
+            elif (
+                not set_ops_result.intersection_A.values
+                and not set_ops_result.intersection_B.values
+            ):
+                continue
+            else:
+                raise ValueError(
+                    f"Only one of set_ops_result.intersection_A and set_ops_result.intersection_B is None, I didn't think that could happen! {set_ops_result = }"
+                )
+
+    if keep_only_A:
+        for node, vi in only_a.items():
+            if vi.values:
+                node = make_new_node(node, vi)
+                # if logger.getEffectiveLevel() <= logging.DEBUG:
+                #     node.display(f"{pad()} only_A out")
+                yield node
+
+    if keep_only_B:
+        for node, vi in only_b.items():
+            if vi.values:
+                node = make_new_node(node, vi)
+                # if logger.getEffectiveLevel() <= logging.DEBUG:
+                #     node.display(f"{pad()} only_B out")
+                yield node
