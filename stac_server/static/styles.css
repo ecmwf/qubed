@@ -24,7 +24,7 @@ body {
 }
 
 #catalog-list {
-    width: 30%;
+    max-width: 400px;
     padding: 10px;
     overflow-y: scroll;
     background-color: var(--background-grey);
@@ -63,6 +63,9 @@ canvas {
 
 /* Updated CSS for the item elements in the catalog list */
 .item {
+    display: flex;
+    flex-direction: column;
+
     background-color: white;
     border: 1px solid #ddd;
     padding: 10px;
@@ -266,4 +269,20 @@ span.value:hover {
 
 details h2 {
     font-size: medium;
+}
+
+.has-data {
+    background-color: rgba(160, 255, 160, 0.346);
+}
+
+
+#date-picker {
+    align-self: center;
+    width: calc(50%);
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+div.air-datepicker {
+    align-self: center;;
 }

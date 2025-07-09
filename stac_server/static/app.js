@@ -1,9 +1,13 @@
-// app.js
+function toHTML(string) {
+  return document.createRange().createContextualFragment(string)
+    .firstElementChild;
+}
 
 // Take the query string and stick it on the API URL
 function getSTACUrlFromQuery() {
   const params = new URLSearchParams(window.location.search);
 
+  let api_url;
   // get current window url and remove path part
   if (window.API_URL.startsWith("http")) {
     // Absolute URL: Use it directly
@@ -161,7 +165,43 @@ async function createCatalogItem(link, itemsContainer) {
       }</p>
     `;
 
-    if (variable.enum && variable.enum.length > 0) {
+    if (key === "date") {
+      console.log("Date", variable, exports);
+
+      itemDiv.appendChild(toHTML("<input id='date-picker'></input>"));
+      let dates = variable.enum;
+      itemDiv.querySelector("button.all").style.display = "none";
+
+      let picker = new AirDatepicker("#date-picker", {
+        position: "bottom center",
+        inline: true,
+        locale: exports.default,
+        range: true,
+        multipleDatesSeparator: " - ",
+        onRenderCell({ date, cellType }) {
+          let isDay = cellType === "day",
+            _date =
+              String(date.getFullYear()).padStart(4, "0") +
+              String(date.getMonth()).padStart(2, "0") +
+              String(date.getDate()).padStart(2, "0"),
+            shouldChangeContent = isDay && dates.includes(_date);
+
+          return {
+            classes: shouldChangeContent ? "has-data" : undefined,
+          };
+        },
+      });
+      console.log(picker);
+
+      //   const cal = new WinkelCalendar({
+      //     container: "date-picker-container",
+      //     // bigBanner: true,
+      //     format: "YYYY-MM-DD",
+      //     // onSelect: onDateChange,
+      //     range: true,
+      //     multipleDatesSeparator: "/to/",
+      //   });
+    } else if (variable.enum && variable.enum.length > 0) {
       const checkbox_list = renderCheckboxList(link);
       itemDiv.appendChild(checkbox_list);
 
@@ -182,9 +222,8 @@ async function createCatalogItem(link, itemsContainer) {
         }
       });
     } else {
-      const any = `<input type="text" name="${link.title}">`;
-      const anyNode = document.createRange().createContextualFragment(any);
-      itemDiv.appendChild(anyNode);
+      const any = toHTML(`<input type="text" name="${link.title}">`);
+      itemDiv.appendChild(any);
     }
   } catch (error) {
     console.error("Error loading item data:", error);
@@ -230,9 +269,7 @@ function renderCheckboxList(link) {
     )
     .join("");
 
-  const listContainerHTML = `<div class="checkbox-container">${checkboxes}</div>`;
-  return document.createRange().createContextualFragment(listContainerHTML)
-    .firstElementChild;
+  return toHTML(`<div class="checkbox-container">${checkboxes}</div>`);
 }
 
 // Render catalog items in the sidebar

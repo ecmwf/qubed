@@ -12,6 +12,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
 
+    <link rel="stylesheet" href="/static/modules/airdatepicker/air-datepicker.css" />
+    <script src="/static/modules/airdatepicker/air-datepicker.js"></script>
+    <script>
+        var exports = {
+        default: {}
+        }
+    </script>
+
+    <script src="/static/modules/airdatepicker/locale/en.js"></script>
+
+    <script src="/static/app.js" defer type="module"></script>
 </head>
 <body>
     <div id="viewer">
@@ -80,6 +91,5 @@ qube.print()
     <script>
         window.API_URL = "{{ api_url }}stac/";
     </script>
-    <script src="/static/app.js"></script>
 </body>
 </html>

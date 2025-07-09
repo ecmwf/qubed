@@ -35,10 +35,13 @@ mars_language = {}
 prefix = Path(os.environ.get("QUBED_DATA_PREFIX", "../"))
 # For docker containers the prefix is usually /code/qubed
 
-with open(prefix / "tests/example_qubes/full_dt.json") as f:
-    qube = Qube.from_json(json.load(f))
+# with open(prefix / "tests/example_qubes/full_dt.json") as f:
+#     qube = Qube.from_json(json.load(f))
 
-with open(prefix / "tests/example_qubes/od.json") as f:
+# with open(prefix / "tests/example_qubes/od.json") as f:
+#     qube = qube | Qube.from_json(json.load(f))
+
+with open(prefix / "tests/example_qubes/test.json") as f:
     qube = qube | Qube.from_json(json.load(f))
 
 with open(prefix / "config/language/language.yaml", "r") as f:
@@ -138,12 +141,14 @@ async def union(
 
 
 def follow_query(request: dict[str, str | list[str]], qube: Qube):
-    s = qube.select(request, mode="next_level", consume=False)
-    by_path = defaultdict(lambda: {"paths": set(), "values": set()})
+    s = qube.select(request, mode="next_level", consume=False).compress()
+    by_path = defaultdict(lambda: {"paths": set(), "values": set(), "dtypes": set()})
 
     for request, node in s.leaf_nodes():
-        if not node.metadata.get("is_leaf", True):
+        # Find any bits of the tree that aren't finished yet i.e they have no children but are not leaf nodes
+        if not node.is_leaf():
             by_path[node.key]["values"].update(node.values.values)
+            by_path[node.key]["dtypes"].add(node.values.dtype)
             by_path[node.key]["paths"].add(frozendict(request))
 
     return s, [
@@ -151,6 +156,7 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
             "paths": list(v["paths"]),
             "key": key,
             "values": sorted(v["values"], reverse=True),
+            "dtypes": list(v["dtypes"]),
         }
         for key, v in by_path.items()
     ]
@@ -241,8 +247,12 @@ async def get_STAC(
     ]
     request_params = "&".join(kvs)
 
-    def make_link(key_name, paths, values):
+    def make_link(path):
         """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
+        key_name = path["key"]
+        values = path["values"]
+        dtypes = path["dtypes"]
+
         href_template = f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
 
         values_from_mars_language = mars_language.get(key_name, {}).get("values", [])
@@ -265,7 +275,7 @@ async def get_STAC(
             "type": "application/json",
             "variables": {
                 key_name: {
-                    "type": "string",
+                    "type": dtypes,
                     "description": mars_language.get(key_name, {}).get(
                         "description", ""
                     ),
@@ -298,11 +308,11 @@ async def get_STAC(
         "stac_version": "1.0.0",
         "id": "root" if not request else "/stac?" + request_params,
         "description": "STAC collection representing potential children of this request",
-        "links": [make_link(p["key"], p["paths"], p["values"]) for p in paths],
+        "links": [make_link(p) for p in paths],
         "debug": {
             # "request": request,
             "descriptions": descriptions,
-            # "paths": paths,
+            "paths": paths,
             "qube": node_tree_to_html(
                 q,
                 collapse=True,
