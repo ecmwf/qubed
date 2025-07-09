@@ -40,6 +40,9 @@ from .value_types import QEnum, ValueGroup, WildcardGroup
 if TYPE_CHECKING:
     from .Qube import Qube
 
+
+DEBUG = False
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -146,6 +149,10 @@ def shallow_qenum_set_operation(A: ValuesIndices, B: ValuesIndices) -> SetOpResu
 
     Note that intersection_A and intersection_B contain the same values but the indices are different.
     """
+    assert A.values.dtype == B.values.dtype, (
+        f"A node has {A.values.dtype=} but B node has {B.values.dtype=}"
+    )
+    dtype = A.values.dtype
 
     # create four groups that map value -> index
     only_A: dict[Any, int] = {val: i for i, val in A.enumerate()}
@@ -162,7 +169,7 @@ def shallow_qenum_set_operation(A: ValuesIndices, B: ValuesIndices) -> SetOpResu
 
     def package(values_indices: dict[Any, int]) -> ValuesIndices:
         return ValuesIndices(
-            values=QEnum(list(values_indices.keys())),
+            values=QEnum(list(values_indices.keys()), dtype=dtype),
             indices=tuple(values_indices.values()),
         )
 
@@ -319,10 +326,10 @@ def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
 def set_operation(
     A: Qube, B: Qube, operation_type: SetOperation, node_type, depth=0
 ) -> Qube | None:
-    # if logger.getEffectiveLevel() <= logging.DEBUG:
-    #     print(f"{pad()}operation({operation_type.name}, depth={depth})")
-    #     A.display(name=pad() + "A")
-    #     B.display(name=pad() + "B")
+    if DEBUG:
+        print(f"{pad()}operation({operation_type.name}, depth={depth})")
+        A.display(name=pad() + "A")
+        B.display(name=pad() + "B")
 
     assert A.key == B.key
     assert A.type == B.type
@@ -399,12 +406,12 @@ def _set_operation(
     the same key but different values. We then loop over all pairs of children from each list
       and compute the intersection.
     """
-    # if logger.getEffectiveLevel() <= logging.DEBUG:
-    #     print(f"{pad()}_operation({operation_type.name}, depth={depth})")
-    #     for i, q in enumerate(A):
-    #         q.display(name=f"{pad()}A_{i}")
-    #     for i, q in enumerate(B):
-    #         q.display(name=f"{pad()}B_{i}")
+    if DEBUG:
+        print(f"{pad()}_operation({operation_type.name}, depth={depth})")
+        for i, q in enumerate(A):
+            q.display(name=f"{pad()}A_{i}")
+        for i, q in enumerate(B):
+            q.display(name=f"{pad()}B_{i}")
 
     keep_only_A, keep_intersection, keep_only_B = operation_type.value
 
@@ -501,10 +508,10 @@ def compress_children(children: Iterable[Qube]) -> tuple[Qube, ...]:
     Helper method that only compresses a set of nodes, and doesn't do it recursively.
     Used in Qubed.compress but also to maintain compression in the set operations above.
     """
-    # if logger.getEffectiveLevel() <= logging.DEBUG:
-    #     print(f"{pad()}compress_children")
-    #     for i, qube in enumerate(children):
-    #         qube.display(f"{pad()}in_{i}")
+    if DEBUG:
+        print(f"{pad()}compress_children")
+        for i, qube in enumerate(children):
+            qube.display(f"{pad()}in_{i}")
 
     # Take the set of new children and see if any have identical key, metadata and children
     # the values may different and will be collapsed into a single node
@@ -550,10 +557,10 @@ def merge_values(qubes: list[Qube]) -> Qube:
     value_type = type(example.values)
     axis = example.depth
 
-    # if logger.getEffectiveLevel() <= logging.DEBUG:
-    #     print(f"{pad()}merge_values --- {axis = }")
-    #     for i, qube in enumerate(qubes):
-    #         qube.display(f"{pad()}in_{i}")
+    if DEBUG:
+        print(f"{pad()}merge_values --- {axis = }")
+        for i, qube in enumerate(qubes):
+            qube.display(f"{pad()}in_{i}")
 
     # Merge the values
     if value_type is QEnum:
@@ -567,7 +574,7 @@ def merge_values(qubes: list[Qube]) -> Qube:
         # that come out of np.unique, we compute them ourselves using the sorting indices
         values = [values[i] for i in sorting_indices]
 
-        values = QEnum(values)
+        values = QEnum(values, dtype=example.values.dtype)
 
     elif value_type is WildcardGroup:
         values = example.values
@@ -681,8 +688,10 @@ def concat_metadata(
     # Exploit the fact that they have the same shape and ordering
     example = qubes[0]
 
-    # print(f"concat_metadata --- {axis = }, qubes:")
-    # for qube in qubes: qube.display()
+    if DEBUG:
+        print(f"concat_metadata --- {axis = }, qubes:")
+        for qube in qubes:
+            qube.display()
 
     qubes = pushdown_metadata_many(qubes)
 
@@ -731,11 +740,12 @@ def shallow_concat_metadata(
     # Collect metadata by key
     metadata_groups = {k: [m[k] for m in metadata_list] for k in example.keys()}
 
-    # print("shallow_concat_metadata")
-    # print(f"{concatenation_axis = }")
-    # print(f"{sorting_indices = }")
-    # for k, metadata_group in metadata_groups.items():
-    #     print(k, metadata_group)
+    if DEBUG:
+        print("shallow_concat_metadata")
+        print(f"{concatenation_axis = }")
+        print(f"{sorting_indices = }")
+        for k, metadata_group in metadata_groups.items():
+            print(k, [m.shape for m in metadata_group])
 
     # Concatenate the metadata together and sort it according the given indices
     def _concate_metadata_group(
@@ -764,131 +774,3 @@ def shallow_concat_metadata(
     # print(f"{[v.shape for v in metadata.values()]}")
 
     return shape, metadata
-
-
-def inplace_set_operation(
-    A: Qube, B: Qube, operation_type: SetOperation, node_type, depth=0
-) -> Qube | None:
-    assert A.key == B.key
-    assert A.type == B.type
-    assert A.values == B.values
-    assert A.depth == B.depth
-
-    new_children: list[Qube] = []
-
-    # Identify any metadata attached to A and B that differs and push it down one level
-    stayput_metadata, A, B = pushdown_metadata(A, B)
-
-    # Group the children of A and B into node groups with common keys
-    nodes_by_key = group_children_by_key(A, B)
-
-    # For every node group, perform the set operation
-    for A_nodes, B_nodes in nodes_by_key.values():
-        output = list(
-            _set_operation(A_nodes, B_nodes, operation_type, node_type, depth + 1)
-        )
-        new_children.extend(output)
-
-    # print(f"{'  '*depth}operation {operation_type.name} [{A}] [{B}] new_children = [{new_children}]")
-
-    # If there are now no children as a result of the operation
-    # we can prune this branch by returning None or an empty root node
-    if (A.children or B.children) and not new_children:
-        return None
-
-    # Whenever we modify children need to recompress them
-    new_children = list(compress_children(new_children))
-    A.children = tuple(sorted(new_children, key=lambda n: ((n.key, n.values.min()))))
-    A.metadata = stayput_metadata
-
-
-def _inplace_set_operation(
-    A: list[Qube],
-    B: list[Qube],
-    operation_type: SetOperation,
-    node_type,
-    depth: int,
-) -> Iterable[Qube]:
-    """ """
-    keep_only_A, keep_intersection, keep_only_B = operation_type.value
-
-    # We're going to progressively remove values from the starting nodes as we do intersections
-    # So we make a node -> ValuesIndices mapping here for both a and b
-    only_a: dict[Qube, ValuesIndices] = {
-        n: ValuesIndices.from_values(n.values) for n in A
-    }
-    only_b: dict[Qube, ValuesIndices] = {
-        n: ValuesIndices.from_values(n.values) for n in B
-    }
-
-    def make_new_node(source: Qube, values_indices: ValuesIndices):
-        # Check if anything has changed
-        if source.values != values_indices.values:
-            node = source.replace(
-                values=values_indices.values,
-            )
-            return recursively_take_from_metadata(
-                node, node.depth, values_indices.indices
-            )
-        return source
-
-    # Iterate over all pairs (node_A, node_B) and perform the shallow set operation
-    # Update our copy of the original node to remove anything that appears in an intersection
-    for node_a in A:
-        for node_b in B:
-            set_ops_result = shallow_set_operation(only_a[node_a], only_b[node_b])
-
-            # Save reduced values back to nodes
-            only_a[node_a] = set_ops_result.only_A
-            only_b[node_b] = set_ops_result.only_B
-
-            # If there was a non empty intersection we need to go deeper!
-            if (
-                set_ops_result.intersection_A.values
-                and set_ops_result.intersection_B.values
-            ):
-                result = set_operation(
-                    make_new_node(node_a, set_ops_result.intersection_A),
-                    make_new_node(node_b, set_ops_result.intersection_B),
-                    operation_type,
-                    node_type,
-                    depth=depth + 1,
-                )
-                if result is not None:
-                    # If we're doing a difference or xor we might want to throw away the intersection
-                    # However we can only do this once we get to the leaf nodes, otherwise we'll
-                    # throw away nodes too early!
-                    # Consider Qube(root, a=1, b=1/2) - Qube(root, a=1, b=1)
-                    # We can easily throw away the whole a node by accident here!
-                    if keep_intersection or result.children:
-                        # if logger.getEffectiveLevel() <= logging.DEBUG:
-                        #     result.display(f"{pad()} intersection out")
-                        yield result
-
-            # If the intersection is empty we're done
-            # the other bits will get emitted later from only_a and only_b
-            elif (
-                not set_ops_result.intersection_A.values
-                and not set_ops_result.intersection_B.values
-            ):
-                continue
-            else:
-                raise ValueError(
-                    f"Only one of set_ops_result.intersection_A and set_ops_result.intersection_B is None, I didn't think that could happen! {set_ops_result = }"
-                )
-
-    if keep_only_A:
-        for node, vi in only_a.items():
-            if vi.values:
-                node = make_new_node(node, vi)
-                # if logger.getEffectiveLevel() <= logging.DEBUG:
-                #     node.display(f"{pad()} only_A out")
-                yield node
-
-    if keep_only_B:
-        for node, vi in only_b.items():
-            if vi.values:
-                node = make_new_node(node, vi)
-                # if logger.getEffectiveLevel() <= logging.DEBUG:
-                #     node.display(f"{pad()} only_B out")
-                yield node

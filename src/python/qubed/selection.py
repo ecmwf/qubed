@@ -2,17 +2,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping
 
-import numpy as np
+
+from .set_operations import recursively_take_from_metadata
 
 if TYPE_CHECKING:
     from .Qube import Qube
-from .value_types import QEnum
+from .types import NodeType
 
 
 def select(
     qube: Qube,
     selection: Mapping[str, str | list[str] | Callable[[Any], bool]],
-    mode: Literal["strict", "relaxed"] = "relaxed",
+    mode: Literal["strict", "relaxed", "next_level"] = "relaxed",
     consume=False,
 ) -> Qube:
     # Find any bare str values and replace them with [str]
@@ -49,8 +50,8 @@ def select(
             elif mode == "next_level":
                 return node.replace(
                     children=(),
-                    metadata=qube.metadata
-                    | {"is_leaf": np.array([not bool(node.children)])},
+                    metadata=qube.metadata,
+                    type=NodeType.Stem if node.children else NodeType.Leaf,
                 )
 
             elif mode == "relaxed":
@@ -62,18 +63,16 @@ def select(
         if node.key in _selection:
             # If the key is specified, check if any of the values match
             selection_criteria = _selection[node.key]
-            if callable(selection_criteria):
-                values = QEnum((c for c in node.values if selection_criteria(c)))
-            elif isinstance(selection_criteria, list):
-                values = QEnum((c for c in selection_criteria if c in node.values))
-            else:
-                raise ValueError(f"Unknown selection type {selection_criteria}")
+            indices, values = node.values.filter(selection_criteria)
 
             # Here modes don't matter because we've explicitly filtered on this key and found nothing
             if not values:
                 return None
 
             matched = True
+            node = recursively_take_from_metadata(
+                node, indices=indices, axis=node.depth
+            )
             node = node.replace(values=values)
 
         if consume:
@@ -86,9 +85,6 @@ def select(
             return None
 
         metadata = dict(node.metadata)
-
-        if mode == "next_level":
-            metadata["is_leaf"] = np.array([not bool(node.children)])
 
         return node.replace(
             children=new_children,

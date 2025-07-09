@@ -1,3 +1,6 @@
+import json
+from datetime import datetime
+
 from frozendict import frozendict
 from qubed import Qube
 
@@ -185,3 +188,57 @@ def test_simple_union():
 
 #                 if i > 100:
 #                     break
+
+
+def test_metadata_serialisation():
+    q1 = Qube.from_tree(
+        "root, class=od/xd, expver=0001/0002, date=20200901, param=1/2"
+    ).add_metadata({"server": 1})
+    q2 = Qube.from_tree(
+        "root, class=rd, expver=0001, date=20200903, param=1/2/3"
+    ).add_metadata({"server": 2})
+    q3 = Qube.from_tree(
+        "root, class=rd, expver=0002, date=20200902, param=1/2, float=1.3353535353/1025/12525252"
+    ).add_metadata({"server": 3})
+
+    q = q1 | q2 | q3
+    q = q.convert_dtypes(
+        {
+            "expver": int,
+            "param": int,
+            "date": lambda s: datetime.strptime(s, "%Y%m%d"),
+            "float": float,
+        }
+    )
+
+    assert (
+        str(q)
+        == """
+root
+├── class=od/xd, expver=1/2, date=2020-09-01, param=1/2
+└── class=rd
+    ├── expver=1, date=2020-09-03, param=1/2/3
+    └── expver=2, date=2020-09-02, param=1/2, float=1.34/1.02e+03/1.25e+07""".strip()
+    )
+
+    s = json.dumps(q.to_json())
+    q2 = Qube.from_json(json.loads(s))
+
+    assert q.compare_metadata(q2)
+
+
+def test_complex_metadata_merge():
+    """
+    This is a tree shaped like this:
+    root
+    ├── class=od/xd, expver=1/2, date=20200901, ...
+    └── class=rd
+        ├── expver=1, date=20200901, ...
+        └── expver=2, date=20200901, ...
+
+    Where there is a "server" key on class=od/xd and also on class=rd expver=1 and expver=2.
+    The metadata merge requires first merging expver=1 and expver=1 then merging that with class=od/xd
+    """
+    j = '{"key": "root", "values": {"type": "enum", "dtype": "str", "values": ["root"]}, "metadata": {}, "children": [{"key": "class", "values": {"type": "enum", "dtype": "str", "values": ["od", "xd"]}, "metadata": {"server": {"shape": [1, 2], "dtype": "int64", "base64": "AQAAAAAAAAABAAAAAAAAAA=="}}, "children": [{"key": "expver", "values": {"type": "enum", "dtype": "str", "values": ["1", "2"]}, "metadata": {}, "children": [{"key": "date", "values": {"type": "enum", "dtype": "str", "values": ["20200901"]}, "metadata": {}, "children": []}]}]}, {"key": "class", "values": {"type": "enum", "dtype": "str", "values": ["rd"]}, "metadata": {}, "children": [{"key": "expver", "values": {"type": "enum", "dtype": "str", "values": ["1"]}, "metadata": {"server": {"shape": [1, 1, 1], "dtype": "int64", "base64": "AgAAAAAAAAA="}}, "children": [{"key": "date", "values": {"type": "enum", "dtype": "str", "values": ["20200901"]}, "metadata": {}, "children": []}]}, {"key": "expver", "values": {"type": "enum", "dtype": "str", "values": ["2"]}, "metadata": {"server": {"shape": [1, 1, 1], "dtype": "int64", "base64": "AwAAAAAAAAA="}}, "children": [{"key": "date", "values": {"type": "enum", "dtype": "str", "values": ["20200901"]}, "metadata": {}, "children": []}]}]}]}'
+    q = Qube.from_json(json.loads(j))
+    q.compress()

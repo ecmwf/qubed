@@ -3,24 +3,32 @@ from __future__ import annotations
 import dataclasses
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import datetime
 from typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
     FrozenSet,
     Iterable,
     Iterator,
     Literal,
+    Self,
     Sequence,
+    TypeAlias,
     TypeVar,
 )
 
+import numpy as np
+
 if TYPE_CHECKING:
-    from .Qube import Qube
+    pass
+
+Indices: TypeAlias = np.ndarray | tuple[int, ...]
 
 
 @dataclass(frozen=True)
 class ValueGroup(ABC):
+    @property
     @abstractmethod
     def dtype(self) -> str:
         "Provide a string rep of the datatype of these values"
@@ -61,22 +69,44 @@ class ValueGroup(ABC):
     def __len__(self) -> int:
         pass
 
+    @abstractmethod
+    def filter(self, f: list[str] | Callable[[Any], bool]) -> Self:
+        pass
+
 
 T = TypeVar("T")
 EnumValuesType = FrozenSet[T]
 
-_dtype_map: dict[str, type] = {
+# Name the allowed dtypes
+_dtype_name_map: dict[str, type] = {
     "str": str,
     "int64": int,
     "float64": float,
     "date": datetime,
 }
-_dtype_map_inv: dict[type, str] = {v: k for k, v in _dtype_map.items()}
-_dtype_formatters = {
+
+# Compute the inverse mapping
+_dtype_map_inv: dict[type, str] = {v: k for k, v in _dtype_name_map.items()}
+
+# A list of functions to deserialise dtypes from the string representation
+_dtype_deserialise = {
     "str": str,
     "int64": int,
     "float64": float,
     "date": datetime.fromisoformat,
+}
+
+# A list of functions to produce a human readable version of the string
+_dtype_summarise = {
+    "str": str,
+    "int64": str,
+    "float64": lambda x: f"{x:.3g}",
+    "date": lambda d: d.strftime("%Y-%m-%d"),
+}
+
+_dtype_json_serialise = {
+    # Default is to let the json serialiser do it
+    "date": lambda d: d.isoformat(),
 }
 
 
@@ -108,7 +138,8 @@ class QEnum(ValueGroup):
         return len(self.values)
 
     def summary(self) -> str:
-        return "/".join(map(str, sorted(self.values)))
+        summary_func = _dtype_summarise[self.dtype]
+        return "/".join(map(summary_func, sorted(self.values)))
 
     def __contains__(self, value: Any) -> bool:
         return value in self.values
@@ -125,19 +156,50 @@ class QEnum(ValueGroup):
         return min(self.values)
 
     def to_json(self):
-        return {"type": "enum", "dtype": self.dtype, "values": self.values}
+        if self.dtype in _dtype_json_serialise:
+            serialiser = _dtype_json_serialise[self.dtype]
+            values = [serialiser(v) for v in self.values]
+        else:
+            values = self.values
+        return {"type": "enum", "dtype": self.dtype, "values": values}
 
     @classmethod
     def from_json(cls, type: Literal["enum"], dtype: str, values: list):
-        dtype_formatter = _dtype_formatters[dtype]
-        return QEnum([dtype_formatter(v) for v in values])
+        dtype_formatter = _dtype_deserialise[dtype]
+        return QEnum([dtype_formatter(v) for v in values], dtype=dtype)
 
     @classmethod
     def from_list(cls, obj):
         example = obj[0]
         dtype = type(example)
+        assert dtype in _dtype_map_inv, (
+            f"data type not allowed {dtype}, currently only {_dtype_map_inv.keys()} are supported."
+        )
         assert [type(v) is dtype for v in obj]
         return cls(obj, dtype=_dtype_map_inv[dtype])
+
+    def filter(self, f: list[str] | Callable[[Any], bool]) -> tuple[Indices, QEnum]:
+        indices = []
+        values = []
+        if callable(f):
+            for i, v in enumerate(self.values):
+                if f(v):
+                    indices.append(i)
+                    values.append(v)
+
+        elif isinstance(f, Iterable):
+            # Try to convert the given values to the type of the current node values
+            # This allows you to select [1,2,3] with [1.0,2.0,3.0] and ["1", "2", "3"]
+            dtype_formatter = _dtype_deserialise[self.dtype]
+            _f = set([dtype_formatter(v) for v in f])
+            for i, v in enumerate(self.values):
+                if v in _f:
+                    indices.append(i)
+                    values.append(v)
+        else:
+            raise ValueError(f"Unknown selection type {f}")
+
+        return tuple(indices), QEnum(values, dtype=self.dtype)
 
 
 @dataclass(frozen=True, order=True)
@@ -170,13 +232,11 @@ class WildcardGroup(ValueGroup):
     def from_strings(cls, values: Iterable[str]) -> Sequence[ValueGroup]:
         return [WildcardGroup()]
 
-
-class DateEnum(QEnum):
-    def summary(self) -> str:
-        def fmt(d):
-            return d.strftime("%Y%m%d")
-
-        return "/".join(map(fmt, sorted(self.values)))
+    def filter(self, f: list[str] | Callable[[Any], bool]) -> QEnum:
+        if callable(f):
+            raise ValueError("Can't filter wildcards with a function.")
+        else:
+            return QEnum(f)
 
 
 @dataclass(frozen=True)
@@ -200,224 +260,6 @@ class Range(ValueGroup, ABC):
         return dataclasses.asdict(self)
 
 
-@dataclass(frozen=True)
-class DateRange(Range):
-    start: date
-    end: date
-    step: timedelta
-    dtype: Literal["date"] = dataclasses.field(kw_only=True, default="date")
-
-    def __len__(self) -> int:
-        return (self.end - self.start) // self.step
-
-    def __iter__(self) -> Iterator[date]:
-        current = self.start
-        while current <= self.end if self.step.days > 0 else current >= self.end:
-            yield current
-            current += self.step
-
-    @classmethod
-    def from_strings(cls, values: Iterable[str]) -> Sequence[DateRange | DateEnum]:
-        dates = sorted([datetime.strptime(v, "%Y%m%d") for v in values])
-        if len(dates) < 2:
-            return [DateEnum(dates)]
-
-        ranges: list[DateEnum | DateRange] = []
-        current_group, dates = (
-            [
-                dates[0],
-            ],
-            dates[1:],
-        )
-        current_type: Literal["enum", "range"] = "enum"
-        while len(dates) > 1:
-            if current_type == "range":
-                # If the next date fits then add it to the current range
-                if dates[0] - current_group[-1] == timedelta(days=1):
-                    current_group.append(dates.pop(0))
-
-                # Emit the current range and start a new one
-                else:
-                    if len(current_group) == 1:
-                        ranges.append(DateEnum(current_group))
-                    else:
-                        ranges.append(
-                            DateRange(
-                                start=current_group[0],
-                                end=current_group[-1],
-                                step=timedelta(days=1),
-                            )
-                        )
-                    current_group = [
-                        dates.pop(0),
-                    ]
-                    current_type = "enum"
-
-            if current_type == "enum":
-                # If the next date is one more than the last then switch to range mode
-                if dates[0] - current_group[-1] == timedelta(days=1):
-                    last = current_group.pop()
-                    if current_group:
-                        ranges.append(DateEnum(current_group))
-                    current_group = [last, dates.pop(0)]
-                    current_type = "range"
-
-                else:
-                    current_group.append(dates.pop(0))
-
-        # Handle remaining `current_group`
-        if current_group:
-            if current_type == "range":
-                ranges.append(
-                    DateRange(
-                        start=current_group[0],
-                        end=current_group[-1],
-                        step=timedelta(days=1),
-                    )
-                )
-            else:
-                ranges.append(DateEnum(current_group))
-
-        return ranges
-
-    def __contains__(self, value: Any) -> bool:
-        v = datetime.strptime(value, "%Y%m%d").date()
-        return self.start <= v <= self.end and (v - self.start) % self.step == 0
-
-    def summary(self) -> str:
-        def fmt(d):
-            return d.strftime("%Y%m%d")
-
-        if self.step == timedelta(days=0):
-            return f"{fmt(self.start)}"
-        if self.step == timedelta(days=1):
-            return f"{fmt(self.start)}/to/{fmt(self.end)}"
-
-        return (
-            f"{fmt(self.start)}/to/{fmt(self.end)}/by/{self.step // timedelta(days=1)}"
-        )
-
-
-@dataclass(frozen=True)
-class TimeRange(Range):
-    start: int
-    end: int
-    step: int
-    dtype: Literal["time"] = dataclasses.field(kw_only=True, default="time")
-
-    def min(self):
-        return self.start
-
-    def __iter__(self) -> Iterator[Any]:
-        return super().__iter__()
-
-    @classmethod
-    def from_strings(self, values: Iterable[str]) -> list["TimeRange"]:
-        times = sorted([int(v) for v in values])
-        if len(times) < 2:
-            return [TimeRange(start=times[0], end=times[0], step=100)]
-
-        ranges = []
-        current_range, times = (
-            [
-                times[0],
-            ],
-            times[1:],
-        )
-        while len(times) > 1:
-            if times[0] - current_range[-1] == 1:
-                current_range.append(times.pop(0))
-
-            elif len(current_range) == 1:
-                ranges.append(
-                    TimeRange(start=current_range[0], end=current_range[0], step=0)
-                )
-                current_range = [
-                    times.pop(0),
-                ]
-
-            else:
-                ranges.append(
-                    TimeRange(start=current_range[0], end=current_range[-1], step=1)
-                )
-                current_range = [
-                    times.pop(0),
-                ]
-        return ranges
-
-    def __len__(self) -> int:
-        return (self.end - self.start) // self.step
-
-    def summary(self) -> str:
-        def fmt(d):
-            return f"{d:04d}"
-
-        if self.step == 0:
-            return f"{fmt(self.start)}"
-        return f"{fmt(self.start)}/to/{fmt(self.end)}/by/{self.step}"
-
-    def __contains__(self, value: Any) -> bool:
-        v = int(value)
-        return self.start <= v <= self.end and (v - self.start) % self.step == 0
-
-
-@dataclass(frozen=True)
-class IntRange(Range):
-    start: int
-    end: int
-    step: int
-    dtype: Literal["int"] = dataclasses.field(kw_only=True, default="int")
-
-    def __len__(self) -> int:
-        return (self.end - self.start) // self.step
-
-    def summary(self) -> str:
-        def fmt(d):
-            return d
-
-        if self.step == 0:
-            return f"{fmt(self.start)}"
-        return f"{fmt(self.start)}/to/{fmt(self.end)}/by/{self.step}"
-
-    def __contains__(self, value: Any) -> bool:
-        v = int(value)
-        return self.start <= v <= self.end and (v - self.start) % self.step == 0
-
-    @classmethod
-    def from_strings(self, values: Iterable[str]) -> list["IntRange"]:
-        ints = sorted([int(v) for v in values])
-        if len(ints) < 2:
-            return [IntRange(start=ints[0], end=ints[0], step=0)]
-
-        ranges = []
-        current_range, ints = (
-            [
-                ints[0],
-            ],
-            ints[1:],
-        )
-        while len(ints) > 1:
-            if ints[0] - current_range[-1] == 1:
-                current_range.append(ints.pop(0))
-
-            elif len(current_range) == 1:
-                ranges.append(
-                    IntRange(start=current_range[0], end=current_range[0], step=0)
-                )
-                current_range = [
-                    ints.pop(0),
-                ]
-
-            else:
-                ranges.append(
-                    IntRange(start=current_range[0], end=current_range[-1], step=1)
-                )
-                current_range = [
-                    ints.pop(0),
-                ]
-        return ranges
-
-
 def values_from_json(obj: dict | list) -> ValueGroup:
     if isinstance(obj, list):
         return QEnum.from_list(obj)
@@ -427,19 +269,3 @@ def values_from_json(obj: dict | list) -> ValueGroup:
             return QEnum.from_json(**obj)
         case _:
             raise ValueError(f"Unknown dtype {obj['dtype']}")
-
-
-def convert_datatypes(q: "Qube", conversions: dict[str, ValueGroup]) -> "Qube":
-    def _convert(q: "Qube") -> Iterator["Qube"]:
-        if q.key in conversions:
-            data_type = conversions[q.key]
-            assert isinstance(q.values, QEnum), (
-                "Only QEnum values can be converted to other datatypes."
-            )
-            for values_group in data_type.from_strings(q.values):
-                # print(values_group)
-                yield q.replace(values=values_group)
-        else:
-            yield q
-
-    return q.transform(_convert)

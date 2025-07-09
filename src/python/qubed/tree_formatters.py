@@ -19,8 +19,8 @@ def default_info_func(node: Qube):
         shape = f"(..., {', '.join(shape[-5:])})"
 
     if node.metadata:
-        metadata = "Metadata Summary (key, dtype, size)\n" + ",\n".join(
-            f"{k}, {v.dtype}, {v.size}, {v.ravel()[:5]}"
+        metadata = "Metadata Summary (key, dtype, size, shape, values)\n" + ",\n".join(
+            f"{k}, {v.dtype}, {v.size}, {v.shape} {v.ravel()[:5]}"
             for k, v in node.metadata.items()
         )
     else:

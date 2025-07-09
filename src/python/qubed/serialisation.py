@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterator, Mapping, Sequence
 
+import numpy as np
 from frozendict import frozendict
 
 from .types import NodeType
@@ -104,6 +106,20 @@ def from_datacube(cls: type[Qube], datacube: Mapping[str, str | Sequence[str]]) 
     return cls.make_root(children)
 
 
+def numpy_to_json(a: np.ndarray):
+    return dict(
+        shape=a.shape,
+        dtype=str(a.dtype),
+        base64=base64.b64encode(np.ascontiguousarray(a)).decode("utf8"),
+    )
+
+
+def numpy_from_json(j):
+    return np.frombuffer(
+        base64.decodebytes(j["base64"].encode("utf8")), dtype=j["dtype"]
+    ).reshape(j["shape"])
+
+
 def from_json(cls: type[Qube], json: dict) -> Qube:
     def from_json(json: dict, depth=0) -> Qube:
         children = tuple(from_json(c, depth + 1) for c in json["children"])
@@ -119,11 +135,16 @@ def from_json(cls: type[Qube], json: dict) -> Qube:
             key=json["key"],
             values=values_from_json(json["values"]),
             type=type,
-            metadata=frozendict(json["metadata"]) if "metadata" in json else {},
+            metadata=frozendict(
+                {k: numpy_from_json(v) for k, v in json["metadata"].items()}
+            )
+            if "metadata" in json
+            else {},
             children=children,
         )
 
-    return from_json(json)
+    # Trigger the code in make_root that calculates node depths and other global properties
+    return cls.make_root(children=from_json(json).children)
 
 
 def to_json(q: Qube) -> dict:
@@ -131,7 +152,7 @@ def to_json(q: Qube) -> dict:
         return {
             "key": node.key,
             "values": node.values.to_json(),
-            "metadata": dict(node.metadata),
+            "metadata": {k: numpy_to_json(v) for k, v in node.metadata.items()},
             "children": [to_json(c) for c in node.children],
         }
 
@@ -141,6 +162,11 @@ def to_json(q: Qube) -> dict:
 def load(cls: type[Qube], path: str | Path) -> Qube:
     with open(path, "r") as f:
         return cls.from_json(json.load(f))
+
+
+def save(qube: Qube, path: str | Path):
+    with open(path, "w") as f:
+        json.dump(qube.to_json(), f)
 
 
 def from_tree(cls: type[Qube], tree_str: str):

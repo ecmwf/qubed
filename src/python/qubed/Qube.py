@@ -25,6 +25,7 @@ from .serialisation import (
     from_json,
     from_tree,
     load,
+    save,
     to_dict,
     to_json,
 )
@@ -101,14 +102,17 @@ class Qube:
         )
 
     @classmethod
-    def make_root(cls, children: Iterable[Qube], metadata={}) -> Qube:
+    def make_root(
+        cls, children: Iterable[Qube], metadata={}, update_depth=True
+    ) -> Qube:
         def update_depth_shape(children, depth, shape):
             for child in children:
                 child.depth = depth + 1
                 child.shape = shape + (len(child.values),)
                 update_depth_shape(child.children, child.depth, child.shape)
 
-        update_depth_shape(children, depth=0, shape=(1,))
+        if update_depth:
+            update_depth_shape(children, depth=0, shape=(1,))
 
         return cls.make_node(
             "root",
@@ -148,6 +152,7 @@ class Qube:
     from_nodes = classmethod(from_nodes)  # See metadata.py
 
     load = classmethod(load)
+    save = save
 
     from_protobuf = classmethod(from_protobuf)
     to_protobuf = to_protobuf
@@ -372,7 +377,7 @@ class Qube:
             if node.key in converters:
                 converter = converters[node.key]
                 values = [converter(v) for v in node.values]
-                new_node = node.replace(values=QEnum(values))
+                new_node = node.replace(values=QEnum.from_list(values))
                 return new_node
             return node
 
@@ -381,7 +386,7 @@ class Qube:
     def select(
         self,
         selection: Mapping[str, str | list[str] | Callable[[Any], bool]],
-        mode: Literal["strict", "relaxed"] = "relaxed",
+        mode: Literal["strict", "relaxed", "next_level"] = "relaxed",
         consume=False,
     ) -> Qube:
         return select(self, selection, mode, consume)
@@ -451,7 +456,8 @@ class Qube:
         """
 
         def union(a: Qube, b: Qube) -> Qube:
-            b = type(self).make_root(children=(b,))
+            # Make a temp root node without recalculating node depths
+            b = type(self).make_root(children=(b,), update_depth=False)
             out = set_operations.set_operation(
                 a, b, set_operations.SetOperation.UNION, type(self)
             )
