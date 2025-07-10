@@ -21,4 +21,3 @@ cmake_build/
 tests/data/
 *.secret
 node_modules/
-qubed_venv

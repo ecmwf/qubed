@@ -243,16 +243,13 @@ Qube.from_json(json) == climate_dt
 
 ## Advanced Selection
 
-There is currently partial support for different datatypes in addition to strings. Here we can convert datatypes by key to ints and timedeltas and then use functions as filters in select.
+There is currently partial support for different datatypes in addition to strings. Here we can convert datatypes by key to ints and dates and then use functions as filters in select.
 
 ```{code-cell} python3
-from datetime import timedelta, datetime
-def to_timedelta(t):
-    dt = datetime.strptime(t, "%H:%M:%S")
-    return timedelta(hours=dt.hour, minutes=dt.minute, seconds=dt.second)
+from datetime import datetime
 
 q = Qube.from_tree("""
-root, frequency=6:00:00
+root, date=20240101
 ├── levtype=pl, levelist=850, threshold=-2/-4/-8/2/4/8
 └── levtype=sfc
     ├── param=10u/10v, threshold=10/15
@@ -261,12 +258,12 @@ root, frequency=6:00:00
 """).convert_dtypes({
     "threshold": float,
     "levelist": int,
-    "frequency": to_timedelta,
+    "date": lambda d: datetime.strptime(d, "%Y%m%d"),
 })
 
 r = q.select({
         "threshold": lambda t: t > 5,
-        "frequency": lambda dt: dt > timedelta(hours = 2),
+        "date": lambda d: d > datetime.strptime("20230101", "%Y%m%d"),
 })
 
 r
