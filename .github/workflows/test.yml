@@ -28,7 +28,7 @@ jobs:
           python-version: 3.x
       - name: Build and Install
         run: |
-          python -m pip install ".[dev]"
+          python -m pip install ".[dev,cli]"
       - name: Test
         run: |
           pytest
