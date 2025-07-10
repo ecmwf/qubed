@@ -20,11 +20,6 @@ dependencies = [
     "frozendict",
     "numpy",
     "protobuf",
-
-    # CLI
-    "rich",
-    "click",
-    "psutil"
 ]
 
 # Because this is a mixed rust/python project the structure is src/python/qubed rather than the more typical src/qubed
@@ -42,6 +37,12 @@ features = ["pyo3/extension-module"]
 
 
 [project.optional-dependencies]
+
+cli = [
+  "rich",
+  "click",
+  "psutil",
+]
 
 stac_server = [
     "fastapi",
