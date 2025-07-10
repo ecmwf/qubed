@@ -11,8 +11,8 @@ import requests
 import sys
 
 process = psutil.Process()
-SELECTOR = "class=d1,dataset=extremes-dt"
-FILEPATH = "tests/example_qubes/extremes-dt.json"
+SELECTOR = "class=d1,dataset=climate-dt"
+FILEPATH = "tests/example_qubes/climate-dt.json"
 API = "https://qubed-dev.lumi.apps.dte.destination-earth.eu/api/v2"
 CONFIG = "config/fdb_config.yaml"
 FULL_OR_PARTIAL = "FULL"
@@ -26,7 +26,6 @@ def from_ecmwf_date(s: str) -> datetime:
 
 def to_ecmwf_date(d: datetime) -> str:
     return d.strftime("%Y%m%d")
-
 
 
 if FULL_OR_PARTIAL == "FULL":
@@ -102,6 +101,9 @@ while current_span[0] > start_date:
         request = dict(split(v.split("=")) for v in line.strip().split(","))
         request.pop("year", None)
         request.pop("month", None)
+
+        key_order = ["class", "dataset",  "stream", "activity", "resolution", "expver", "experiment", "generation", "model", "realization", "type", "date", "time", "levtype", "levelist", "step", "param"]
+        request = {k : request[k] for k in key_order if k in request}
 
         q = (Qube.from_datacube(request)
             .convert_dtypes({

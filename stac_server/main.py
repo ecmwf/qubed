@@ -41,8 +41,8 @@ with open(prefix / "tests/example_qubes/on-demand-extremes-dt.json") as f:
 with open(prefix / "tests/example_qubes/extremes-dt.json") as f:
     qube = qube | Qube.from_json(json.load(f))
 
-# with open(prefix / "tests/example_qubes/climate-dt.json") as f:
-#     qube = qube | Qube.from_json(json.load(f))
+with open(prefix / "tests/example_qubes/climate-dt.json") as f:
+    qube = qube | Qube.from_json(json.load(f))
 
 # with open(prefix / "tests/example_qubes/od.json") as f:
 #     qube = qube | Qube.from_json(json.load(f))
