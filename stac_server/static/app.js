@@ -73,16 +73,6 @@ function goToNextUrl() {
     const key_type = item.dataset.keyType;
     let values = [];
 
-    const datePicker = item.querySelector("input[type='date']");
-    if (datePicker) {
-      values.push(datePicker.value.replace(/-/g, ""));
-    }
-
-    const timePicker = item.querySelector("input[type='time']");
-    if (timePicker) {
-      values.push(timePicker.value.replace(":", ""));
-    }
-
     const enum_checkboxes = item.querySelectorAll(
       "input[type='checkbox']:checked"
     );
@@ -102,6 +92,7 @@ function goToNextUrl() {
       any_new_keys = true;
     }
 
+    console.log(`Checking ${key} ${key_type} and found ${values}`);
     return { key, values };
   });
 
@@ -112,6 +103,8 @@ function goToNextUrl() {
 
   // Update the request with the new keys
   for (const { key, values } of new_keys) {
+    if (values.length == 0) continue;
+
     // Find the index of the existing key in the request array
     const existingIndex = request.findIndex(
       ([existingKey, existingValues]) => existingKey === key
@@ -133,6 +126,10 @@ function goToNextUrl() {
 }
 
 async function createCatalogItem(link, itemsContainer) {
+  if (Object.entries(link.variables)[0][1].on_frontier === false) {
+    return;
+  }
+
   const itemDiv = document.createElement("div");
   itemDiv.className = "item loading";
   itemDiv.textContent = "Loading...";
@@ -191,7 +188,6 @@ async function createCatalogItem(link, itemsContainer) {
           };
         },
       });
-
     } else if (variable.enum && variable.enum.length > 0) {
       const checkbox_list = renderCheckboxList(link);
       itemDiv.appendChild(checkbox_list);
@@ -226,17 +222,20 @@ function renderCheckboxList(link) {
   const variables = link["variables"];
   const key = Object.keys(variables)[0];
   const variable = variables[key];
-  const value_descriptions = variable.value_descriptions || [];
+  const value_descriptions = variable.value_descriptions || {};
 
-  function renderCheckbox(key, value, human_readable_value) {
+  function renderCheckbox(key, value, desc) {
     const id = `${key}=${value}`;
+    let more_info = desc.url
+      ? ` <a target=”_blank” class="more-info" href=${desc.url}>?<a>`
+      : "";
 
     let human_label, code_label;
-    if (human_readable_value) {
-      human_label = `<label for="${id}">${human_readable_value}</label>`;
+    if (desc.name) {
+      human_label = `<label for="${id}">${desc.name}${more_info}</label>`;
       code_label = `<label class="code" for="${id}"><code>${value}</code></label>`;
     } else {
-      human_label = `<label for="${id}">${value}</label>`;
+      human_label = `<label for="${id}">${value}${more_info}</label>`;
       code_label = `<label class="code"><code></code></label>`;
     }
 
@@ -255,9 +254,7 @@ function renderCheckboxList(link) {
   }
 
   const checkboxes = variable.enum
-    .map((value, index) =>
-      renderCheckbox(key, value, value_descriptions[index])
-    )
+    .map((value) => renderCheckbox(key, value, value_descriptions[value] || {}))
     .join("");
 
   return toHTML(`<div class="checkbox-container">${checkboxes}</div>`);
