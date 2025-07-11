@@ -1,6 +1,5 @@
 import json
 import os
-from collections import defaultdict
 from pathlib import Path
 from typing import Mapping
 
@@ -11,7 +10,6 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from frozendict import frozendict
 from markupsafe import Markup
 from qubed import Qube
 from qubed.tree_formatters import node_tree_to_html
@@ -49,22 +47,6 @@ with open(prefix / "tests/example_qubes/climate-dt.json") as f:
 
 with open(prefix / "config/language/language.yaml", "r") as f:
     mars_language = yaml.safe_load(f)
-
-with open(prefix / "config/language/paramids.yaml", "r") as f:
-    params = yaml.safe_load(f)
-
-# Coerce value codes to lowercase
-for key in mars_language.keys():
-    if "values" in mars_language[key]:
-        mars_language[key]["values"] = [
-            [str(v[0]).lower(), *v[1:]] for v in mars_language[key]["values"]
-        ]
-
-
-mars_language["param"]["values"] = [
-    [str(id), *sorted([s.capitalize() for s in other_values][::-1], key=len)]
-    for id, other_values in params.items()
-]
 
 if "API_KEY" in os.environ:
     api_key = os.environ["API_KEY"]
@@ -144,24 +126,23 @@ async def union(
 
 
 def follow_query(request: dict[str, str | list[str]], qube: Qube):
-    s = qube.select(request, mode="next_level", consume=False).compress()
-    by_path = defaultdict(lambda: {"paths": set(), "values": set(), "dtypes": set()})
+    # Compute the axes for the full tree
+    full_axes = qube.select(request, consume=False).axes_info()
 
-    for request, node in s.leaf_nodes():
-        # Find any bits of the tree that aren't finished yet i.e they have no children but are not leaf nodes
-        if not node.is_leaf():
-            by_path[node.key]["values"].update(node.values.values)
-            by_path[node.key]["dtypes"].add(node.values.dtype)
-            by_path[node.key]["paths"].add(frozendict(request))
+    # Also compute the selected tree just to the point where our selection ends
+    s = qube.select(request, mode="next_level", consume=False).compress()
+
+    # Compute the set of keys that are needed to advance the selection frontier
+    frontier_keys = {node.key for _, node in s.leaf_nodes() if not node.is_leaf()}
 
     return s, [
         {
-            "paths": list(v["paths"]),
             "key": key,
-            "values": sorted(v["values"], reverse=True),
-            "dtypes": list(v["dtypes"]),
+            "values": sorted(info.values, reverse=True),
+            "dtype": list(info.dtypes)[0],
+            "on_frontier": key in frontier_keys,
         }
-        for key, v in by_path.items()
+        for key, info in full_axes.items()
     ]
 
 
@@ -243,33 +224,26 @@ async def basic_stac(filters: str):
 async def get_STAC(
     request: dict[str, str | list[str]] = Depends(parse_request),
 ):
-    q, paths = follow_query(request, qube)
+    q, axes = follow_query(request, qube)
+
     kvs = [
         f"{k}={','.join(v)}" if isinstance(v, list) else f"{k}={v}"
         for k, v in request.items()
     ]
     request_params = "&".join(kvs)
 
-    def make_link(path):
+    def make_link(axis):
         """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
-        key_name = path["key"]
-        values = path["values"]
-        dtypes = path["dtypes"]
+        key_name = axis["key"]
 
         href_template = f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
 
-        values_from_mars_language = mars_language.get(key_name, {}).get("values", [])
-
-        if all(isinstance(v, list) for v in values_from_mars_language):
-            value_descriptions_dict = {
-                k: v[-1]
-                for v in values_from_mars_language
-                if len(v) > 1
-                for k in v[:-1]
-            }
-            value_descriptions = [value_descriptions_dict.get(v, "") for v in values]
-            if not any(value_descriptions):
-                value_descriptions = None
+        values_from_language_yaml = mars_language.get(key_name, {}).get("values", {})
+        value_descriptions = {
+            v: values_from_language_yaml[v]
+            for v in axis["values"]
+            if v in values_from_language_yaml
+        }
 
         return {
             "title": key_name,
@@ -278,21 +252,15 @@ async def get_STAC(
             "type": "application/json",
             "variables": {
                 key_name: {
-                    "type": dtypes,
+                    "type": axis["dtype"],
                     "description": mars_language.get(key_name, {}).get(
                         "description", ""
                     ),
-                    "enum": values,
+                    "enum": axis["values"],
                     "value_descriptions": value_descriptions,
+                    "on_frontier": axis["on_frontier"],
                 }
             },
-        }
-
-    def value_descriptions(key, values):
-        return {
-            v[0]: v[-1]
-            for v in mars_language.get(key, {}).get("values", [])
-            if len(v) > 1 and v[0] in list(values)
         }
 
     descriptions = {
@@ -300,7 +268,7 @@ async def get_STAC(
             "key": key,
             "values": values,
             "description": mars_language.get(key, {}).get("description", ""),
-            "value_descriptions": value_descriptions(key, values),
+            "value_descriptions": mars_language.get(key, {}).get("values", {}),
         }
         for key, values in request.items()
     }
@@ -311,11 +279,10 @@ async def get_STAC(
         "stac_version": "1.0.0",
         "id": "root" if not request else "/stac?" + request_params,
         "description": "STAC collection representing potential children of this request",
-        "links": [make_link(p) for p in paths],
+        "links": [make_link(a) for a in axes],
         "debug": {
             # "request": request,
             "descriptions": descriptions,
-            "paths": paths,
             "qube": node_tree_to_html(
                 q,
                 collapse=True,
