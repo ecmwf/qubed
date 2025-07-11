@@ -10,7 +10,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Any, Iterable, Iterator, Literal, Mapping
+from typing import Any, Iterable, Iterator, Literal, Mapping, Self
 
 import numpy as np
 from frozendict import frozendict
@@ -46,9 +46,23 @@ from .value_types import (
 @dataclass
 class AxisInfo:
     key: str
-    type: Any
+    dtypes: set[str]
     depths: set[int]
     values: set
+
+    def combine(self, other: Self):
+        self.key = other.key
+        self.dtypes.update(other.dtypes)
+        self.depths.update(other.depths)
+        self.values.update(other.values)
+
+    def to_json(self):
+        return {
+            "key": self.key,
+            "dtypes": self.dtypes,
+            "values": list(self.values),
+            "depths": list(self.depths),
+        }
 
 
 @dataclass(frozen=False, eq=True, order=True, unsafe_hash=True)
@@ -412,7 +426,7 @@ class Qube:
 
     def axes_info(self, depth=0) -> dict[str, AxisInfo]:
         axes = defaultdict(
-            lambda: AxisInfo(key="", type=str, depths=set(), values=set())
+            lambda: AxisInfo(key="", dtypes=set(), depths=set(), values=set())
         )
         for c in self.children:
             for k, info in c.axes_info(depth=depth + 1).items():
@@ -422,7 +436,7 @@ class Qube:
             axes[self.key].combine(
                 AxisInfo(
                     key=self.key,
-                    type=type(next(iter(self.values))),
+                    dtypes={self.values.dtype},
                     depths={depth},
                     values=set(self.values),
                 )
