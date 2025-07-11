@@ -165,7 +165,7 @@ async function createCatalogItem(link, itemsContainer) {
       }</p>
     `;
 
-    if (key === "date") {
+    if (false && key === "date") {
       console.log("Date", variable, exports);
 
       itemDiv.appendChild(toHTML("<input id='date-picker'></input>"));
@@ -191,16 +191,7 @@ async function createCatalogItem(link, itemsContainer) {
           };
         },
       });
-      console.log(picker);
 
-      //   const cal = new WinkelCalendar({
-      //     container: "date-picker-container",
-      //     // bigBanner: true,
-      //     format: "YYYY-MM-DD",
-      //     // onSelect: onDateChange,
-      //     range: true,
-      //     multipleDatesSeparator: "/to/",
-      //   });
     } else if (variable.enum && variable.enum.length > 0) {
       const checkbox_list = renderCheckboxList(link);
       itemDiv.appendChild(checkbox_list);
