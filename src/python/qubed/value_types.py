@@ -106,7 +106,7 @@ _dtype_summarise = {
 
 _dtype_json_serialise = {
     # Default is to let the json serialiser do it
-    "date": lambda d: d.isoformat(),
+    "date": lambda d: d.strftime("%Y-%m-%d"),
 }
 
 
