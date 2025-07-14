@@ -1,21 +1,34 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping
-
+from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 from .set_operations import recursively_take_from_metadata
 
 if TYPE_CHECKING:
     from .Qube import Qube
+from enum import Enum, auto
+
 from .types import NodeType
+
+
+class SelectMode(Enum):
+    Strict = auto()
+    Relaxed = auto()
+    NextLevel = auto()
 
 
 def select(
     qube: Qube,
     selection: Mapping[str, str | list[str] | Callable[[Any], bool]],
-    mode: Literal["strict", "relaxed", "next_level"] = "relaxed",
-    consume=False,
+    mode: SelectMode = SelectMode.Relaxed,
+    consume: bool = False,
 ) -> Qube:
+    """
+    node: input qube
+    selection: flat dictionary of matchers against key, value pairs
+    matched: Used by select when it recurses
+
+    """
     # Find any bare str values and replace them with [str]
     _selection: dict[str, list[str] | Callable[[Any], bool]] = {}
     for k, v in selection.items():
@@ -32,7 +45,7 @@ def select(
     def select(
         node: Qube,
         selection: dict[str, list[str] | Callable[[Any], bool]],
-        matched: bool,
+        matched: bool = False,
     ) -> Qube | None:
         # If this node has no children but there are still parts of the request
         # that have not been consumed, then prune this whole branch
@@ -44,23 +57,23 @@ def select(
         # In next_level mode we include the next level down so you can tell what keys to add next
         # In relaxed mode we skip the key if it't not in the request and carry on
         if node.key not in selection:
-            if mode == "strict":
+            if mode == SelectMode.Strict:
                 return None
 
-            elif mode == "next_level":
+            elif mode == SelectMode.NextLevel:
                 return node.replace(
                     children=(),
                     metadata=qube.metadata,
                     type=NodeType.Stem if node.children else NodeType.Leaf,
                 )
 
-            elif mode == "relaxed":
+            elif mode == SelectMode.Relaxed:
                 pass
+
             else:
                 raise ValueError(f"Unknown mode argument {mode}")
 
-        # If the key IS in the selection then check if the values match
-        if node.key in _selection:
+        else:
             # If the key is specified, check if any of the values match
             selection_criteria = _selection[node.key]
             indices, values = node.values.filter(selection_criteria)

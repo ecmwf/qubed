@@ -10,7 +10,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Any, Iterable, Iterator, Literal, Mapping, Self
+from typing import Any, Iterable, Iterator, Mapping, Self
 
 import numpy as np
 from frozendict import frozendict
@@ -18,7 +18,7 @@ from frozendict import frozendict
 from . import set_operations
 from .metadata import from_nodes
 from .protobuf.adapters import from_protobuf, to_protobuf
-from .selection import select
+from .selection import SelectMode, select
 from .serialisation import (
     from_datacube,
     from_dict,
@@ -397,13 +397,8 @@ class Qube:
 
         return self.transform(convert)
 
-    def select(
-        self,
-        selection: Mapping[str, str | list[str] | Callable[[Any], bool]],
-        mode: Literal["strict", "relaxed", "next_level"] = "relaxed",
-        consume=False,
-    ) -> Qube:
-        return select(self, selection, mode, consume)
+    select_modes = SelectMode
+    select = select
 
     def span(self, key: str) -> list[str]:
         """
