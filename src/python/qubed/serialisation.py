@@ -51,18 +51,18 @@ def from_dict(cls: type[Qube], d: dict) -> Qube:
                     type=NodeType.Stem,
                     children={},
                 )
-
-            # Special case for Wildcard values
-            if values == ["*"]:
-                values = WildcardGroup()
             else:
-                values = QEnum(values)
+                # Special case for Wildcard values
+                if values == ["*"]:
+                    values = WildcardGroup()
+                else:
+                    values = QEnum(values)
 
-            yield cls.make_node(
-                key=key,
-                values=values,
-                children=from_dict(children),
-            )
+                yield cls.make_node(
+                    key=key,
+                    values=values,
+                    children=from_dict(children),
+                )
 
     return cls.make_root(list(from_dict(d)))
 
