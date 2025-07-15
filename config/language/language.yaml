@@ -146,6 +146,7 @@ dataset:
   values:
     climate-dt:
       name: "Climate Digital Twin"
+      description: "The Climate DT represents the first ever attempt to operationalise the production of global multi-decadal climate projections, leveraging the world-leading supercomputing facilities of the EuroHPC Joint Undertaking along with some of the leading European climate models. A concise overview of what the Climate DT aims to achieve, and of the different concepts essential for an understanding of the Digital Twin's characteristics, is included in the Climate DT factsheet."
       url: "https://confluence.ecmwf.int/display/DDCZ/Climate+DT+Phase+1+data+catalogue"
     extremes-dt:
       name: "Extremes data"
@@ -26306,3 +26307,23 @@ params:
     name: "Convective available potential energy instantaneous"
     alternative_names:
     - "cape_ins"
+
+test:
+- key: levelist
+  selectors: 
+    levtype: pl
+  name: Pressure levels
+  description: A list of indices 
+- key: levelist
+  selectors:
+    dataset: climate-dt
+    levtype: o2d
+  name: 2D ocean field
+  description: Note that this can be the ocean surface, or other 2D levels such as at 2 metres or total column integrations.
+- name: 3D ocean field
+  description: ...
+  key: levelist
+  selectors:
+    dataset: climate-dt
+    levtype: o3d
+
