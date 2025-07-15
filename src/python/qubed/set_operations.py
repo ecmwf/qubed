@@ -268,7 +268,7 @@ def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
 
         if np.array_equal(A_val, B_val):
             # If the metadata is the same we can just go ahead
-            dprint(f"Keeping metadata key '{key}={A_val}' at the level of '{A.key}'")
+            # print(f"Keeping metadata key '{key}={A_val}' at the level of '{A.key}'")
             stayput_metadata[key] = A.metadata[key]
 
         elif A.structural_hash == B.structural_hash:
