@@ -16,7 +16,7 @@ import numpy as np
 from frozendict import frozendict
 
 from . import set_operations
-from .metadata import from_nodes
+from .metadata import add_metadata, from_nodes
 from .protobuf.adapters import from_protobuf, to_protobuf
 from .selection import SelectMode, select
 from .serialisation import (
@@ -480,24 +480,7 @@ class Qube:
 
         return self.replace(children=tuple(sorted(new_children)))
 
-    def add_metadata(self, metadata: dict[str, Any | list[Any] | np.ndarray], depth=0):
-        if depth == 0:
-            new_metadata = dict(self.metadata)
-            for k, v in metadata.items():
-                if not isinstance(v, np.ndarray) or isinstance(v, list):
-                    v = [v]
-                try:
-                    v = np.array(v).reshape(self.shape)
-                except ValueError:
-                    raise ValueError(
-                        f"Given metadata can't be reshaped to {self.shape} because it has shape {np.array(v).shape}!"
-                    )
-                new_metadata[k] = v
-            self.metadata = frozendict(new_metadata)
-        else:
-            for child in self.children:
-                child.add_metadata(metadata, depth - 1)
-        return self
+    add_metadata = add_metadata
 
     def strip_metadata(self) -> Qube:
         def strip(node):

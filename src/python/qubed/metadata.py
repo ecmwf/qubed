@@ -6,6 +6,8 @@ import numpy as np
 
 if TYPE_CHECKING:
     from .Qube import Qube
+from frozendict import frozendict
+
 from .value_types import QEnum
 
 
@@ -42,3 +44,25 @@ def from_nodes(cls, nodes, add_root=True):
     if add_root:
         return cls.make_root(children=(root,))
     return root
+
+
+def add_metadata(
+    q: Qube, metadata: dict[str, Any | list[Any] | np.ndarray], depth=0
+) -> Qube:
+    if depth == 0:
+        new_metadata = dict(q.metadata)
+        for k, v in metadata.items():
+            if not isinstance(v, np.ndarray) or isinstance(v, list):
+                v = [v]
+            try:
+                v = np.array(v).reshape(q.shape)
+            except ValueError:
+                raise ValueError(
+                    f"Given metadata can't be reshaped to {q.shape} because it has shape {np.array(v).shape}!"
+                )
+            new_metadata[k] = v
+        q.metadata = frozendict(new_metadata)
+    else:
+        for child in q.children:
+            child.add_metadata(metadata, depth - 1)
+    return q
