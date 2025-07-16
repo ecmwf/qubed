@@ -50,10 +50,21 @@ except:
 for i, metadata in enumerate(fdb.list(SELECTOR, keys=True)):
     request = metadata.pop("keys")
     # print(i, request, metadata)
+    request.pop("year", None)
+    request.pop("month", None)
+
+    key_order = ["class", "dataset",  "stream", "activity", "resolution", "expver", "experiment", "generation", "model", "realization", "type", "date", "time", "levtype", "levelist", "step", "param"]
+    request = {k : request[k] for k in key_order if k in request}
+
     q = (
         Qube.from_datacube(request)
         .add_metadata(metadata)
-    )
+        .convert_dtypes({
+                    "generation": int,
+                    "realization": int,
+                    "param": int,
+                    "date": lambda s: datetime.strptime(s, "%Y%m%d")})
+        )
 
     qube = qube | q
     if i % 5000 == 0: 

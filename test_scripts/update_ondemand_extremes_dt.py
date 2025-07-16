@@ -102,6 +102,9 @@ while current_span[0] > start_date:
         request.pop("year", None)
         request.pop("month", None)
 
+        key_order = ["class", "dataset",  "stream", "activity", "resolution", "expver", "experiment", "generation", "model", "realization", "type", "date", "time", "levtype", "levelist", "step", "param"]
+        request = {k : request[k] for k in key_order if k in request}
+
         q = (Qube.from_datacube(request)
             .convert_dtypes({
                         "generation": int,

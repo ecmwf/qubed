@@ -279,10 +279,10 @@ def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
             # expver=2, foo=bar, param=1
             # where the two have different metadata at the expver level
             # Instead we let the leftmost metadata win here
-            print(
-                f"Keeping just the A metadata for key '{key}' at the level of '{A.key}' "
-                "because the subtrees are identical"
-            )
+            # print(
+            #     f"Keeping just the A metadata for key '{key}' at the level of '{A.key}' "
+            #     "because the subtrees are identical"
+            # )
             stayput_metadata[key] = A.metadata[key]
 
         else:
