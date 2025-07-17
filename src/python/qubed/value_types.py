@@ -117,7 +117,7 @@ _dtype_json_deserialise = {
 _dtype_json_serialise = {
     # Default is to let the json serialiser do it
     "date": lambda d: d.strftime("%Y-%m-%d"),
-    "datetime": lambda d: d.toisoformat,
+    "datetime": lambda d: d.strftime("%Y-%m-%d %H%M"),
 }
 
 
