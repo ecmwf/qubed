@@ -627,6 +627,11 @@ def pushdown_metadata_many(qubes: list[Qube]) -> list[Qube]:
         ]
         pushdown_metadata = {k: qube.metadata[k] for k in keys_to_pushdown}
 
+        if pushdown_metadata and not qube.children:
+            raise ValueError(
+                f"Metadata keys {pushdown_metadata.keys()} do not exist in all places in the tree."
+            )
+
         new_children = []
         for child in qube.children:
             N = len(child.values)
