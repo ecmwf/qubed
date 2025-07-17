@@ -20,6 +20,7 @@ dependencies = [
     "frozendict",
     "numpy",
     "protobuf",
+    "requests"
 ]
 
 # Because this is a mixed rust/python project the structure is src/python/qubed rather than the more typical src/qubed
