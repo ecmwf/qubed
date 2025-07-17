@@ -276,12 +276,13 @@ class Qube:
     def leaves_with_metadata(
         self, indices=()
     ) -> Iterator[tuple[dict[str, str], dict[str, str | np.ndarray]]]:
+        def unwrap_np(v):
+            "Convert numpy arrays with shape () into bare values"
+            return v.item() if v.shape == () else v
+
         for index, value in enumerate(self.values):
             indexed_metadata = {
-                k: vs[indices + (index,)] for k, vs in self.metadata.items()
-            }
-            indexed_metadata = {
-                k: v.item() if v.shape == () else v for k, v in indexed_metadata.items()
+                k: unwrap_np(vs[indices + (index,)]) for k, vs in self.metadata.items()
             }
             if not self.children:
                 yield {self.key: value}, indexed_metadata
