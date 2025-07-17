@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Iterator, Mapping, Sequence
 
 import numpy as np
+import requests
 from frozendict import frozendict
 
 from .types import NodeType
@@ -229,3 +230,20 @@ def from_tree(cls: type[Qube], tree_str: str):
         stack.append(bottom)
 
     return cls.from_dict(root)
+
+
+def from_api(
+    cls: type[Qube],
+    selection: Mapping[str, str | list[str]],
+    url="https://qubed.lumi.apps.dte.destination-earth.eu/api/v2/select/",
+) -> Qube:
+    url_selection: dict[str, str] = {
+        k: ",".join(v) if isinstance(v, list) else v for k, v in selection.items()
+    }
+
+    json = requests.get(
+        url,
+        params=url_selection,
+    ).json()
+
+    return from_json(cls, json)

@@ -20,6 +20,7 @@ from .metadata import add_metadata, from_nodes
 from .protobuf.adapters import from_protobuf, to_protobuf
 from .selection import SelectMode, select
 from .serialisation import (
+    from_api,
     from_datacube,
     from_dict,
     from_json,
@@ -156,6 +157,7 @@ class Qube:
 
     # Serialisation methods, see serialisation.py
     from_datacube = classmethod(from_datacube)
+    from_api = classmethod(from_api)
 
     from_dict = classmethod(from_dict)
     to_dict = to_dict
