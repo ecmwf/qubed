@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, date
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -83,10 +83,18 @@ _dtype_name_map: dict[str, type] = {
     "int64": int,
     "float64": float,
     "date": datetime,
+    "datetime": datetime
 }
 
-# Compute the inverse mapping
-_dtype_map_inv: dict[type, str] = {v: k for k, v in _dtype_name_map.items()}
+# The inverse mapping
+# Note that datetime's default to date and need 
+_dtype_map_inv: dict[str, type] = {
+    str: "str",
+    int: "int64",
+    float: "float64",
+    date: "date",
+    datetime: "datetime",
+}
 
 # A list of functions to produce a human readable version of the string
 _dtype_summarise = {
@@ -94,6 +102,7 @@ _dtype_summarise = {
     "int64": str,
     "float64": lambda x: f"{x:.3g}",
     "date": lambda d: d.strftime("%Y-%m-%d"),
+    "datetime": lambda d: d.strftime("%Y-%m-%d %H%M"),
 }
 
 #  A list of functions to deserialise dtypes from the string representation
@@ -101,12 +110,14 @@ _dtype_json_deserialise = {
     "str": str,
     "int64": int,
     "float64": float,
-    "date": datetime.fromisoformat,
+    "date": lambda s: datetime.fromisoformat(s).date(),
+    "datetime": datetime.fromisoformat,
 }
 
 _dtype_json_serialise = {
     # Default is to let the json serialiser do it
     "date": lambda d: d.strftime("%Y-%m-%d"),
+    "datetime": lambda d: d.toisoformat,
 }
 
 

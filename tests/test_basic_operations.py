@@ -1,4 +1,5 @@
 from qubed import Qube
+from datetime import datetime
 
 q = Qube.from_tree("""
 root
@@ -158,3 +159,17 @@ def test_order_independence():
     )
 
     assert u == v
+
+
+def test_value_dtypes():
+    q = Qube.from_datacube({
+        "str": "d1",
+        "date" : datetime.strptime("20250101" + "1245", "%Y%m%d%H%M").date(),
+        "datetime" : datetime.strptime("20250101" + "1245", "%Y%m%d%H%M"),
+        "float": 1.4,
+        "int": [1324],
+        })
+    
+    for leaf in q.leaves():
+        for k, v in leaf.items():
+            assert type(v).__name__ == k

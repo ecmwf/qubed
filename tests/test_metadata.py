@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, date
 
 from frozendict import frozendict
 from qubed import Qube
@@ -206,7 +206,7 @@ def test_metadata_serialisation():
         {
             "expver": int,
             "param": int,
-            "date": lambda s: datetime.strptime(s, "%Y%m%d"),
+            "date": lambda s: datetime.strptime(s, "%Y%m%d").date(),
             "float": float,
         }
     )
