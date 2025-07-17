@@ -1,4 +1,5 @@
 import os
+
 os.environ["ECCODES_PYTHON_USE_FINDLIBS"] = "1"
 os.environ["FDB5_HOME"] = "/home/eouser/fdb_bundle/build"
 
@@ -7,8 +8,8 @@ import yaml
 
 CONFIG = "config/fdb_config.yaml"
 SELECTOR = {
-    "class" : "d1",
-    "dataset" : "on-demand-extremes-dt",
+    "class": "d1",
+    "dataset": "on-demand-extremes-dt",
 }
 
 with open(CONFIG) as f:
