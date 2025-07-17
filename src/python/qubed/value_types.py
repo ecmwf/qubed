@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import date, datetime
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -83,12 +83,12 @@ _dtype_name_map: dict[str, type] = {
     "int64": int,
     "float64": float,
     "date": datetime,
-    "datetime": datetime
+    "datetime": datetime,
 }
 
 # The inverse mapping
-# Note that datetime's default to date and need 
-_dtype_map_inv: dict[str, type] = {
+# Note that datetime's default to date and need
+_dtype_map_inv: dict[type, str] = {
     str: "str",
     int: "int64",
     float: "float64",
