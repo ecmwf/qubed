@@ -98,9 +98,9 @@ def from_datacube(cls: type[Qube], datacube: Mapping[str, str | Sequence[str]]) 
         if values == "*":
             values_group = WildcardGroup()
         elif isinstance(values, list):
-            values_group = QEnum(values)
+            values_group = QEnum.from_list(values)
         else:
-            values_group = QEnum([values])
+            values_group = QEnum.from_list([values])
 
         children = [cls.make_node(key, values_group, children)]
 

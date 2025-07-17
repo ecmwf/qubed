@@ -88,20 +88,20 @@ _dtype_name_map: dict[str, type] = {
 # Compute the inverse mapping
 _dtype_map_inv: dict[type, str] = {v: k for k, v in _dtype_name_map.items()}
 
-# A list of functions to deserialise dtypes from the string representation
-_dtype_deserialise = {
-    "str": str,
-    "int64": int,
-    "float64": float,
-    "date": datetime.fromisoformat,
-}
-
 # A list of functions to produce a human readable version of the string
 _dtype_summarise = {
     "str": str,
     "int64": str,
     "float64": lambda x: f"{x:.3g}",
     "date": lambda d: d.strftime("%Y-%m-%d"),
+}
+
+#  A list of functions to deserialise dtypes from the string representation
+_dtype_json_deserialise = {
+    "str": str,
+    "int64": int,
+    "float64": float,
+    "date": datetime.fromisoformat,
 }
 
 _dtype_json_serialise = {
@@ -165,7 +165,7 @@ class QEnum(ValueGroup):
 
     @classmethod
     def from_json(cls, type: Literal["enum"], dtype: str, values: list):
-        dtype_formatter = _dtype_deserialise[dtype]
+        dtype_formatter = _dtype_json_deserialise[dtype]
         return QEnum([dtype_formatter(v) for v in values], dtype=dtype)
 
     @classmethod
@@ -190,7 +190,7 @@ class QEnum(ValueGroup):
         elif isinstance(f, Iterable):
             # Try to convert the given values to the type of the current node values
             # This allows you to select [1,2,3] with [1.0,2.0,3.0] and ["1", "2", "3"]
-            dtype_formatter = _dtype_deserialise[self.dtype]
+            dtype_formatter = _dtype_json_deserialise[self.dtype]
             _f = set([dtype_formatter(v) for v in f])
             for i, v in enumerate(self.values):
                 if v in _f:
