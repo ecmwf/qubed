@@ -16,6 +16,8 @@ import pyfdb
 import yaml
 import sys
 
+from pathlib import Path
+
 process = psutil.Process()
 SELECTOR = {
     "class" : "d1",
@@ -53,8 +55,24 @@ for i, metadata in enumerate(fdb.list(SELECTOR, keys=True)):
     request.pop("year", None)
     request.pop("month", None)
 
-    key_order = ["class", "dataset",  "stream", "activity", "resolution", "expver", "experiment", "generation", "model", "realization", "type", "date", "time", "levtype", "levelist", "step", "param"]
+    date = request.pop("date")
+    time = request.pop("time")
+    request["datetime"] = datetime.strptime(date + time, "%Y%m%d%H%M")
+
+    key_order = ["class", "dataset",  "stream", "activity", "resolution", "expver", "experiment", "generation", "model", "realization", "type", "datetime", "date", "time", "levtype", "levelist", "step", "param"]
     request = {k : request[k] for k in key_order if k in request}
+
+    # Split path into three parts
+    # p = Path(metadata.pop("path"))
+    # part_0 = p.parents[1]
+    # part_1 = p.parents[0].relative_to(part_0)
+    # part_2 = p.name
+    
+    # metadata["path_0"] = str(part_0)
+    # metadata["path_1"] = str(part_1)
+    # metadata["path_2"] = str(part_2)
+
+
 
     q = (
         Qube.from_datacube(request)
@@ -63,7 +81,8 @@ for i, metadata in enumerate(fdb.list(SELECTOR, keys=True)):
                     "generation": int,
                     "realization": int,
                     "param": int,
-                    "date": lambda s: datetime.strptime(s, "%Y%m%d")})
+                    # "date": lambda s: datetime.strptime(s, "%Y%m%d")
+                })
         )
 
     qube = qube | q
