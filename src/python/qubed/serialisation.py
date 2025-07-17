@@ -10,7 +10,7 @@ import requests
 from frozendict import frozendict
 
 from .types import NodeType
-from .value_types import QEnum, ValueGroup, WildcardGroup, values_from_json
+from .value_types import QEnum, ValueGroup, ValueType, WildcardGroup, values_from_json
 
 if TYPE_CHECKING:
     from .Qube import Qube
@@ -80,7 +80,9 @@ def to_dict(q: Qube) -> dict:
     return to_dict(q)[1]
 
 
-def from_datacube(cls: type[Qube], datacube: Mapping[str, str | Sequence[str]]) -> Qube:
+def from_datacube(
+    cls: type[Qube], datacube: Mapping[str, ValueType | Sequence[ValueType]]
+) -> Qube:
     """
     Construct a qube from an input like:
     {

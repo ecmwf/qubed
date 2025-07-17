@@ -1,5 +1,6 @@
-from qubed import Qube
 from datetime import datetime
+
+from qubed import Qube
 
 q = Qube.from_tree("""
 root
@@ -162,14 +163,25 @@ def test_order_independence():
 
 
 def test_value_dtypes():
-    q = Qube.from_datacube({
-        "str": "d1",
-        "date" : datetime.strptime("20250101" + "1245", "%Y%m%d%H%M").date(),
-        "datetime" : datetime.strptime("20250101" + "1245", "%Y%m%d%H%M"),
-        "float": 1.4,
-        "int": [1324],
-        })
-    
+    q = Qube.from_datacube(
+        {
+            "str": "d1",
+            "date": datetime.strptime("20250101" + "1245", "%Y%m%d%H%M").date(),
+            "datetime": datetime.strptime("20250101" + "1245", "%Y%m%d%H%M"),
+            "float": 1.4,
+            "int": [1324],
+        }
+    )
+
     for leaf in q.leaves():
         for k, v in leaf.items():
             assert type(v).__name__ == k
+
+    # Test round trip through json
+    q2 = Qube.from_json(q.to_json())
+    assert q == q2
+
+    assert (
+        str(q)
+        == "root, str=d1, date=2025-01-01, datetime=2025-01-01T12:45, float=1.4, int=1324"
+    )

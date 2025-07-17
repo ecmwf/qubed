@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     pass
 
 Indices: TypeAlias = np.ndarray | tuple[int, ...]
+ValueType: TypeAlias = str | int | float | date | datetime
 
 
 @dataclass(frozen=True)
@@ -102,7 +103,7 @@ _dtype_summarise = {
     "int64": str,
     "float64": lambda x: f"{x:.3g}",
     "date": lambda d: d.strftime("%Y-%m-%d"),
-    "datetime": lambda d: d.strftime("%Y-%m-%d %H%M"),
+    "datetime": lambda d: d.strftime("%Y-%m-%dT%H:%M"),
 }
 
 #  A list of functions to deserialise dtypes from the string representation
@@ -117,7 +118,7 @@ _dtype_json_deserialise = {
 _dtype_json_serialise = {
     # Default is to let the json serialiser do it
     "date": lambda d: d.strftime("%Y-%m-%d"),
-    "datetime": lambda d: d.strftime("%Y-%m-%d %H%M"),
+    "datetime": lambda d: d.strftime("%Y-%m-%dT%H:%M"),
 }
 
 
