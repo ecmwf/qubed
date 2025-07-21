@@ -10,7 +10,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Any, Iterable, Iterator, Mapping, Self
+from typing import Any, Iterable, Iterator, Literal, Mapping, Self, overload
 
 import numpy as np
 from frozendict import frozendict
@@ -251,7 +251,26 @@ class Qube:
         assert out is not None
         return out
 
-    def leaves(self) -> Iterable[dict[str, str]]:
+    @overload
+    def leaves(
+        self, metadata: Literal[True]
+    ) -> Iterator[tuple[dict[str, str], dict[str, str | np.ndarray]]]: ...
+
+    @overload
+    def leaves(self, metadata: Literal[False]) -> Iterable[dict[str, str]]: ...
+
+    @overload
+    def leaves(self) -> Iterable[dict[str, str]]: ...
+
+    def leaves(
+        self, metadata: bool = False
+    ) -> (
+        Iterable[dict[str, str]]
+        | Iterator[tuple[dict[str, str], dict[str, str | np.ndarray]]]
+    ):
+        if metadata:
+            yield from self.leaves_with_metadata()
+            return
         for value in self.values:
             if not self.children:
                 yield {self.key: value}

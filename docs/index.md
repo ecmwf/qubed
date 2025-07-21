@@ -17,6 +17,7 @@ background.md
 algorithms.md
 fiab.md
 cmd.md
+metadata.md
 ```
 
 ```{code-cell} python3
