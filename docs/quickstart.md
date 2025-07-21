@@ -13,17 +13,17 @@ First install qubed with `pip install qubed`. Now, let's dive in with a real wor
 ```{code-cell} python3
 import requests
 from qubed import Qube
-climate_dt = Qube.from_json(requests.get("https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/climate_dt.json").json())
+climate_dt = Qube.from_api({"dataset": "climate-dt"})
 climate_dt.html(depth=1)
 ```
 
 Click the arrows to expand and drill down deeper into the data.
 
 ```{note}
-There is currently a simple Qube web browser hosted [here](https://qubed.lumi.apps.dte.destination-earth.eu/). Browse that and copy the 'Example Qube Code' to download a Qube representing the selection at that point. You'll get something like `Qube.from_json(requests.get("https://qubed.lumi.apps.dte.destination-earth.eu/api/v1/select/climate-dt/?").json())`{l=python}
+There is currently a simple Qube web browser hosted [here](https://qubed.lumi.apps.dte.destination-earth.eu/). This is what `Qube.from_api` talks to by default. You can also browse that viewer and copy the 'Example Qube Code' to download a Qube representing the selection at that point. If the viewer is down for any reason you can also get an example qube from the repository: `# Backup option: climate_dt = Qube.from_json(requests.get("https://github.com/ecmwf/qubed/raw/refs/heads/main/tests/example_qubes/climate-dt.json").json())`{l=python}
 ```
 
-Fundamentally a Qube represents a set identifiers which are a set of key value pairs, here's the one leaf in the Climate DT dataset:
+Fundamentally a Qube represents a set identifiers which are a set of key value pairs, here's the first such identifier in the Climate DT dataset:
 
 ```{code-cell} python3
 next(climate_dt.leaves())
