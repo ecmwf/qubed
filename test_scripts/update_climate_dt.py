@@ -13,7 +13,7 @@ import sys
 process = psutil.Process()
 SELECTOR = "class=d1,dataset=climate-dt"
 FILEPATH = "tests/example_qubes/climate-dt.json"
-API = "https://qubed-dev.lumi.apps.dte.destination-earth.eu/api/v2"
+API = "https://qubed.lumi.apps.dte.destination-earth.eu/api/v2"
 CONFIG = "config/fdb_config.yaml"
 FULL_OR_PARTIAL = "FULL"
 

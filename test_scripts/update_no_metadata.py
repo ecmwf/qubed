@@ -10,9 +10,72 @@ from tqdm import tqdm
 import requests
 import sys
 
+#!/usr/bin/env python3
+import argparse
+import os
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Convert data in an fdb into a qube (no metadata)')
+    
+    parser.add_argument(
+        '--selector',
+        type=str,
+        default="class=d1,dataset=climate-dt",
+        help='Selector string (default: %(default)s)'
+    )
+    
+    parser.add_argument(
+        '--filepath',
+        type=str,
+        default="tests/example_qubes/climate-dt.json",
+        help='Path to file (may not exist) (default: %(default)s)'
+    )
+    
+    parser.add_argument(
+        '--api',
+        type=str,
+        default="https://qubed.lumi.apps.dte.destination-earth.eu/api/v2",
+        help='API URL (default: %(default)s)'
+    )
+    
+    parser.add_argument(
+        '--config',
+        type=str,
+        default="config/fdb_config.yaml",
+        help='Configuration file path (must exist) (default: %(default)s)'
+    )
+    
+    # Mutually exclusive group for --full/--partial
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        '--full',
+        action='store_const',
+        const='FULL',
+        dest='full_or_partial',
+        help='Use FULL mode (default)'
+    )
+    mode_group.add_argument(
+        '--partial',
+        action='store_const',
+        const='PARTIAL',
+        dest='full_or_partial',
+        help='Use PARTIAL mode'
+    )
+    
+    # Set default for full_or_partial
+    parser.set_defaults(full_or_partial='FULL')
+    
+    args = parser.parse_args()
+    
+    # Validate that config file exists
+    if not os.path.exists(args.config):
+        parser.error(f"Configuration file does not exist: {args.config}")
+    
+    return args
+
 process = psutil.Process()
-SELECTOR = "class=d1,dataset=on-demand-extremes-dt"
-FILEPATH = "tests/example_qubes/on-demand-extremes-dt.json"
+SELECTOR = "class=d1,dataset=climate-dt"
+FILEPATH = "tests/example_qubes/climate-dt.json"
 API = "https://qubed.lumi.apps.dte.destination-earth.eu/api/v2"
 CONFIG = "config/fdb_config.yaml"
 FULL_OR_PARTIAL = "FULL"
