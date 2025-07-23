@@ -21,16 +21,24 @@ from pathlib import Path
 process = psutil.Process()
 SELECTOR = {
     "class" : "d1",
-    "dataset" : "extremes-dt",
+    "dataset" : "climate-dt",
+    "year": "2025",
+    "month": "4/5/6/7/8/9/10/11/12"
 }
-FILEPATH = "tests/example_qubes/extremes-dt_with_metadata.json"
-API = "https://qubed-dev.lumi.apps.dte.destination-earth.eu/api/v2"
+FILEPATH = "tests/example_qubes/climate-dt_with_metadata_one_year_2025.json"
+API = "https://qubed-dev-.lumi.apps.dte.destination-earth.eu/api/v2"
 CONFIG = "config/fdb_config.yaml"
-FULL_OR_PARTIAL = "FULL"
+FULL_OR_PARTIAL = "PARTIAL"
 
 with open("config/api.secret", "r") as f:
     secret = f.read()
 
+
+def from_ecmwf_date(s: str) -> datetime:
+    return datetime.strptime(s, "%Y%m%d")
+
+def to_ecmwf_date(d: datetime) -> str:
+    return d.strftime("%Y%m%d")
 
 with open(CONFIG) as f:
     config = yaml.safe_load(f)
@@ -49,9 +57,10 @@ for i, metadata in enumerate(fdb.list(SELECTOR, keys=True)):
     request.pop("year", None)
     request.pop("month", None)
 
-    date = request.pop("date")
-    time = request.pop("time")
-    request["datetime"] = datetime.strptime(date + time, "%Y%m%d%H%M")
+    # Remove date and time and create datetime
+    # date = request.pop("date")
+    # time = request.pop("time")
+    # request["datetime"] = datetime.strptime(date + time, "%Y%m%d%H%M")
 
     key_order = ["class", "dataset",  "stream", "activity", "resolution", "expver", "experiment", "generation", "model", "realization", "type", "datetime", "date", "time", "levtype", "levelist", "step", "param"]
     request = {k : request[k] for k in key_order if k in request}
@@ -86,7 +95,6 @@ for i, metadata in enumerate(fdb.list(SELECTOR, keys=True)):
             json.dump(qube.to_json(), f)
         # qube.print()
     # if i > 5000: break
-print(i)
 
 qube.print()
 

@@ -81,7 +81,7 @@ for i, metadata in enumerate(fdb.list(SELECTOR, keys=True)):
                     "generation": int,
                     "realization": int,
                     "param": int,
-                    # "date": lambda s: datetime.strptime(s, "%Y%m%d")
+                    "date": lambda s: datetime.strptime(s, "%Y%m%d").date()
                 })
         )
 
@@ -92,7 +92,6 @@ for i, metadata in enumerate(fdb.list(SELECTOR, keys=True)):
             json.dump(qube.to_json(), f)
         # qube.print()
     # if i > 5000: break
-print(i)
 
 qube.print()
 
