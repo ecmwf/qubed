@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import dataclasses
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     FrozenSet,
@@ -19,9 +17,6 @@ from typing import (
 )
 
 import numpy as np
-
-if TYPE_CHECKING:
-    pass
 
 Indices: TypeAlias = np.ndarray | tuple[int, ...]
 ValueType: TypeAlias = str | int | float | date | datetime
@@ -252,24 +247,85 @@ class WildcardGroup(ValueGroup):
 
 
 @dataclass(frozen=True)
-class Range(ValueGroup, ABC):
-    dtype: str = dataclasses.field(kw_only=True)
+class DateRange(ValueGroup):
+    spans: list[tuple[date, date]]
+    step: timedelta = timedelta(days=1)
 
-    start: Any
-    end: Any
-    step: Any
-
-    def min(self):
-        return self.start
+    def min(self) -> date:
+        return self.spans[0][0]
 
     def __iter__(self) -> Iterator[Any]:
-        i = self.start
-        while i <= self.end:
-            yield i
-            i += self.step
+        for start, stop in self.spans:
+            current = start
+            while start != stop:
+                yield current
+                current += self.step
+
+    def __len__(self) -> int:
+        return sum((stop - start) // self.step for start, stop in self.spans)
+
+    def summary(self) -> str:
+        f = _dtype_summarise["date"]
+        return " ".join(f"{f(start)}/to/{f(stop)}" for start, stop in self.spans)
+
+    # def __contains__(self, value: date) -> bool:
+    #     # Make
+    #     for span in self.spans:
+    #         if
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+    @classmethod
+    def from_strings(cls, values: Iterable[str]) -> Sequence[ValueGroup]:
+        return [cls(tuple(values))]
 
     def to_json(self):
-        return dataclasses.asdict(self)
+        if self.dtype in _dtype_json_serialise:
+            serialiser = _dtype_json_serialise[self.dtype]
+            values = [serialiser(v) for v in self.values]
+        else:
+            values = self.values
+        return {"type": "enum", "dtype": self.dtype, "values": values}
+
+    @classmethod
+    def from_json(cls, type: Literal["enum"], dtype: str, values: list):
+        dtype_formatter = _dtype_json_deserialise[dtype]
+        return QEnum([dtype_formatter(v) for v in values], dtype=dtype)
+
+    @classmethod
+    def from_list(cls, obj):
+        example = obj[0]
+        dtype = type(example)
+        assert dtype in _dtype_map_inv, (
+            f"data type not allowed {dtype}, currently only {_dtype_map_inv.keys()} are supported."
+        )
+        assert [type(v) is dtype for v in obj]
+        return cls(obj, dtype=_dtype_map_inv[dtype])
+
+    def filter(self, f: list[str] | Callable[[Any], bool]) -> tuple[Indices, QEnum]:
+        indices = []
+        values = []
+        if callable(f):
+            for i, v in enumerate(self.values):
+                if f(v):
+                    indices.append(i)
+                    values.append(v)
+
+        elif isinstance(f, Iterable):
+            # Try to convert the given values to the type of the current node values
+            # This allows you to select [1,2,3] with [1.0,2.0,3.0] and ["1", "2", "3"]
+            dtype_formatter = _dtype_json_deserialise[self.dtype]
+            _f = set([dtype_formatter(v) for v in f])
+            for i, v in enumerate(self.values):
+                if v in _f:
+                    indices.append(i)
+                    values.append(v)
+        else:
+            raise ValueError(f"Unknown selection type {f}")
+
+        return tuple(indices), QEnum(values, dtype=self.dtype)
 
 
 def values_from_json(obj: dict | list) -> ValueGroup:
