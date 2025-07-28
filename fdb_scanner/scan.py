@@ -25,15 +25,17 @@ Extremes DT Daily of last week: --last_n_days=7 --selector class=d1,dataset=extr
 On Demand Extremes DT Full Daily scan: --full --selector class=d1,dataset=on-demand-extremes-dt --filepath tests/example_qubes/on-demand-extremes-dt.json
 
 Example crontab:
-# On Demand Extremes DT Daily at 4am
-cd /home/eouser/qubed && ./fdb_scanner/scan.py --full --selector class=d1,dataset=on-demand-extremes-dt --filepath tests/example_qubes/on-demand-extremes-dt.json >> ./fdb_scanner/logs/on-demand-extremes-dt.log
+# On Demand Extremes DT Full scan every day at 4am
+0 4 * * * cd /home/eouser/qubed && ./.venv/bin/python3.12 ./fdb_scanner/scan.py --quiet --full --selector class=d1,dataset=on-demand-extremes-dt --filepath tests/example_qubes/on-demand-extremes-dt.json >> ./fdb_scanner/logs/on-demand-extremes-dt-full-daily.log 2>&1
 
-# Extremes-dt Daily at 3am
-cd /home/eouser/qubed && ./fdb_scanner/scan.py --last_n_days=7 --selector class=d1,dataset=extremes-dt --filepath tests/example_qubes/extremes-dt.json >> ./fdb_scanner/logs/extremes-dt.log
+# On Demand Extremes DT Partial scan every hour
+*/37 * * * cd /home/eouser/qubed && ./.venv/bin/python3.12 ./fdb_scanner/scan.py --quiet --last_n_days=14 --selector class=d1,dataset=on-demand-extremes-dt --filepath tests/example_qubes/on-demand-extremes-dt.json >> ./fdb_scanner/logs/on-demand-extremes-dt-partial-hourly.log 2>&1
+
+# Extremes-dt Daily Partial scan every hour at 12 past
+*/12 * * * * cd /home/eouser/qubed && ./.venv/bin/python3.12 ./fdb_scanner/scan.py --quiet --last_n_days=14 --selector class=d1,dataset=extremes-dt --filepath tests/example_qubes/extremes-dt.json >> ./fdb_scanner/logs/extremes-dt.log 2>&1
 
 # Climate dt gen 2 Weekly on sunday at 2am
-cd /home/eouser/qubed && ./fdb_scanner/scan.py --full --selector class=d1,dataset=climate-dt,generation=2 --filepath tests/example_qubes/climate-dt-gen-2.json >> ./fdb_scanner/logs/climate-dt.log
-
+0 2 * * SUN cd /home/eouser/qubed && ./.venv/bin/python3.12 ./fdb_scanner/scan.py --quiet --full --selector class=d1,dataset=climate-dt,generation=2 --filepath tests/example_qubes/climate-dt-gen-2.json >> ./fdb_scanner/logs/climate-dt.log 2>&1
 """
 import json
 import subprocess
