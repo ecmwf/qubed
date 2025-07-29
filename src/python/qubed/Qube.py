@@ -408,12 +408,17 @@ class Qube:
 
         return remove_key(self).compress()
 
-    def convert_dtypes(self, converters: dict[str, Callable[[Any], Any]]):
+    def convert_dtypes(self, converters: dict[str, Callable[[Any], Any] | type]):
         def convert(node: Qube) -> Qube:
             if node.key in converters:
                 converter = converters[node.key]
-                values = [converter(v) for v in node.values]
-                new_node = node.replace(values=QEnum.from_list(values))
+
+                if isinstance(converter, type) and issubclass(converter, ValueGroup):
+                    values = converter.from_list(node.values)
+                else:
+                    values = QEnum.from_list([converter(v) for v in node.values])
+
+                new_node = node.replace(values=values)
                 return new_node
             return node
 

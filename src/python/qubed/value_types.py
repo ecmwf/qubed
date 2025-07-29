@@ -11,7 +11,6 @@ from typing import (
     Iterator,
     Literal,
     Self,
-    Sequence,
     TypeAlias,
     TypeVar,
 )
@@ -52,8 +51,8 @@ class ValueGroup(ABC):
 
     @classmethod
     @abstractmethod
-    def from_strings(cls, values: Iterable[str]) -> Sequence[ValueGroup]:
-        "Given a list of strings, return a one or more ValueGroups of this type."
+    def from_list(cls, values: Iterable[str]) -> ValueGroup:
+        "Given a list of objects, return a ValueGroup"
         pass
 
     @abstractmethod
@@ -155,10 +154,6 @@ class QEnum(ValueGroup):
     def dtype(self):
         return self._dtype
 
-    @classmethod
-    def from_strings(cls, values: Iterable[str]) -> Sequence[ValueGroup]:
-        return [cls(tuple(values))]
-
     def min(self):
         return min(self.values)
 
@@ -176,7 +171,7 @@ class QEnum(ValueGroup):
         return QEnum([dtype_formatter(v) for v in values], dtype=dtype)
 
     @classmethod
-    def from_list(cls, obj):
+    def from_list(cls, obj) -> Self:
         example = obj[0]
         dtype = type(example)
         assert dtype in _dtype_map_inv, (
@@ -236,8 +231,8 @@ class WildcardGroup(ValueGroup):
         return "*"
 
     @classmethod
-    def from_strings(cls, values: Iterable[str]) -> Sequence[ValueGroup]:
-        return [WildcardGroup()]
+    def from_list(cls, values: Iterable[Any]) -> Self:
+        return cls()
 
     def filter(self, f: list[str] | Callable[[Any], bool]) -> QEnum:
         if callable(f):
@@ -248,8 +243,12 @@ class WildcardGroup(ValueGroup):
 
 @dataclass(frozen=True)
 class DateRange(ValueGroup):
-    spans: list[tuple[date, date]]
+    spans: tuple[tuple[date, date], ...]
     step: timedelta = timedelta(days=1)
+    _dtype: type = date
+
+    def __gt__(self, other: Self):
+        return self.spans[0][0] >= other.spans[-1][1]
 
     def min(self) -> date:
         return self.spans[0][0]
@@ -266,66 +265,49 @@ class DateRange(ValueGroup):
 
     def summary(self) -> str:
         f = _dtype_summarise["date"]
-        return " ".join(f"{f(start)}/to/{f(stop)}" for start, stop in self.spans)
+        return ",".join(f"{f(start)}/to/{f(stop)}" for start, stop in self.spans)
 
-    # def __contains__(self, value: date) -> bool:
-    #     # Make
-    #     for span in self.spans:
-    #         if
+    def __contains__(self, value: date) -> bool:
+        # You'd think a binary search would be faster here
+        # but the crossover comes at about 300 distinct ranges
+        for start, end in self.spans:
+            if start <= value < end:
+                return True
+        return False
 
     @property
     def dtype(self):
         return self._dtype
 
-    @classmethod
-    def from_strings(cls, values: Iterable[str]) -> Sequence[ValueGroup]:
-        return [cls(tuple(values))]
-
     def to_json(self):
-        if self.dtype in _dtype_json_serialise:
-            serialiser = _dtype_json_serialise[self.dtype]
-            values = [serialiser(v) for v in self.values]
-        else:
-            values = self.values
-        return {"type": "enum", "dtype": self.dtype, "values": values}
+        serialiser = _dtype_json_serialise["date"]
+        spans = [(serialiser(s), serialiser(e)) for s, e in self.spans]
+        return {"type": "ranges", "dtype": self.dtype, "spans": spans}
 
     @classmethod
     def from_json(cls, type: Literal["enum"], dtype: str, values: list):
-        dtype_formatter = _dtype_json_deserialise[dtype]
-        return QEnum([dtype_formatter(v) for v in values], dtype=dtype)
+        pass
 
     @classmethod
-    def from_list(cls, obj):
-        example = obj[0]
-        dtype = type(example)
-        assert dtype in _dtype_map_inv, (
-            f"data type not allowed {dtype}, currently only {_dtype_map_inv.keys()} are supported."
+    def from_list(cls, dates: list[date]) -> Self:
+        assert [type(v) is date for v in dates], (
+            f"Only enums of dates can be converted to DateRange, types given: {set([type(v) for v in dates])}"
         )
-        assert [type(v) is dtype for v in obj]
-        return cls(obj, dtype=_dtype_map_inv[dtype])
+
+        first, *rest = sorted(dates)
+        current_span: tuple[date, date] = (first, first + cls.step)
+        spans: list[tuple[date, date]] = []
+        for d in rest:
+            if d == current_span[1]:
+                current_span = (current_span[0], current_span[1] + cls.step)
+            else:
+                spans.append(current_span)
+                current_span = (d, d + cls.step)
+        spans.append(current_span)
+        return cls(tuple(spans))
 
     def filter(self, f: list[str] | Callable[[Any], bool]) -> tuple[Indices, QEnum]:
-        indices = []
-        values = []
-        if callable(f):
-            for i, v in enumerate(self.values):
-                if f(v):
-                    indices.append(i)
-                    values.append(v)
-
-        elif isinstance(f, Iterable):
-            # Try to convert the given values to the type of the current node values
-            # This allows you to select [1,2,3] with [1.0,2.0,3.0] and ["1", "2", "3"]
-            dtype_formatter = _dtype_json_deserialise[self.dtype]
-            _f = set([dtype_formatter(v) for v in f])
-            for i, v in enumerate(self.values):
-                if v in _f:
-                    indices.append(i)
-                    values.append(v)
-        else:
-            raise ValueError(f"Unknown selection type {f}")
-
-        return tuple(indices), QEnum(values, dtype=self.dtype)
+        pass
 
 
 def values_from_json(obj: dict | list) -> ValueGroup:
