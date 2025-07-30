@@ -12,4 +12,6 @@ stacServer:
 ingress:
   enabled: True
   tlsSecretName: "lumi-wildcard-tls"
-  hostname: "qubed-dev.lumi.apps.dte.destination-earth.eu"
+  hostnames:
+    - "qubed-dev.lumi.apps.dte.destination-earth.eu"
+    - "catalogue-dev.lumi.apps.dte.destination-earth.eu"
