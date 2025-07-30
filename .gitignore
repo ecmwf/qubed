@@ -22,3 +22,4 @@ tests/data/
 *.secret
 node_modules/
 uv.lock
+*.log
