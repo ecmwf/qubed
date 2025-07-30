@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ECMWF DestinE STAC Viewer</title>
+    <title>{{title}}</title>
     <link rel="stylesheet" href="/static/styles.css" />
     <link rel="stylesheet" href="/static/qube_styles.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
@@ -27,11 +27,7 @@
 <body>
     <div id="viewer">
         <div id="catalog-list">
-            {% if branch == "Main" %}
-            <h2>Qubed Cataloque Browser</h2>
-            {% else %}
-            <h2>Qubed Cataloque Browser ({{branch}})</h2>
-            {% endif %}
+            <h2>{{title}}</h2>
 
             <p>{{message}}</p>
             <p>Select one <strong>or multiple</strong> items and then click next to iteratively build up a full request.</p>

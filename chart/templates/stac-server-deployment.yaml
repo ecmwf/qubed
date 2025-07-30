@@ -25,11 +25,13 @@ spec:
                     name: api-key
                     key: API_KEY
             - name: API_URL
-              value: "https://{{ .Values.ingress.hostname }}/api/v2/"
+              value: "https://{{ index .Values.ingress.hostnames 0 }}/api/v2/"
             - name: QUBED_DATA_PREFIX
               value: "/code/qubed"
-            - name: branch
+            - name: GIT_BRANCH
               value: {{ .Values.branch }}
+            - name: TITLE
+              value: {{ .Values.title }}
           ports:
             - containerPort: {{ .Values.stacServer.servicePort }}
 ---

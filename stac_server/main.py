@@ -95,7 +95,8 @@ async def read_root(request: Request):
     config = {
         "request": request,
         "api_url": os.environ.get("API_URL", "/api/v2/"),
-        "branch": os.environ.get("branch", "local"),
+        "branch": os.environ.get("GIT_BRANCH", "local"),
+        "title": os.environ.get("TITLE", "Qubed Catalogue Browser"),
         "message": "",
         "last_database_update": "",
     }
