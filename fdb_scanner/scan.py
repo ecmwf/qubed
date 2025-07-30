@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-WARNING this scipt current has hardcoded code to:
-    remove year and month keys
-    order keys for climate dt data
+WARNING this scipt is hardcoded to:
+    - remove `year` and `month` keys
+    - order keys in a way that makes sense for the climate/extremes/ondemand dt data
 
-To use it for operation or other day you need to change that.
+To use it for operational data or other data, you need to change that.
 
 Example usage (Climate DT):
     fdb_scanner/scan.py --selector class=d1,dataset=climate-dt --filepath tests/example_qubes/test.json --last_n_days=3
