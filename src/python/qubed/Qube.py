@@ -356,7 +356,7 @@ class Qube:
                     return Qube.make_root(deepcopy(c.children))
             raise KeyError(f"Key '{key}' not found in children of {self.key}")
         else:
-            raise ValueError(f"Unknown key type {args}")
+            raise ValueError(f"Unknown key type {args} on {self}")
 
     @cached_property
     def n_leaves(self) -> int:
