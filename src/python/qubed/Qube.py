@@ -373,6 +373,18 @@ class Qube:
             return 0
         return 1 + sum(c.n_nodes for c in self.children)
 
+    def walk(self, func: "Callable[[Qube]]"):
+        """
+        Call a function on every node of the Qube.
+        """
+
+        def walk(node: Qube):
+            func(node)
+            for c in node.children:
+                walk(c)
+
+        walk(self)
+
     def transform(self, func: "Callable[[Qube], Qube | Iterable[Qube]]") -> Qube:
         """
         Call a function on every node of the Qube, return one or more nodes.
