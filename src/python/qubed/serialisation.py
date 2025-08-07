@@ -75,7 +75,13 @@ def to_dict(q: Qube) -> dict:
 
     def to_dict(q: Qube) -> tuple[str, dict]:
         key = f"{q.key}={','.join(str(v) for v in q.values)}"
-        return key, dict(to_dict(c) for c in q.children)
+        values = {}
+        for child in q.children:
+            subkey, subtree = to_dict(child)
+            if subkey in values:
+                raise ValueError(
+                    f"to_dict does not support uncompressed trees, the key value pair {key} would have to appear twice to encode this qube!"
+                )
 
     return to_dict(q)[1]
 

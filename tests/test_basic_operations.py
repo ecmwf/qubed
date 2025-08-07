@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import pytest
 from qubed import Qube
 
 q = Qube.from_tree("""
@@ -185,3 +186,120 @@ def test_value_dtypes():
         str(q)
         == "root, str=d1, date=2025-01-01, datetime=2025-01-01T12:45, float=1.4, int=1324"
     )
+
+
+def test_flattten():
+    q = Qube.from_tree("""
+    root
+    ├── class=od, expver=0001/0002, param=1/2
+    └── class=rd
+        ├── expver=0001, param=1/2/3
+        └── expver=0002, param=1/2
+    """)
+
+    assert q.flatten() == Qube.from_json(
+        {
+            "key": "root",
+            "values": {"type": "enum", "dtype": "str", "values": ["root"]},
+            "metadata": {},
+            "children": [
+                {
+                    "key": "class",
+                    "values": {"type": "enum", "dtype": "str", "values": ["od"]},
+                    "metadata": {},
+                    "children": [
+                        {
+                            "key": "expver",
+                            "values": {
+                                "type": "enum",
+                                "dtype": "str",
+                                "values": ["0001", "0002"],
+                            },
+                            "metadata": {},
+                            "children": [
+                                {
+                                    "key": "param",
+                                    "values": {
+                                        "type": "enum",
+                                        "dtype": "str",
+                                        "values": ["1", "2"],
+                                    },
+                                    "metadata": {},
+                                    "children": [],
+                                }
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "key": "class",
+                    "values": {"type": "enum", "dtype": "str", "values": ["rd"]},
+                    "metadata": {},
+                    "children": [
+                        {
+                            "key": "expver",
+                            "values": {
+                                "type": "enum",
+                                "dtype": "str",
+                                "values": ["0001"],
+                            },
+                            "metadata": {},
+                            "children": [
+                                {
+                                    "key": "param",
+                                    "values": {
+                                        "type": "enum",
+                                        "dtype": "str",
+                                        "values": ["1", "2", "3"],
+                                    },
+                                    "metadata": {},
+                                    "children": [],
+                                }
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "key": "class",
+                    "values": {"type": "enum", "dtype": "str", "values": ["rd"]},
+                    "metadata": {},
+                    "children": [
+                        {
+                            "key": "expver",
+                            "values": {
+                                "type": "enum",
+                                "dtype": "str",
+                                "values": ["0002"],
+                            },
+                            "metadata": {},
+                            "children": [
+                                {
+                                    "key": "param",
+                                    "values": {
+                                        "type": "enum",
+                                        "dtype": "str",
+                                        "values": ["1", "2"],
+                                    },
+                                    "metadata": {},
+                                    "children": [],
+                                }
+                            ],
+                        }
+                    ],
+                },
+            ],
+        }
+    )
+
+
+def test_invalid_from_dict():
+    with pytest.raises(ValueError):
+        q = Qube.from_tree("""
+        root
+        ├── class=od, expver=0001/0002, param=1/2
+        └── class=rd
+            ├── expver=0001, param=1/2/3
+            └── expver=0002, param=1/2
+        """)
+
+        q.flatten().to_dict()

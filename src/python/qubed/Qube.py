@@ -332,6 +332,34 @@ class Qube:
 
         return to_list_of_cubes(self)
 
+    def flatten(self) -> Qube:
+        """
+        Flatten a tree out into an array of dense trunks. For example:
+        root
+        ├── class=od, expver=0001/0002, param=1/2
+        └── class=rd
+            ├── expver=0001, param=1/2/3
+            └── expver=0002, param=1/2
+
+        would become:
+
+        root
+        ├── class=od, expver=0001/0002, param=1/2
+        ├── class=rd, expver=0001, param=1/2/3
+        └── class=rd, expver=0002, param=1/2
+        """
+
+        def _flatten(node: Qube) -> Iterator[Qube]:
+            if not node.children:
+                yield node
+            for child in node.children:
+                for grandchild in _flatten(child):
+                    yield node.replace(children=[grandchild])
+
+        return self.make_root(
+            children=[gc for c in self.children for gc in _flatten(c)]
+        )
+
     def __getitem__(self, args) -> Qube:
         if isinstance(args, str):
             specifiers = args.split(",")
