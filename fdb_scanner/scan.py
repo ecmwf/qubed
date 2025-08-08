@@ -153,6 +153,7 @@ dates = [from_ecmwf_date(s) for s in axes["date"]]
 dataset_start_date, dataset_end_date = min(dates), max(dates)
 start_date, end_date = dataset_start_date, dataset_end_date
 chunk_size = min(dataset_end_date - dataset_start_date, timedelta(days=120))
+dates_in_range = [d for d in dates if start_date <= d < end_date]
 
 if args.full_or_partial is ScanMode.Partial:
     assert args.last_n_days, "Must provide --last_n_days or --full"
@@ -283,7 +284,8 @@ with open(args.filepath, "w") as f:
     json.dump(existing_qube.to_json(), f)
 
 # Delete the temporary file
-Path(args.filepath + ".tmp").unlink()
+tmp_file = Path(args.filepath + ".tmp")
+if tmp_file.exists(): tmp_file.unlink()
 
 # Upload the whole thing to the API
 r = requests.post(
