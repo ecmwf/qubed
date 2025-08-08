@@ -25,3 +25,4 @@ uv.lock
 *.log
 *.tmp
 test_scripts/data
+tests/example_qubes
