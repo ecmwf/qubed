@@ -69,3 +69,8 @@ dev = [
     "isort",
 
 ]
+
+# Support for the concise Binary Object Representation (CBOR) (RFC 8949)
+cbor = [
+    "cbor2"
+]
