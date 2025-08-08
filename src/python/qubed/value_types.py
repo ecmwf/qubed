@@ -91,7 +91,7 @@ _dtype_map_inv: dict[type, str] = {
     datetime: "datetime",
 }
 
-# A list of functions to produce a human readable version of the string
+# A list of functions to produce a human readable version of the value
 _dtype_summarise = {
     "str": str,
     "int64": str,
@@ -100,8 +100,9 @@ _dtype_summarise = {
     "datetime": lambda d: d.strftime("%Y-%m-%dT%H:%M"),
 }
 
-#  A list of functions to deserialise dtypes from the string representation
-_dtype_json_deserialise = {
+#  A list of functions to make a best effort attempt to
+# convert to the value type to the target type
+_dtype_try_convert = {
     "str": str,
     "int64": int,
     "float64": float,
@@ -109,11 +110,25 @@ _dtype_json_deserialise = {
     "datetime": datetime.fromisoformat,
 }
 
+#  A list of functions to (de)serialise dtypes to/from the json representation
+_dtype_json_deserialise = {
+    "date": lambda s: datetime.fromisoformat(s).date(),
+    "datetime": datetime.fromisoformat,
+}
+
 _dtype_json_serialise = {
-    # Default is to let the json serialiser do it
     "date": lambda d: d.strftime("%Y-%m-%d"),
     "datetime": lambda d: d.strftime("%Y-%m-%dT%H:%M"),
 }
+
+# CBOR is a binary protocol that retains JSON object structure
+# https://cbor.io/
+# https://cbor2.readthedocs.io
+# While also adding native support for additional types like dates and datetimes
+# Hence the serialisation for CBOR is similar but preserves more types in their native format.
+# Currently all supported types are natively encoded in cbor
+_dtype_cbor_deserialise = {}
+_dtype_cbor_serialise = {}
 
 
 @dataclass(frozen=True, order=True)
@@ -167,7 +182,11 @@ class QEnum(ValueGroup):
 
     @classmethod
     def from_json(cls, type: Literal["enum"], dtype: str, values: list):
-        dtype_formatter = _dtype_json_deserialise[dtype]
+        dtype_formatter = _dtype_json_deserialise.get(dtype, None)
+        # Fast path
+        if dtype_formatter is None:
+            return QEnum(values, dtype=dtype)
+
         return QEnum([dtype_formatter(v) for v in values], dtype=dtype)
 
     @classmethod
@@ -192,7 +211,7 @@ class QEnum(ValueGroup):
         elif isinstance(f, Iterable):
             # Try to convert the given values to the type of the current node values
             # This allows you to select [1,2,3] with [1.0,2.0,3.0] and ["1", "2", "3"]
-            dtype_formatter = _dtype_json_deserialise[self.dtype]
+            dtype_formatter = _dtype_try_convert[self.dtype]
             _f = set([dtype_formatter(v) for v in f])
             for i, v in enumerate(self.values):
                 if v in _f:
@@ -245,7 +264,7 @@ class WildcardGroup(ValueGroup):
 class DateRange(ValueGroup):
     spans: tuple[tuple[date, date], ...]
     step: timedelta = timedelta(days=1)
-    _dtype: type = date
+    _dtype: str = "date"
 
     def __gt__(self, other: Self):
         return self.spans[0][0] >= other.spans[-1][1]
@@ -256,7 +275,7 @@ class DateRange(ValueGroup):
     def __iter__(self) -> Iterator[Any]:
         for start, stop in self.spans:
             current = start
-            while start != stop:
+            while current < stop:
                 yield current
                 current += self.step
 
@@ -285,8 +304,10 @@ class DateRange(ValueGroup):
         return {"type": "ranges", "dtype": self.dtype, "spans": spans}
 
     @classmethod
-    def from_json(cls, type: Literal["enum"], dtype: str, values: list):
-        pass
+    def from_json(cls, type: Literal["enum"], dtype: str, spans: list) -> Self:
+        deserialiser = _dtype_json_deserialise["date"]
+        _spans = tuple([(deserialiser(s), deserialiser(e)) for s, e in spans])
+        return cls(spans=_spans)
 
     @classmethod
     def from_list(cls, dates: list[date]) -> Self:
@@ -317,5 +338,8 @@ def values_from_json(obj: dict | list) -> ValueGroup:
     match obj["type"]:
         case "enum":
             return QEnum.from_json(**obj)
+        case "ranges":
+            assert obj["dtype"] == "date", "Currently only date ranges are implemented."
+            return DateRange.from_json(**obj)
         case _:
-            raise ValueError(f"Unknown dtype {obj['dtype']}")
+            raise ValueError(f"Unknown type {obj['type']}")

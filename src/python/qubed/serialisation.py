@@ -82,6 +82,8 @@ def to_dict(q: Qube) -> dict:
                 raise ValueError(
                     f"to_dict does not support uncompressed trees, the key value pair {key} would have to appear twice to encode this qube!"
                 )
+            values[subkey] = subtree
+        return key, values
 
     return to_dict(q)[1]
 
@@ -115,7 +117,21 @@ def from_datacube(
     return cls.make_root(children)
 
 
+#### JSON Serialisation ####
+
+
 def numpy_to_json(a: np.ndarray):
+    # Special case for strings, it's better to encode them as lists of variable length utf8 strings
+    # rather than numpy's default UTF-32 fixed length representation
+    if a.dtype == np.dtypes.StringDType():
+        return dict(
+            shape=a.shape,
+            dtype="str",
+            # Flatten because otherwise we'd have [[[[[[[[[[...]]]]]]]]]] everywhere.
+            # Storing the shape above is enough to reconstruct it.
+            values=a.flatten().tolist(),
+        )
+
     return dict(
         shape=a.shape,
         dtype=str(a.dtype),
@@ -124,12 +140,19 @@ def numpy_to_json(a: np.ndarray):
 
 
 def numpy_from_json(j):
+    # Special case for strings
+    if j["dtype"] == "str":
+        return np.array(j["values"], dtype=np.dtypes.StringDType()).reshape(j["shape"])
     return np.frombuffer(
         base64.decodebytes(j["base64"].encode("utf8")), dtype=j["dtype"]
     ).reshape(j["shape"])
 
 
 def from_json(cls: type[Qube], json: dict) -> Qube:
+    """
+    Create a qube from a python object loaded in with json.
+    """
+
     def from_json(json: dict, depth=0) -> Qube:
         children = tuple(from_json(c, depth + 1) for c in json["children"])
 
@@ -157,6 +180,11 @@ def from_json(cls: type[Qube], json: dict) -> Qube:
 
 
 def to_json(q: Qube) -> dict:
+    """
+    Convert the qube to a python object suitable for serialising with json.
+    Use this with json.dumps(qube.to_json()) or json.dump(qube.to_json(), f)
+    """
+
     def to_json(node: Qube) -> dict:
         return {
             "key": node.key,
@@ -166,6 +194,74 @@ def to_json(q: Qube) -> dict:
         }
 
     return to_json(q)
+
+
+##### CBOR Serialisation ########
+
+
+def numpy_to_cbor(a: np.ndarray):
+    # Special case for strings, it's better to encode them as lists of variable length utf8 strings
+    # rather than numpy's default UTF-32 fixed length representation
+    if a.dtype == np.dtypes.StringDType():
+        return dict(
+            shape=a.shape,
+            dtype="str",
+            # Flatten because otherwise we'd have [[[[[[[[[[...]]]]]]]]]] everywhere.
+            # Storing the shape above is enough to reconstruct it.
+            values=a.flatten().tolist(),
+        )
+
+    return dict(
+        shape=a.shape,
+        dtype=str(a.dtype),
+        bytes=bytes(a),
+    )
+
+
+def numpy_from_cbor(j):
+    # Special case for strings
+    if j["dtype"] == "str":
+        return np.array(j["values"], dtype=np.dtypes.StringDType()).reshape(j["shape"])
+    return np.frombuffer(j["bytes"], dtype=j["dtype"]).reshape(j["shape"])
+
+
+def from_cbor(cls: type[Qube], cbor: dict) -> Qube:
+    def from_cbor(json: dict, depth=0) -> Qube:
+        children = tuple(from_cbor(c, depth + 1) for c in json["children"])
+
+        if depth == 0:
+            type = NodeType.Root
+        elif len(children) == 0:
+            type = NodeType.Leaf
+        else:
+            type = NodeType.Stem
+
+        return cls.make_node(
+            key=json["key"],
+            values=values_from_json(json["values"]),
+            type=type,
+            metadata=frozendict(
+                {k: numpy_from_cbor(v) for k, v in json["metadata"].items()}
+            )
+            if "metadata" in json
+            else {},
+            children=children,
+        )
+
+    # Trigger the code in make_root that calculates node depths and other global properties
+    return cls.make_root(children=from_cbor(cbor).children)
+
+
+def to_cbor(q: Qube) -> dict:
+    def to_cbor(node: Qube) -> dict:
+        return {
+            "key": node.key,
+            "values": node.values.to_json(),
+            "metadata": {k: numpy_to_cbor(v) for k, v in node.metadata.items()},
+            "children": [to_cbor(c) for c in node.children],
+        }
+
+    return to_cbor(q)
 
 
 def load(cls: type[Qube], path: str | Path) -> Qube:

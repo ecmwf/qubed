@@ -19,15 +19,15 @@ def default_info_func(node: Qube):
         shape = f"(..., {', '.join(shape[-5:])})"
 
     if node.metadata:
-        metadata = "Metadata Summary (key, dtype, size, shape, values)\n" + ",\n".join(
-            f"{k}, {v.dtype}, {v.size}, {v.shape} {v.ravel()[:5]}"
+        metadata = "Metadata Summary (key, dtype, size, shape, value)\n" + ",\n".join(
+            f"{k}, {v.dtype}, {v.size}, {v.shape} {str(v.ravel()[:1])[:200]}"
             for k, v in node.metadata.items()
         )
     else:
         metadata = ""
 
     return f"""\
-Values dtype = {node.values.dtype}
+Value type = {node.values.__class__.__name__}(dtype='{node.values.dtype}')
 Number of values = {len(node.values)}
 Structural Hash = {node.structural_hash}
 Node shape = {node.shape},

@@ -16,25 +16,27 @@ import numpy as np
 from frozendict import frozendict
 
 from . import set_operations
-from .metadata import add_metadata, from_nodes
+from .formatters import (
+    HTML,
+    _display,
+    node_tree_to_html,
+    node_tree_to_string,
+)
+from .metadata import add_metadata, from_nodes, leaves_with_metadata
 from .protobuf.adapters import from_protobuf, to_protobuf
 from .selection import SelectMode, select
 from .serialisation import (
     from_api,
+    from_cbor,
     from_datacube,
     from_dict,
     from_json,
     from_tree,
     load,
     save,
+    to_cbor,
     to_dict,
     to_json,
-)
-from .tree_formatters import (
-    HTML,
-    _display,
-    node_tree_to_html,
-    node_tree_to_string,
 )
 from .types import NodeType
 from .value_types import (
@@ -165,6 +167,9 @@ class Qube:
     from_json = classmethod(from_json)
     to_json = to_json
 
+    from_cbor = classmethod(from_cbor)
+    to_cbor = to_cbor
+
     from_nodes = classmethod(from_nodes)  # See metadata.py
 
     load = classmethod(load)
@@ -269,7 +274,7 @@ class Qube:
         | Iterator[tuple[dict[str, str], dict[str, str | np.ndarray]]]
     ):
         if metadata:
-            yield from self.leaves_with_metadata()
+            yield from leaves_with_metadata(self)
             return
         for value in self.values:
             if not self.children:
@@ -281,6 +286,11 @@ class Qube:
                     else:
                         yield leaf
 
+    def leaves_with_metadata(self):
+        raise DeprecationWarning(
+            "qube.leaves_with_metadata() has been replaced with qube.leaves(metadata=True)"
+        )
+
     def leaf_nodes(self) -> "Iterable[tuple[dict[str, str], Qube]]":
         for value in self.values:
             if not self.children:
@@ -291,30 +301,6 @@ class Qube:
                         yield ({self.key: value, **leaf[0]}, leaf[1])
                     else:
                         yield leaf
-
-    def leaves_with_metadata(
-        self, indices=()
-    ) -> Iterator[tuple[dict[str, str], dict[str, str | np.ndarray]]]:
-        def unwrap_np(v):
-            "Convert numpy arrays with shape () into bare values"
-            return v.item() if v.shape == () else v
-
-        for index, value in enumerate(self.values):
-            indexed_metadata = {
-                k: unwrap_np(vs[indices + (index,)]) for k, vs in self.metadata.items()
-            }
-            if not self.children:
-                yield {self.key: value}, indexed_metadata
-
-            for child in self.children:
-                for leaf, metadata in child.leaves_with_metadata(
-                    indices=indices + (index,)
-                ):
-                    # Don't output the key "root"
-                    if not self.is_root():
-                        yield {self.key: value, **leaf}, metadata | indexed_metadata
-                    else:
-                        yield leaf, metadata
 
     def datacubes(self) -> Iterable[dict[str, Any | list[Any]]]:
         def to_list_of_cubes(node: Qube) -> Iterable[dict[str, Any | list[Any]]]:
@@ -560,13 +546,17 @@ class Qube:
 
     def compare_metadata(self, B: Qube) -> bool:
         if not self.key == B.key:
+            print(f"{self.key} != {B.key}")
             return False
         if not self.values == B.values:
+            print(f"{self.values} != {B.values}")
             return False
         for k in self.metadata.keys():
             if k not in B.metadata:
+                print(f"'{k}' not in  {B.metadata.keys() = }")
                 return False
             if not np.array_equal(self.metadata[k], B.metadata[k]):
+                print(f"self.metadata[{k}] != B.metadata.[{k}]")
                 return False
         for A_child, B_child in zip(self.children, B.children):
             if not A_child.compare_metadata(B_child):
