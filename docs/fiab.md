@@ -7,7 +7,7 @@ jupytext:
     jupytext_version: 1.16.4
 ---
 
-# Fiab
+# Forecast in a Box
 
 ## Model Selection
 
