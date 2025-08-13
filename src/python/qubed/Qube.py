@@ -103,7 +103,8 @@ class Qube:
         if not isinstance(values, WildcardGroup) and type is not NodeType.Root:
             assert len(values) > 0, "Nodes must have at least one value"
 
-        children = tuple(sorted(children, key=lambda n: ((n.key, n.values.min()))))
+        children = tuple(
+            sorted(children, key=lambda n: ((n.key, n.values.min()))))
 
         if type is None:
             type = NodeType.Leaf if len(children) == 0 else NodeType.Stem
@@ -251,7 +252,8 @@ class Qube:
 
     def __xor__(self, other: Qube) -> Qube:
         out = set_operations.set_operation(
-            self, other, set_operations.SetOperation.SYMMETRIC_DIFFERENCE, type(self)
+            self, other, set_operations.SetOperation.SYMMETRIC_DIFFERENCE, type(
+                self)
         )
         assert out is not None
         return out
@@ -301,6 +303,13 @@ class Qube:
                         yield ({self.key: value, **leaf[0]}, leaf[1])
                     else:
                         yield leaf
+
+    def compressed_leaf_nodes(self) -> "Iterable[tuple[dict[str, str], Qube]]":
+        if not self.children:
+            yield self
+        for child in self.children:
+            for leaf in child.compressed_leaf_nodes():
+                yield leaf
 
     def datacubes(self) -> Iterable[dict[str, Any | list[Any]]]:
         def to_list_of_cubes(node: Qube) -> Iterable[dict[str, Any | list[Any]]]:
@@ -407,7 +416,8 @@ class Qube:
         """
 
         def transform(node: Qube) -> list[Qube]:
-            children = tuple(sorted(cc for c in node.children for cc in transform(c)))
+            children = tuple(
+                sorted(cc for c in node.children for cc in transform(c)))
             new_nodes = func(node)
             if isinstance(new_nodes, Qube):
                 new_nodes = [new_nodes]
@@ -424,8 +434,10 @@ class Qube:
             children: list[Qube] = []
             for c in node.children:
                 if c.key in _keys:
-                    grandchildren = tuple(sorted(remove_key(cc) for cc in c.children))
-                    grandchildren = remove_key(Qube.make_root(grandchildren)).children
+                    grandchildren = tuple(sorted(remove_key(cc)
+                                          for cc in c.children))
+                    grandchildren = remove_key(
+                        Qube.make_root(grandchildren)).children
                     children.extend(grandchildren)
                 else:
                     children.append(remove_key(c))
@@ -442,7 +454,8 @@ class Qube:
                 if isinstance(converter, type) and issubclass(converter, ValueGroup):
                     values = converter.from_list(node.values)
                 else:
-                    values = QEnum.from_list([converter(v) for v in node.values])
+                    values = QEnum.from_list(
+                        [converter(v) for v in node.values])
 
                 new_node = node.replace(values=values)
                 return new_node
@@ -501,7 +514,8 @@ class Qube:
 
         def hash_node(node: Qube) -> int:
             return hash(
-                (node.key, node.values, tuple(c.structural_hash for c in node.children))
+                (node.key, node.values, tuple(
+                    c.structural_hash for c in node.children))
             )
 
         return hash_node(self)
@@ -553,7 +567,7 @@ class Qube:
             return False
         for k in self.metadata.keys():
             if k not in B.metadata:
-                print(f"'{k}' not in  {B.metadata.keys() = }")
+                print(f"'{k}' not in  {B.metadata.keys()=}")
                 return False
             if not np.array_equal(self.metadata[k], B.metadata[k]):
                 print(f"self.metadata[{k}] != B.metadata.[{k}]")

@@ -26,3 +26,4 @@ uv.lock
 *.tmp
 test_scripts/data
 tests/example_qubes
+qubed_venv
