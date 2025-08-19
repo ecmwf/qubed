@@ -547,6 +547,65 @@ class Qube:
 
         return self.replace(children=tuple(sorted(new_children)))
 
+    def compress_w_poly_attrs(self) -> Qube:
+
+        def union(a: Qube, b: Qube) -> Qube:
+            # collect input leaves and their polys
+            input_leaves = [leaf[0] for leaf in a.compressed_leaf_nodes(
+            )] + [leaf[0] for leaf in b.compressed_leaf_nodes()]
+            seen = set()
+            input_polys = []
+
+            for leaf in list(a.compressed_leaf_nodes()) + list(b.compressed_leaf_nodes()):
+                polys = getattr(leaf[0], "sliced_polys", None)
+                for poly in polys:
+                    if poly is not None and id(poly) not in seen:
+                        input_polys.append(poly)
+                        seen.add(id(poly))
+
+            b = type(self).make_root(children=(b,), update_depth=False)
+            out = set_operations.set_operation(
+                a, b, set_operations.SetOperation.UNION, type(self)
+            )
+
+            # collect output leaves
+            output_leaves = [leaf[0] for leaf in out.compressed_leaf_nodes()]
+
+            if len(output_leaves) < len(input_leaves):
+                merged = []
+                for p in input_polys:
+                    if p is None:
+                        continue
+                    if isinstance(p, list):
+                        merged.extend(p)
+                    else:
+                        merged.append(p)
+
+                if merged:
+                    for leaf in output_leaves:
+                        leaf.sliced_polys = merged
+            else:
+                # no compression, but still copy attrs
+                for in_leaf, out_leaf in zip(input_leaves, output_leaves):
+                    if hasattr(in_leaf, "sliced_polys"):
+                        out_leaf.sliced_polys = in_leaf.sliced_polys
+
+            return out
+
+        new_children = [c.compress_w_poly_attrs() for c in self.children]
+        if len(new_children) > 1:
+            cumulative_union = Qube.empty()
+            cumulative_union.sliced_polys = []
+            for new_child in new_children:
+                cumulative_union = union(cumulative_union, new_child)
+            new_children = cumulative_union.children
+
+        for old, new in zip(self.children, new_children):
+            if hasattr(old, "sliced_polys"):
+                new.sliced_polys = old.sliced_polys
+
+        return self.replace(children=tuple(sorted(new_children)))
+
     add_metadata = add_metadata
 
     def strip_metadata(self) -> Qube:
