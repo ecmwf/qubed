@@ -547,33 +547,31 @@ class Qube:
 
         return self.replace(children=tuple(sorted(new_children)))
 
-    def compress_w_poly_attrs(self) -> Qube:
+    def compress_w_leaf_attrs(self, attr_str) -> Qube:
 
-        def union(a: Qube, b: Qube) -> Qube:
-            # collect input leaves and their polys
-            input_leaves = [leaf[0] for leaf in a.compressed_leaf_nodes(
-            )] + [leaf[0] for leaf in b.compressed_leaf_nodes()]
+        def find_unique_leaf_attrs(attr_str, a: Qube, b: Qube):
             seen = set()
-            input_polys = []
+            input_attrs = []
 
             for leaf in list(a.compressed_leaf_nodes()) + list(b.compressed_leaf_nodes()):
-                polys = getattr(leaf[0], "sliced_polys", None)
-                for poly in polys:
-                    if poly is not None and id(poly) not in seen:
-                        input_polys.append(poly)
-                        seen.add(id(poly))
+                attrs = getattr(leaf[0], attr_str, None)
+                if attrs:
+                    for attr in attrs:
+                        if attr is not None and id(attr) not in seen:
+                            input_attrs.append(attr)
+                            seen.add(id(attr))
+            return input_attrs
 
-            b = type(self).make_root(children=(b,), update_depth=False)
-            out = set_operations.set_operation(
-                a, b, set_operations.SetOperation.UNION, type(self)
-            )
-
-            # collect output leaves
+        def assign_attrs_to_union(attr_str, a: Qube, b: Qube, out: Qube):
+            input_leaves = [leaf[0] for leaf in a.compressed_leaf_nodes(
+            )] + [leaf[0] for leaf in b.compressed_leaf_nodes()]
             output_leaves = [leaf[0] for leaf in out.compressed_leaf_nodes()]
+
+            input_attrs = find_unique_leaf_attrs(attr_str, a, b)
 
             if len(output_leaves) < len(input_leaves):
                 merged = []
-                for p in input_polys:
+                for p in input_attrs:
                     if p is None:
                         continue
                     if isinstance(p, list):
@@ -583,26 +581,33 @@ class Qube:
 
                 if merged:
                     for leaf in output_leaves:
-                        leaf.sliced_polys = merged
+                        setattr(leaf, attr_str, merged)
             else:
-                # no compression, but still copy attrs
-                for in_leaf, out_leaf in zip(input_leaves, output_leaves):
-                    if hasattr(in_leaf, "sliced_polys"):
-                        out_leaf.sliced_polys = in_leaf.sliced_polys
+                transfer_attr(attr_str, input_leaves, output_leaves)
 
+        def union(a: Qube, b: Qube) -> Qube:
+            b = type(self).make_root(children=(b,), update_depth=False)
+            out = set_operations.set_operation(
+                a, b, set_operations.SetOperation.UNION, type(self)
+            )
+
+            assign_attrs_to_union(attr_str, a, b, out)
             return out
 
-        new_children = [c.compress_w_poly_attrs() for c in self.children]
+        new_children = [c.compress_w_leaf_attrs(
+            attr_str) for c in self.children]
         if len(new_children) > 1:
-            cumulative_union = Qube.empty()
-            cumulative_union.sliced_polys = []
-            for new_child in new_children:
-                cumulative_union = union(cumulative_union, new_child)
-            new_children = cumulative_union.children
+            new_children = list(
+                functools.reduce(union, new_children, Qube.empty()).children
+            )
 
-        for old, new in zip(self.children, new_children):
-            if hasattr(old, "sliced_polys"):
-                new.sliced_polys = old.sliced_polys
+        def transfer_attr(attr_str, old_children, new_children):
+            for old, new in zip(old_children, new_children):
+                if hasattr(old, attr_str):
+                    old_attr = getattr(old, attr_str)
+                    setattr(new, attr_str, old_attr)
+
+        transfer_attr(attr_str, self.children, new_children)
 
         return self.replace(children=tuple(sorted(new_children)))
 
