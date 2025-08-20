@@ -7,7 +7,7 @@ from time import time
 
 from qubed import Qube
 
-p = Path("test_scripts/data/climate-dt-flat-1990-2.list")
+p = Path("test_scripts/data/climate-dt-flat-1990-5.list")
 qube = Qube.empty()
 
 one_count = 0
@@ -32,9 +32,11 @@ with p.open() as f:
 
             level_one = dict(v.split("=") for v in key.split("/"))
             one_count += 1
-            if one_count > 1:
-                print(qube)
-                break
+            print(f"{one_count}th level one key, {i / (time() - t0):.0f} leaves/s")
+
+            # if one_count > 1:
+            #     print(qube)
+            #     break
 
         elif level == "1":
             level_two_qube |= level_three_qube.add_metadata(path_meta)
@@ -44,7 +46,7 @@ with p.open() as f:
             path_meta = dict(v.split("=") for v in metadata[0].split("/", 3))
             two_count += 1
             print(f"{two_count}th level two key, {i / (time() - t0):.0f} leaves/s")
-            # if two_count == 2:
+            # if two_count > 1:
             #     print(qube)
             #     break
 
@@ -82,3 +84,4 @@ with p.open() as f:
             level_three_qube |= Qube.from_datacube(keys).add_metadata(
                 offset_length_meta
             )
+level_one_qube.save(f"test_scripts/qubes/{p.stem}.json")
