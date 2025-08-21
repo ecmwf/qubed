@@ -117,13 +117,13 @@ def from_datacube(
     return cls.make_root(children)
 
 
-#### JSON Serialisation ####
+####  JSON Serialisation ####
 
 
 def numpy_to_json(a: np.ndarray):
     # Special case for strings, it's better to encode them as lists of variable length utf8 strings
     # rather than numpy's default UTF-32 fixed length representation
-    if a.dtype == np.dtypes.StringDType():
+    if a.dtype == np.str_:
         return dict(
             shape=a.shape,
             dtype="str",
@@ -196,7 +196,7 @@ def to_json(q: Qube) -> dict:
     return to_json(q)
 
 
-##### CBOR Serialisation ########
+#####  CBOR Serialisation ########
 
 
 def numpy_to_cbor(a: np.ndarray):
