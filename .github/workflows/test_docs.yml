@@ -22,7 +22,7 @@ jobs:
           python-version: 3.x
       - name: Build and Install
         run: |
-          python -m pip install ".[dev,docs]"
+          python -m pip install ".[dev,docs,cbor]"
       - name: Test
         run: |
           sphinx-build --define nb_execution_raise_on_error=1 docs docs/_build
