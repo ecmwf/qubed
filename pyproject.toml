@@ -18,7 +18,7 @@ requires-python = ">= 3.11"
 dynamic = ["version"]
 dependencies = [
     "frozendict",
-    "numpy",
+    "numpy>=1.26",
     "protobuf",
     "requests"
 ]
@@ -36,6 +36,24 @@ python-source = "src/python"
 module-name = "qubed.rust"
 features = ["pyo3/extension-module"]
 
+[tool.tox]
+requires = ["tox>=4.28"]
+env_list = [
+    # "3.13",
+    "3.12",
+    # "3.11",
+    "numpy1.x"
+]
+
+[tool.tox.env_run_base]
+description = "Run test under {base_python}"
+deps = [".[dev,cbor]"]
+commands = [["pytest"]]
+
+[tool.tox.env.numpy1.x]
+description = "run tests with different numpy major versions"
+base_python = ["py312"]
+deps = [".[dev,cbor]", "numpy<2"]
 
 [project.optional-dependencies]
 

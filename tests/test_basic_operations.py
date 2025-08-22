@@ -182,6 +182,10 @@ def test_value_dtypes():
     q2 = Qube.from_json(q.to_json())
     assert q == q2
 
+    # Test round trip through cbor
+    q2 = Qube.from_cbor(q.to_cbor())
+    assert q == q2
+
     assert (
         str(q)
         == "root, str=d1, date=2025-01-01, datetime=2025-01-01T12:45, float=1.4, int=1324"

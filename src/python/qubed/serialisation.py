@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+from datetime import timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterator, Mapping, Sequence
 
@@ -11,6 +12,11 @@ from frozendict import frozendict
 
 from .types import NodeType
 from .value_types import QEnum, ValueGroup, ValueType, WildcardGroup, values_from_json
+
+try:
+    import cbor2
+except ImportError:
+    cbor2 = None
 
 if TYPE_CHECKING:
     from .Qube import Qube
@@ -123,7 +129,12 @@ def from_datacube(
 def numpy_to_json(a: np.ndarray):
     # Special case for strings, it's better to encode them as lists of variable length utf8 strings
     # rather than numpy's default UTF-32 fixed length representation
-    if a.dtype == np.dtypes.StringDType():
+    if (
+        # Handle numpy 1.x style fixed size string buffers
+        a.dtype.type is np.str_
+        # Handle numpy 2.x style variable size strings
+        or (np.version.version.startswith("2.") and a.dtype.type is str)
+    ):
         return dict(
             shape=a.shape,
             dtype="str",
@@ -142,7 +153,12 @@ def numpy_to_json(a: np.ndarray):
 def numpy_from_json(j):
     # Special case for strings
     if j["dtype"] == "str":
-        return np.array(j["values"], dtype=np.dtypes.StringDType()).reshape(j["shape"])
+        dtype = (
+            np.str_
+            if not np.version.version.startswith("2.")
+            else np.dtypes.StringDType()
+        )
+        return np.array(j["values"], dtype=dtype).reshape(j["shape"])
     return np.frombuffer(
         base64.decodebytes(j["base64"].encode("utf8")), dtype=j["dtype"]
     ).reshape(j["shape"])
@@ -202,7 +218,12 @@ def to_json(q: Qube) -> dict:
 def numpy_to_cbor(a: np.ndarray):
     # Special case for strings, it's better to encode them as lists of variable length utf8 strings
     # rather than numpy's default UTF-32 fixed length representation
-    if a.dtype == np.dtypes.StringDType():
+    if (
+        # Handle numpy 1.x style fixed size string buffers
+        a.dtype.type is np.str_
+        # Handle numpy 2.x style variable size strings
+        or (np.version.version.startswith("2.") and a.dtype.type is str)
+    ):
         return dict(
             shape=a.shape,
             dtype="str",
@@ -221,11 +242,16 @@ def numpy_to_cbor(a: np.ndarray):
 def numpy_from_cbor(j):
     # Special case for strings
     if j["dtype"] == "str":
-        return np.array(j["values"], dtype=np.dtypes.StringDType()).reshape(j["shape"])
+        dtype = (
+            np.str_
+            if not np.version.version.startswith("2.")
+            else np.dtypes.StringDType()
+        )
+        return np.array(j["values"], dtype=dtype).reshape(j["shape"])
     return np.frombuffer(j["bytes"], dtype=j["dtype"]).reshape(j["shape"])
 
 
-def from_cbor(cls: type[Qube], cbor: dict) -> Qube:
+def from_cbor(cls: type[Qube], cbor_bytes: bytes) -> Qube:
     def from_cbor(json: dict, depth=0) -> Qube:
         children = tuple(from_cbor(c, depth + 1) for c in json["children"])
 
@@ -248,11 +274,14 @@ def from_cbor(cls: type[Qube], cbor: dict) -> Qube:
             children=children,
         )
 
+    if cbor2 is None:
+        raise ModuleNotFoundError("cbor2 must be installed to use this feature.")
+    cbor = cbor2.loads(cbor_bytes)
     # Trigger the code in make_root that calculates node depths and other global properties
     return cls.make_root(children=from_cbor(cbor).children)
 
 
-def to_cbor(q: Qube) -> dict:
+def to_cbor(q: Qube) -> bytes:
     def to_cbor(node: Qube) -> dict:
         return {
             "key": node.key,
@@ -261,7 +290,10 @@ def to_cbor(q: Qube) -> dict:
             "children": [to_cbor(c) for c in node.children],
         }
 
-    return to_cbor(q)
+    if cbor2 is None:
+        raise ModuleNotFoundError("cbor2 must be installed to use this feature.")
+
+    return cbor2.dumps(to_cbor(q), string_referencing=True, timezone=timezone.utc)
 
 
 def load(cls: type[Qube], path: str | Path) -> Qube:

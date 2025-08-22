@@ -183,9 +183,12 @@ def test_metadata_serialisation():
         }
     )
 
-    # Check we're using efficient utf8 variable length strings rather than the
-    # current numpy default which is utf32 fixed length strings
-    assert q.children[0].metadata["path"].dtype == np.dtypes.StringDType()
+    # Check we're using efficient utf8 variable length strings with numpy 2.x
+    # rather than the current numpy default which is utf32 fixed length strings
+    assert (
+        np.version.version.startswith("1.")
+        or q.children[0].metadata["path"].dtype == np.dtypes.StringDType()
+    )
 
     assert (
         str(q)
@@ -197,9 +200,13 @@ root
     └── expver=0002, date=2020-09-02, param=1/2, float=1.34/1.02e+03/1.25e+07""".strip()
     )
 
+    # Test metadata round trip through json encoding
     s = json.dumps(q.to_json())
     q2 = Qube.from_json(json.loads(s))
+    assert q.compare_metadata(q2)
 
+    # Test metadata round trip through json encoding
+    q2 = Qube.from_cbor(q.to_cbor())
     assert q.compare_metadata(q2)
 
     # Now load it from disk to check for backwards incompatible changes in encodings

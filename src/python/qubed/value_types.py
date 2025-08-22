@@ -311,9 +311,13 @@ class DateRange(ValueGroup):
 
     @classmethod
     def from_list(cls, dates: list[date]) -> Self:
-        assert [type(v) is date for v in dates], (
-            f"Only enums of dates can be converted to DateRange, types given: {set([type(v) for v in dates])}"
-        )
+        if not all([isinstance(v, (date, datetime)) for v in dates]):
+            try:
+                dates = [datetime.fromisoformat(d).date() for d in dates]
+            except Exception as e:
+                raise ValueError(
+                    f"Tried to convert {dates} to date but failed with error {e}"
+                )
 
         first, *rest = sorted(dates)
         current_span: tuple[date, date] = (first, first + cls.step)
@@ -325,7 +329,9 @@ class DateRange(ValueGroup):
                 spans.append(current_span)
                 current_span = (d, d + cls.step)
         spans.append(current_span)
-        return cls(tuple(spans))
+
+        dtype = "datetime" if isinstance(spans[0][0], datetime) else "date"
+        return cls(tuple(spans), _dtype=dtype)
 
     def filter(self, f: list[str] | Callable[[Any], bool]) -> tuple[Indices, QEnum]:
         pass
