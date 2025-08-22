@@ -129,7 +129,12 @@ def from_datacube(
 def numpy_to_json(a: np.ndarray):
     # Special case for strings, it's better to encode them as lists of variable length utf8 strings
     # rather than numpy's default UTF-32 fixed length representation
-    if a.dtype == np.dtypes.StringDType():
+    if (
+        # Handle numpy 1.x style fixed size string buffers
+        a.dtype.type is np.str_
+        # Handle numpy 2.x style variable size strings
+        or (np.version.version.startswith("2.") and a.dtype.type is str)
+    ):
         return dict(
             shape=a.shape,
             dtype="str",
@@ -148,7 +153,12 @@ def numpy_to_json(a: np.ndarray):
 def numpy_from_json(j):
     # Special case for strings
     if j["dtype"] == "str":
-        return np.array(j["values"], dtype=np.dtypes.StringDType()).reshape(j["shape"])
+        dtype = (
+            np.str_
+            if not np.version.version.startswith("2.")
+            else np.dtypes.StringDType()
+        )
+        return np.array(j["values"], dtype=dtype).reshape(j["shape"])
     return np.frombuffer(
         base64.decodebytes(j["base64"].encode("utf8")), dtype=j["dtype"]
     ).reshape(j["shape"])
@@ -208,7 +218,12 @@ def to_json(q: Qube) -> dict:
 def numpy_to_cbor(a: np.ndarray):
     # Special case for strings, it's better to encode them as lists of variable length utf8 strings
     # rather than numpy's default UTF-32 fixed length representation
-    if a.dtype == np.dtypes.StringDType():
+    if (
+        # Handle numpy 1.x style fixed size string buffers
+        a.dtype.type is np.str_
+        # Handle numpy 2.x style variable size strings
+        or (np.version.version.startswith("2.") and a.dtype.type is str)
+    ):
         return dict(
             shape=a.shape,
             dtype="str",
@@ -227,7 +242,12 @@ def numpy_to_cbor(a: np.ndarray):
 def numpy_from_cbor(j):
     # Special case for strings
     if j["dtype"] == "str":
-        return np.array(j["values"], dtype=np.dtypes.StringDType()).reshape(j["shape"])
+        dtype = (
+            np.str_
+            if not np.version.version.startswith("2.")
+            else np.dtypes.StringDType()
+        )
+        return np.array(j["values"], dtype=dtype).reshape(j["shape"])
     return np.frombuffer(j["bytes"], dtype=j["dtype"]).reshape(j["shape"])
 
 

@@ -15,7 +15,7 @@ def to_numpy_array(values, shape):
     """
     Try to coerce an iterable to a numpy array wit given shape, default to np.dtypes.StringDType for strings
     """
-    if all(isinstance(v, str) for v in values):
+    if all(isinstance(v, str) for v in values) and np.version.version.startswith("2."):
         return np.array(values, dtype=np.dtypes.StringDType).reshape(tuple(shape))
 
     return np.array(values).reshape(tuple(shape))

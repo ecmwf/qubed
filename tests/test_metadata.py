@@ -183,9 +183,12 @@ def test_metadata_serialisation():
         }
     )
 
-    # Check we're using efficient utf8 variable length strings rather than the
-    # current numpy default which is utf32 fixed length strings
-    assert q.children[0].metadata["path"].dtype == np.dtypes.StringDType()
+    # Check we're using efficient utf8 variable length strings with numpy 2.x
+    # rather than the current numpy default which is utf32 fixed length strings
+    assert (
+        np.version.version.startswith("1.")
+        or q.children[0].metadata["path"].dtype == np.dtypes.StringDType()
+    )
 
     assert (
         str(q)
