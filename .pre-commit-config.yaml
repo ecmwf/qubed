@@ -6,6 +6,7 @@ repos:
     hooks:
     -   id: trailing-whitespace
     -   id: end-of-file-fixer
+        exclude: "[^/.]+.cbor"
     # -   id: check-yaml
 # -   id: check-added-large-files
 
