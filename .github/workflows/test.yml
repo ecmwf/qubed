@@ -18,17 +18,35 @@ permissions:
   contents: read
 
 jobs:
-  linux:
-    runs-on:
-        - ubuntu-latest
+  test:
+    name: test with ${{ matrix.env }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        env:
+          - "3.13"
+          - "3.12"
+          - "3.11"
+        os:
+          - ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: 3.x
-      - name: Build and Install
-        run: |
-          python -m pip install ".[dev,cbor]"
-      - name: Test
-        run: |
-          pytest
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install tox
+        run: uv tool install --python-preference only-managed --python 3.13 tox --with tox-uv
+      - name: Install Python
+        if: matrix.env != '3.13'
+        run: uv python install --python-preference only-managed ${{ matrix.env }}
+
+      - name: Setup test suite
+        run: tox run -vv --notest --skip-missing-interpreters false
+        env:
+          TOX_GH_MAJOR_MINOR: ${{ matrix.env }}
+
+      - name: Run test suite
+        run: tox run --skip-pkg-install
+        env:
+            TOX_GH_MAJOR_MINOR: ${{ matrix.env }}

@@ -39,11 +39,16 @@ features = ["pyo3/extension-module"]
 [tool.tox]
 requires = ["tox>=4.28"]
 env_list = [
-    # "3.13",
+    "3.13",
     "3.12",
-    # "3.11",
+    "3.11",
     "numpy1.x"
 ]
+
+[tool.tox.gh.python]
+"3.13" = ["3.13"]
+"3.12" = ["3.12", "numpy1.x"]
+"3.11" = ["3.11"]
 
 [tool.tox.env_run_base]
 description = "Run test under {base_python}"
