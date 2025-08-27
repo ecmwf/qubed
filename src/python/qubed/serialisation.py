@@ -306,7 +306,7 @@ def load(cls: type[Qube], path: str | Path) -> Qube:
             return cls.from_json(json.load(f))
     elif path.suffix == ".cbor":
         with open(path, "rb") as f:
-            return Qube.from_cbor(f.read())
+            return cls.from_cbor(f.read())
     else:
         raise ValueError(f"Unknown filetype {path.suffix}")
 
