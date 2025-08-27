@@ -19,10 +19,11 @@ from . import set_operations
 from .formatters import (
     HTML,
     _display,
+    info,
     node_tree_to_html,
     node_tree_to_string,
 )
-from .metadata import add_metadata, from_nodes, leaves_with_metadata
+from .metadata import add_metadata, from_nodes, leaves_with_metadata, metadata_info
 from .protobuf.adapters import from_protobuf, to_protobuf
 from .selection import SelectMode, select
 from .serialisation import (
@@ -179,6 +180,9 @@ class Qube:
     to_protobuf = to_protobuf
 
     from_tree = classmethod(from_tree)
+
+    # Print out an info dump about the qube
+    info = info
 
     @classmethod
     def empty(cls) -> Qube:
@@ -387,6 +391,8 @@ class Qube:
             return 0
         return 1 + sum(c.n_nodes for c in self.children)
 
+    metadata_info = metadata_info
+
     def walk(self, func: "Callable[[Qube]]"):
         """
         Call a function on every node of the Qube.
@@ -477,8 +483,8 @@ class Qube:
             lambda: AxisInfo(key="", dtypes=set(), depths=set(), values=set())
         )
         for c in self.children:
-            for k, info in c.axes_info(depth=depth + 1).items():
-                axes[k].combine(info)
+            for k, a_info in c.axes_info(depth=depth + 1).items():
+                axes[k].combine(a_info)
 
         if not self.is_root():
             axes[self.key].combine(

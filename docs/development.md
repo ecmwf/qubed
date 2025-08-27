@@ -54,3 +54,7 @@ git lfs pull --include="tests/example_qubes/climate-dt-metadata_2025.cbor" --exc
 ```
 
 That these files are not downloaded by default is controlled the contents of `.lfsconfig`
+
+## Docs
+
+The docs are built with sphinx with a plugin that allows code the run and the output to be saved into the docs. This code can break when you update qubed so use `docs/test_docs.sh` to check it hasn't broken. The CI also has a job to check for this.

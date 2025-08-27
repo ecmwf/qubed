@@ -320,7 +320,6 @@ def save(qube: Qube, path: str | Path, type="json"):
         with open(path, "w") as f:
             json.dump(qube.to_json(), f)
     elif type == "cbor":
-        print("Saving as cbor")
         with open(path, "wb") as f:
             f.write(qube.to_cbor())
     else:
