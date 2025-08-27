@@ -313,7 +313,6 @@ def load(cls: type[Qube], path: str | Path) -> Qube:
 
 def save(qube: Qube, path: str | Path, type="json"):
     path = Path(path)
-    print(path.suffix)
     if path.suffix == ".cbor":
         type = "cbor"
 
