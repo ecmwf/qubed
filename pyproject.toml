@@ -81,7 +81,8 @@ docs = [
     "ipykernel",
     "scipy",
     "objsize",
-    "humanize"
+    "humanize",
+    "pandas"
 ]
 
 dev = [
