@@ -19,7 +19,7 @@ assert sys.argv[1].endswith(".zst")
 
 p = Path(sys.argv[1])  # Compressed file
 decompressed = p.parent / f"{p.stem}"  # decompressed file
-output = Path(f"test_scripts/qubes/{p.stem[:-5]}.json")
+output = p.parents[1] / Path(f"monthly/{p.stem[:-5]}.json")
 
 if output.exists():
     sys.exit()
@@ -102,6 +102,9 @@ with decompressed.open() as f:
                 "param",
             ]
             keys = {k: keys[k] for k in key_order if k in keys}
+
+            offset_length_meta["length"] = int(offset_length_meta["length"])
+            offset_length_meta["offset"] = int(offset_length_meta["offset"])
 
             level_three_qube |= Qube.from_datacube(keys).add_metadata(
                 offset_length_meta
