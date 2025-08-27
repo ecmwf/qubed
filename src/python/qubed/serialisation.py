@@ -297,13 +297,35 @@ def to_cbor(q: Qube) -> bytes:
 
 
 def load(cls: type[Qube], path: str | Path) -> Qube:
-    with open(path, "r") as f:
-        return cls.from_json(json.load(f))
+    path = Path(path)
+    if not path.exists():
+        raise ValueError(f"{path} does not exist!")
+
+    if path.suffix == ".json":
+        with open(path, "r") as f:
+            return cls.from_json(json.load(f))
+    elif path.suffix == ".cbor":
+        with open(path, "rb") as f:
+            return Qube.from_cbor(f.read())
+    else:
+        raise ValueError(f"Unknown filetype {path.suffix}")
 
 
-def save(qube: Qube, path: str | Path):
-    with open(path, "w") as f:
-        json.dump(qube.to_json(), f)
+def save(qube: Qube, path: str | Path, type="json"):
+    path = Path(path)
+    print(path.suffix)
+    if path.suffix == ".cbor":
+        type = "cbor"
+
+    if type == "json":
+        with open(path, "w") as f:
+            json.dump(qube.to_json(), f)
+    elif type == "cbor":
+        print("Saving as cbor")
+        with open(path, "wb") as f:
+            f.write(qube.to_cbor())
+    else:
+        raise ValueError(f"Unkown filetype {type}")
 
 
 def from_tree(cls: type[Qube], tree_str: str):
