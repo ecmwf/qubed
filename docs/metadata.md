@@ -56,6 +56,11 @@ def count_metadata_bytes(q: Qube):
     q.walk(measure)
     return dict(totals)
 
+# Requires the humanize library for nice formatting of bytes
+def print_metadata_sizes(q):
+    totals = count_metadata_bytes(q)
+    for k, size in totals.items():
+        print(f"{k} : {humanize.naturalsize(size)}")
 
 count_metadata_bytes(example)
 ```
