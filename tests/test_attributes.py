@@ -85,3 +85,30 @@ def test_compress_w_leaf_attr_compressed_not_compressed():
     assert len(compressed_q_leaves) == 2
     assert set(compressed_q_leaves[0].test_attr) == set(["foo", "bar"])
     assert set(compressed_q_leaves[1].test_attr) == set(["baz", "test"])
+
+
+def test_preservation_of_attributes_by_select():
+    q = Qube.from_tree("""
+    root, class=od
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=2
+        └── param=3
+    """)
+
+    compressed_leaves = list(q.leaf_nodes())
+    leaf_attrs = ["foo", "bar", "baz", "test"]
+
+    for i, leaf in enumerate(compressed_leaves):
+        leaf.test_attr = [leaf_attrs[i]]
+
+    compressed_q = q.compress_with_attributes("test_attr")
+
+    compressed_q = compressed_q.select({"param": "1"})
+
+    compressed_q_leaves = list(compressed_q.leaf_nodes())
+
+    assert len(compressed_q_leaves) == 1
+    assert set(compressed_q_leaves[0].test_attr) == set(["foo", "bar"])
