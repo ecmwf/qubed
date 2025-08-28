@@ -16,6 +16,7 @@ import numpy as np
 from frozendict import frozendict
 
 from . import set_operations
+from .attributes import compress_with_attributes
 from .formatters import (
     HTML,
     _display,
@@ -286,27 +287,37 @@ class Qube:
                     else:
                         yield leaf
 
-    def leaves_with_metadata(self):
-        raise DeprecationWarning(
-            "qube.leaves_with_metadata() has been replaced with qube.leaves(metadata=True)"
-        )
-
-    def leaf_nodes(self) -> "Iterable[tuple[dict[str, str], Qube]]":
+    def leaves_with_nodes(
+        self: Qube,
+    ) -> Iterable[tuple[dict[str, str], Qube]]:
+        """
+        Like q.leaves() but including a reference to the leaf node object.
+        """
         for value in self.values:
             if not self.children:
                 yield ({self.key: value}, self)
             for child in self.children:
-                for leaf in child.leaf_nodes():
+                for leaf in child.leaves_with_nodes():
                     if not self.is_root():
                         yield ({self.key: value, **leaf[0]}, leaf[1])
                     else:
                         yield leaf
 
-    def compressed_leaf_nodes(self) -> "Iterable[Qube]":
-        if not self.children:
+    def leaves_with_metadata(self):
+        raise DeprecationWarning(
+            "qube.leaves_with_metadata() has been replaced with qube.leaves(metadata=True)"
+        )
+
+    def leaf_nodes(self: Qube) -> Iterable[Qube]:
+        """
+        An iterable over the child nodes (not the leaves) of the qube.
+        Each node is only returned once even if it has multiplicity.
+        """
+        if self.is_leaf():
             yield self
+
         for child in self.children:
-            for leaf in child.compressed_leaf_nodes():
+            for leaf in child.leaf_nodes():
                 yield leaf
 
     def datacubes(self) -> Iterable[dict[str, Any | list[Any]]]:
@@ -540,71 +551,7 @@ class Qube:
 
         return self.replace(children=tuple(sorted(new_children)))
 
-    def compress_w_leaf_attrs(self, attr_str) -> Qube:
-        def find_unique_leaf_attrs(attr_str, a: Qube, b: Qube):
-            seen = set()
-            input_attrs = []
-            for leaf in list(a.compressed_leaf_nodes()) + list(
-                b.compressed_leaf_nodes()
-            ):
-                attrs = getattr(leaf, attr_str, None)
-                if attrs:
-                    for attr in attrs:
-                        if attr is not None and id(attr) not in seen:
-                            input_attrs.append(attr)
-                            seen.add(id(attr))
-            return input_attrs
-
-        def assign_attrs_to_union(attr_str, a: Qube, b: Qube, out: Qube):
-            input_leaves = list(a.compressed_leaf_nodes()) + list(
-                b.compressed_leaf_nodes()
-            )
-            output_leaves = list(out.compressed_leaf_nodes())
-
-            input_attrs = find_unique_leaf_attrs(attr_str, a, b)
-
-            if len(output_leaves) < len(input_leaves):
-                merged = []
-                for p in input_attrs:
-                    if p is None:
-                        continue
-                    if isinstance(p, list):
-                        merged.extend(p)
-                    else:
-                        merged.append(p)
-
-                if merged:
-                    for leaf in output_leaves:
-                        setattr(leaf, attr_str, merged)
-            else:
-                transfer_attr(attr_str, input_leaves, output_leaves)
-
-        def union(a: Qube, b: Qube) -> Qube:
-            b = type(self).make_root(children=(b,), update_depth=False)
-            out = set_operations.set_operation(
-                a, b, set_operations.SetOperation.UNION, type(self)
-            )
-
-            assign_attrs_to_union(attr_str, a, b, out)
-            return out
-
-        def transfer_attr(attr_str, old_children, new_children):
-            for old, new in zip(old_children, new_children):
-                if hasattr(old, attr_str):
-                    old_attr = getattr(old, attr_str)
-                    setattr(new, attr_str, old_attr)
-
-        new_children = [c.compress_w_leaf_attrs(attr_str) for c in self.children]
-
-        if len(new_children) == 0:
-            return self
-
-        if len(new_children) > 1:
-            new_children = list(
-                functools.reduce(union, new_children, Qube.empty()).children
-            )
-
-        return self.replace(children=tuple(sorted(new_children)))
+    compress_with_attributes = compress_with_attributes
 
     add_metadata = add_metadata
 
