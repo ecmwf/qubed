@@ -353,6 +353,9 @@ def info(qube: Qube):
 """
 
     print(f"""
+This qube has
+    {humanize.intword(qube.n_nodes)} nodes
+    {humanize.intword(qube.n_leaves)} individual leaves
 
 In memory size of qube: {humanize.naturalsize(objsize.get_deep_size(qube))}
 
