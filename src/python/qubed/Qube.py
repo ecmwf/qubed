@@ -103,8 +103,7 @@ class Qube:
         if not isinstance(values, WildcardGroup) and type is not NodeType.Root:
             assert len(values) > 0, "Nodes must have at least one value"
 
-        children = tuple(
-            sorted(children, key=lambda n: ((n.key, n.values.min()))))
+        children = tuple(sorted(children, key=lambda n: ((n.key, n.values.min()))))
 
         if type is None:
             type = NodeType.Leaf if len(children) == 0 else NodeType.Stem
@@ -252,8 +251,7 @@ class Qube:
 
     def __xor__(self, other: Qube) -> Qube:
         out = set_operations.set_operation(
-            self, other, set_operations.SetOperation.SYMMETRIC_DIFFERENCE, type(
-                self)
+            self, other, set_operations.SetOperation.SYMMETRIC_DIFFERENCE, type(self)
         )
         assert out is not None
         return out
@@ -416,8 +414,7 @@ class Qube:
         """
 
         def transform(node: Qube) -> list[Qube]:
-            children = tuple(
-                sorted(cc for c in node.children for cc in transform(c)))
+            children = tuple(sorted(cc for c in node.children for cc in transform(c)))
             new_nodes = func(node)
             if isinstance(new_nodes, Qube):
                 new_nodes = [new_nodes]
@@ -434,10 +431,8 @@ class Qube:
             children: list[Qube] = []
             for c in node.children:
                 if c.key in _keys:
-                    grandchildren = tuple(sorted(remove_key(cc)
-                                          for cc in c.children))
-                    grandchildren = remove_key(
-                        Qube.make_root(grandchildren)).children
+                    grandchildren = tuple(sorted(remove_key(cc) for cc in c.children))
+                    grandchildren = remove_key(Qube.make_root(grandchildren)).children
                     children.extend(grandchildren)
                 else:
                     children.append(remove_key(c))
@@ -454,8 +449,7 @@ class Qube:
                 if isinstance(converter, type) and issubclass(converter, ValueGroup):
                     values = converter.from_list(node.values)
                 else:
-                    values = QEnum.from_list(
-                        [converter(v) for v in node.values])
+                    values = QEnum.from_list([converter(v) for v in node.values])
 
                 new_node = node.replace(values=values)
                 return new_node
@@ -514,8 +508,7 @@ class Qube:
 
         def hash_node(node: Qube) -> int:
             return hash(
-                (node.key, node.values, tuple(
-                    c.structural_hash for c in node.children))
+                (node.key, node.values, tuple(c.structural_hash for c in node.children))
             )
 
         return hash_node(self)
@@ -551,11 +544,10 @@ class Qube:
         def find_unique_leaf_attrs(attr_str, a: Qube, b: Qube):
             seen = set()
             input_attrs = []
-
             for leaf in list(a.compressed_leaf_nodes()) + list(
                 b.compressed_leaf_nodes()
             ):
-                attrs = getattr(leaf[0], attr_str, None)
+                attrs = getattr(leaf, attr_str, None)
                 if attrs:
                     for attr in attrs:
                         if attr is not None and id(attr) not in seen:
@@ -564,10 +556,10 @@ class Qube:
             return input_attrs
 
         def assign_attrs_to_union(attr_str, a: Qube, b: Qube, out: Qube):
-            input_leaves = [leaf[0] for leaf in a.compressed_leaf_nodes()] + [
-                leaf[0] for leaf in b.compressed_leaf_nodes()
-            ]
-            output_leaves = [leaf[0] for leaf in out.compressed_leaf_nodes()]
+            input_leaves = list(a.compressed_leaf_nodes()) + list(
+                b.compressed_leaf_nodes()
+            )
+            output_leaves = list(out.compressed_leaf_nodes())
 
             input_attrs = find_unique_leaf_attrs(attr_str, a, b)
 
@@ -596,20 +588,21 @@ class Qube:
             assign_attrs_to_union(attr_str, a, b, out)
             return out
 
-        new_children = [c.compress_w_leaf_attrs(
-            attr_str) for c in self.children]
-        if len(new_children) > 1:
-            new_children = list(
-                functools.reduce(union, new_children, Qube.empty()).children
-            )
-
         def transfer_attr(attr_str, old_children, new_children):
             for old, new in zip(old_children, new_children):
                 if hasattr(old, attr_str):
                     old_attr = getattr(old, attr_str)
                     setattr(new, attr_str, old_attr)
 
-        transfer_attr(attr_str, self.children, new_children)
+        new_children = [c.compress_w_leaf_attrs(attr_str) for c in self.children]
+
+        if len(new_children) == 0:
+            return self
+
+        if len(new_children) > 1:
+            new_children = list(
+                functools.reduce(union, new_children, Qube.empty()).children
+            )
 
         return self.replace(children=tuple(sorted(new_children)))
 
