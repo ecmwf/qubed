@@ -1,7 +1,7 @@
 """
 Convert fdb data with metadata from disk into a qube as fast as possible
 
-Example running this in parallel ls test_scripts/data/*.zst | xargs -n 1 -P 10 python test_scripts/fdb_deblaster.py
+Example running this in parallel ls test_scripts/data/*.zst | xargs -n 1 -P 10 python test_scripts/fdb_dump_parser.py
 """
 
 import subprocess

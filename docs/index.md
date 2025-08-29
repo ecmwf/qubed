@@ -18,6 +18,7 @@ algorithms.md
 fiab.md
 cmd.md
 metadata.md
+building_qubes_from_the_fdb.md
 ```
 
 ```{code-cell} python3
