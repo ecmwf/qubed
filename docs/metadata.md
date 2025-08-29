@@ -12,7 +12,7 @@ Qubed includes the ability to store metadata which may vary for each individual 
 
 ```{code-cell} python3
 from qubed import Qube
-example = Qube.load("../tests/example_qubes/on-demand-extremes-dt.cbor")
+example = Qube.load("../tests/example_qubes/extremes-dt_with_metadata.json")
 example.html(depth=1)
 ```
 
