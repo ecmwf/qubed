@@ -134,7 +134,9 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
     s = qube.select(request, mode=Qube.select_modes.NextLevel, consume=False).compress()
 
     # Compute the set of keys that are needed to advance the selection frontier
-    frontier_keys = {node.key for _, node in s.leaf_nodes() if not node.is_leaf()}
+    frontier_keys = {
+        node.key for _, node in s.leaves_with_nodes() if not node.is_leaf()
+    }
 
     return s, [
         {
