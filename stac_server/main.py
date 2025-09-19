@@ -129,19 +129,22 @@ async def union(
 def follow_query(request: dict[str, str | list[str]], qube: Qube):
     # Compute the axes for the full tree
     full_axes = qube.select(request, consume=False).axes_info()
+    print(request)
+
+    seen_keys = list(request.keys())
 
     # Also compute the selected tree just to the point where our selection ends
     s = qube.select(request, mode=Qube.select_modes.NextLevel, consume=False).compress()
 
     # Compute the set of keys that are needed to advance the selection frontier
-    frontier_keys = {node.key for _, node in s.leaf_nodes() if not node.is_leaf()}
+    frontier_keys = {node.key for _, node in s.leaf_nodes()}
 
     return s, [
         {
             "key": key,
             "values": sorted(info.values, reverse=True),
             "dtype": list(info.dtypes)[0],
-            "on_frontier": key in frontier_keys,
+            "on_frontier": (key in frontier_keys) and (key not in seen_keys),
         }
         for key, info in full_axes.items()
     ]
@@ -213,9 +216,6 @@ async def basic_stac(filters: str):
         "title": f"{this_key}={this_value}",
         "description": value_info,
         "links": [make_link(leaf) for leaf in q.leaves()],
-        # "debug": {
-        #     "qube": str(q),
-        # },
     }
 
     return stac_collection
@@ -282,7 +282,6 @@ async def get_STAC(
         "description": "STAC collection representing potential children of this request",
         "links": [make_link(a) for a in axes],
         "debug": {
-            # "request": request,
             "descriptions": descriptions,
             "qube": node_tree_to_html(
                 q,

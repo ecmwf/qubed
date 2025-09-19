@@ -134,6 +134,7 @@ async function createCatalogItem(link, itemsContainer) {
   itemDiv.className = "item loading";
   itemDiv.textContent = "Loading...";
   itemsContainer.appendChild(itemDiv);
+  // const isLeaf = Object.entries(link.variables)[0][1].is_leaf
 
   try {
     // Update the item div with real content
@@ -152,13 +153,11 @@ async function createCatalogItem(link, itemsContainer) {
     }
 
     itemDiv.innerHTML = `
-      <h3 class="item-title">${
-        capitalize(link.title) || "No title available"
+      <h3 class="item-title">${capitalize(link.title) || "No title available"
       }</h3>
       <button class="all">*</button>
       <p class="item-type">Key Type: ${itemDiv.dataset.keyType || "Unknown"}</p>
-      <p class="item-description">${
-        variable.description ? variable.description.slice(0, 100) : ""
+      <p class="item-description">${variable.description ? variable.description.slice(0, 100) : ""
       }</p>
     `;
 
@@ -294,8 +293,7 @@ function renderRequestBreakdown(request, descriptions) {
     request
       .map(
         ([key, values]) =>
-          `    <span class="key" title="${
-            descriptions[key]["description"]
+          `    <span class="key" title="${descriptions[key]["description"]
           }">"${key}"</span>: ${format_values(key, values)},`
       )
       .join("\n") +
