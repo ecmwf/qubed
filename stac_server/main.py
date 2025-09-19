@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 from qubed import Qube
-from qubed.tree_formatters import node_tree_to_html
+from qubed.formatters import node_tree_to_html
 
 app = FastAPI()
 security = HTTPBearer()
