@@ -17,6 +17,12 @@ climate_dt = Qube.from_api({"dataset": "climate-dt"})
 climate_dt.html(depth=1)
 ```
 
+
+The info function also gives useful information about the axes and metadata information present in a qube.
+```{code-cell} python3
+climate_dt.info()
+```
+
 Click the arrows to expand and drill down deeper into the data.
 
 ```{note}

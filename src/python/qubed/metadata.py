@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Iterable, Iterator
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Self
 
 import numpy as np
 
 if TYPE_CHECKING:
     from .Qube import Qube
+from collections import defaultdict
+
 from frozendict import frozendict
 
 from .value_types import QEnum
@@ -102,3 +105,38 @@ def leaves_with_metadata(
                     yield {qube.key: value, **leaf}, metadata | indexed_metadata
                 else:
                     yield leaf, metadata
+
+
+@dataclass
+class MetadataInfo:
+    key: str = ""
+    dtypes: set = field(default_factory=set)
+    depths: set[int] = field(default_factory=set)
+    total_bytes: int = 0
+
+    @classmethod
+    def from_entry(cls, key: str, depth: int, values: np.ndarray) -> Self:
+        return cls(
+            key=key,
+            dtypes=set([values.dtype]),
+            depths=set([depth]),
+            total_bytes=values.nbytes,
+        )
+
+    def combine(self, other: Self):
+        self.key = other.key
+        self.dtypes.update(other.dtypes)
+        self.depths.update(other.depths)
+        self.total_bytes += other.total_bytes
+
+
+def metadata_info(q: Qube):
+    all_info = defaultdict(MetadataInfo)
+
+    def measure(q: Qube):
+        for key, values in q.metadata.items():
+            info = MetadataInfo.from_entry(key, q.depth, values)
+            all_info[key].combine(info)
+
+    q.walk(measure)
+    return dict(all_info)
