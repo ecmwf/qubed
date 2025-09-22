@@ -134,7 +134,6 @@ async function createCatalogItem(link, itemsContainer) {
   itemDiv.className = "item loading";
   itemDiv.textContent = "Loading...";
   itemsContainer.appendChild(itemDiv);
-  // const isLeaf = Object.entries(link.variables)[0][1].is_leaf
 
   try {
     // Update the item div with real content

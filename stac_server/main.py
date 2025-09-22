@@ -129,7 +129,6 @@ async def union(
 def follow_query(request: dict[str, str | list[str]], qube: Qube):
     # Compute the axes for the full tree
     full_axes = qube.select(request, consume=False).axes_info()
-    print(request)
 
     seen_keys = list(request.keys())
 
