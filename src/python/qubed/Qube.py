@@ -16,6 +16,7 @@ import numpy as np
 from frozendict import frozendict
 
 from . import set_operations
+from .attributes import compress_with_attributes
 from .formatters import (
     HTML,
     _display,
@@ -290,21 +291,38 @@ class Qube:
                     else:
                         yield leaf
 
+    def leaves_with_nodes(
+        self: Qube,
+    ) -> Iterable[tuple[dict[str, str], Qube]]:
+        """
+        Like q.leaves() but including a reference to the leaf node object.
+        """
+        for value in self.values:
+            if not self.children:
+                yield ({self.key: value}, self)
+            for child in self.children:
+                for leaf in child.leaves_with_nodes():
+                    if not self.is_root():
+                        yield ({self.key: value, **leaf[0]}, leaf[1])
+                    else:
+                        yield leaf
+
     def leaves_with_metadata(self):
         raise DeprecationWarning(
             "qube.leaves_with_metadata() has been replaced with qube.leaves(metadata=True)"
         )
 
-    def leaf_nodes(self) -> "Iterable[tuple[dict[str, str], Qube]]":
-        for value in self.values:
-            if not self.children:
-                yield ({self.key: value}, self)
-            for child in self.children:
-                for leaf in child.leaf_nodes():
-                    if not self.is_root():
-                        yield ({self.key: value, **leaf[0]}, leaf[1])
-                    else:
-                        yield leaf
+    def leaf_nodes(self: Qube) -> Iterable[Qube]:
+        """
+        An iterable over the child nodes (not the leaves) of the qube.
+        Each node is only returned once even if it has multiplicity.
+        """
+        if self.is_leaf():
+            yield self
+
+        for child in self.children:
+            for leaf in child.leaf_nodes():
+                yield leaf
 
     def datacubes(self) -> Iterable[dict[str, Any | list[Any]]]:
         def to_list_of_cubes(node: Qube) -> Iterable[dict[str, Any | list[Any]]]:
@@ -539,6 +557,8 @@ class Qube:
 
         return self.replace(children=tuple(sorted(new_children)))
 
+    compress_with_attributes = compress_with_attributes
+
     add_metadata = add_metadata
 
     def strip_metadata(self) -> Qube:
@@ -559,7 +579,7 @@ class Qube:
             return False
         for k in self.metadata.keys():
             if k not in B.metadata:
-                print(f"'{k}' not in  {B.metadata.keys() = }")
+                print(f"'{k}' not in  {B.metadata.keys()=}")
                 return False
             if not np.array_equal(self.metadata[k], B.metadata[k]):
                 print(f"self.metadata[{k}] != B.metadata.[{k}]")
