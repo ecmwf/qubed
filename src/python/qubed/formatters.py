@@ -307,3 +307,59 @@ def _display(qube: Qube, name: str | None = None, **kwargs):
         qube.print(name=name)
     else:
         display(qube.html(name=name, **kwargs))
+
+
+def info(qube: Qube):
+    """
+    Print out an info dump about the given qube.
+    """
+    import humanize
+    import objsize
+    import pandas as pd
+
+    axes = "\n".join(
+        f"{k} {'/'.join(v.dtypes)} {'/'.join(str(s) for s in v.depths)}"
+        for k, v in qube.axes_info().items()
+    )
+    metadata = "\n".join(
+        f"{k} {'/'.join(str(s) for s in v.dtypes)} {'/'.join(str(s) for s in v.depths)} {humanize.naturalsize(v.total_bytes)}"
+        for k, v in qube.metadata_info().items()
+    )
+
+    axes = pd.DataFrame.from_records(
+        {
+            "Key": k,
+            "Dtypes": "/".join(str(s) for s in v.dtypes),
+            "Depths": "/".join(str(s) for s in v.depths),
+            "Example Value": list(v.values)[0] if v.values else "",
+        }
+        for k, v in qube.axes_info().items()
+    ).to_markdown()
+
+    metadata = pd.DataFrame.from_records(
+        {
+            "Key": k,
+            "Dtypes": "/".join(str(s) for s in v.dtypes),
+            "Depths": "/".join(str(s) for s in v.depths),
+            "Total Size": humanize.naturalsize(v.total_bytes),
+        }
+        for k, v in qube.metadata_info().items()
+    ).to_markdown()
+
+    if metadata:
+        metadata = f"""
+--- Metadata Info ---
+{metadata}
+"""
+
+    print(f"""
+This qube has
+    {humanize.intword(qube.n_nodes)} nodes
+    {humanize.intword(qube.n_leaves)} individual leaves
+
+In memory size of qube: {humanize.naturalsize(objsize.get_deep_size(qube))}
+
+--- Axes Info -------
+{axes}
+{metadata}
+    """)

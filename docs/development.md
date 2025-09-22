@@ -36,7 +36,7 @@ pip install pre-commit
 pre-commit install # In the root of this repo
 ```
 
-## CI
+## CI
 
 The tests are in `./tests`.  The CI is setup using tox to run the tests in a few different environments, they are currently:
 
@@ -44,3 +44,19 @@ The tests are in `./tests`.  The CI is setup using tox to run the tests in a few
 * python 3.12
 * python 3.11
 * python 3.12 with numpy version 1.x as opposed to version 2.x which is used by default.
+
+
+## Git Large File Storage
+
+This repo uses git Large file storage to store some qubes larger than 100MB. These files are not downloaded by `git clone` by default. In order to download them do, for example:
+```bash
+git lfs pull --include="tests/example_qubes/climate-dt/ten_yearly/climate-dt-1990-2000.cbor" --exclude=""
+```
+
+That these files are not downloaded by default is controlled the contents of `.lfsconfig`
+
+You can use `git lfs ls-files` to see which files are currently tracked by lfs.
+
+## Docs
+
+The docs are built with sphinx with a plugin that allows code the run and the output to be saved into the docs. This code can break when you update qubed so use `docs/test_docs.sh` to check it hasn't broken. The CI also has a job to check for this.
