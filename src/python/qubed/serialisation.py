@@ -183,11 +183,11 @@ def from_json(cls: type[Qube], json: dict) -> Qube:
             key=json["key"],
             values=values_from_json(json["values"]),
             type=type,
-            metadata=frozendict(
-                {k: numpy_from_json(v) for k, v in json["metadata"].items()}
-            )
-            if "metadata" in json
-            else {},
+            metadata=(
+                frozendict({k: numpy_from_json(v) for k, v in json["metadata"].items()})
+                if "metadata" in json
+                else {}
+            ),
             children=children,
         )
 
@@ -266,11 +266,11 @@ def from_cbor(cls: type[Qube], cbor_bytes: bytes) -> Qube:
             key=json["key"],
             values=values_from_json(json["values"]),
             type=type,
-            metadata=frozendict(
-                {k: numpy_from_cbor(v) for k, v in json["metadata"].items()}
-            )
-            if "metadata" in json
-            else {},
+            metadata=(
+                frozendict({k: numpy_from_cbor(v) for k, v in json["metadata"].items()})
+                if "metadata" in json
+                else {}
+            ),
             children=children,
         )
 

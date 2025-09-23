@@ -1,9 +1,11 @@
 from datetime import datetime
 
 import pytest
+
 from qubed import Qube
 
-q = Qube.from_tree("""
+q = Qube.from_tree(
+    """
 root
 ├── class=od
 │   ├── expver=0001
@@ -20,11 +22,13 @@ root
     └── expver=0002
         ├── param=1
         └── param=2
-""")
+"""
+)
 
 
 def test_getitem():
-    assert q["class", "od"] == Qube.from_tree("""
+    assert q["class", "od"] == Qube.from_tree(
+        """
 root
 ├── expver=0001
 │   ├── param=1
@@ -32,12 +36,15 @@ root
 └── expver=0002
     ├── param=1
     └── param=2
-""")
+"""
+    )
 
-    assert q["class", "od"]["expver", "0001"] == Qube.from_tree("""
+    assert q["class", "od"]["expver", "0001"] == Qube.from_tree(
+        """
 root
 ├── param=1
-└── param=2""")
+└── param=2"""
+    )
 
 
 def test_n_leaves():
@@ -193,13 +200,15 @@ def test_value_dtypes():
 
 
 def test_flattten():
-    q = Qube.from_tree("""
+    q = Qube.from_tree(
+        """
     root
     ├── class=od, expver=0001/0002, param=1/2
     └── class=rd
         ├── expver=0001, param=1/2/3
         └── expver=0002, param=1/2
-    """)
+    """
+    )
 
     assert q.flatten() == Qube.from_json(
         {
@@ -298,12 +307,14 @@ def test_flattten():
 
 def test_invalid_from_dict():
     with pytest.raises(ValueError):
-        q = Qube.from_tree("""
+        q = Qube.from_tree(
+            """
         root
         ├── class=od, expver=0001/0002, param=1/2
         └── class=rd
             ├── expver=0001, param=1/2/3
             └── expver=0002, param=1/2
-        """)
+        """
+        )
 
         q.flatten().to_dict()

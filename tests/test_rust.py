@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-
 from qubed.rust import Qube as Qube
-
 
 # def test_from_json():
 #     q = pyQube.from_tree("""

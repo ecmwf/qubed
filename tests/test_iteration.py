@@ -1,4 +1,5 @@
 from frozendict import frozendict
+
 from qubed import Qube
 
 
@@ -19,13 +20,15 @@ def test_iter_leaves_simple():
 
 
 def test_datacubes():
-    q = Qube.from_tree("""
+    q = Qube.from_tree(
+        """
     root, class=d1
     ├── date=19920101/19930101/19940101, params=1/2/3
     └── date=19950101
         ├── level=1/2/3, params=1/2/3/4
         └── params=1/2/3/4
-    """)
+    """
+    )
     assert len(list(q.datacubes())) == 3
 
     assert list(q.datacubes()) == [
