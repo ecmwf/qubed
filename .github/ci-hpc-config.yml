@@ -1,0 +1,6 @@
+build:
+  python: 3.11
+  parallel: 1
+  pytest_cmd: |
+    python -m pytest --cov=./ --cov-report=xml
+    python -m coverage report

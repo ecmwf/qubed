@@ -4,7 +4,6 @@ on:
     types: [opened, synchronize, reopened, closed]
   push:
     branches:
-      - "develop"
       - "main"
     tags:
       - "**"
@@ -55,7 +54,6 @@ jobs:
   publish:
     if: >-
       ${{ github.event_name == 'push' && (
-        github.ref_name == 'develop' ||
         github.ref_name == 'main'  ||
         github.ref_type == 'tag'
       ) }}
