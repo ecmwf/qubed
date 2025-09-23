@@ -35,9 +35,11 @@ def make_node(
     return cls.make_node(
         key=key,
         values=QEnum(values),
-        metadata={k: to_numpy_array(v, shape) for k, v in metadata.items()}
-        if metadata is not None
-        else {},
+        metadata=(
+            {k: to_numpy_array(v, shape) for k, v in metadata.items()}
+            if metadata is not None
+            else {}
+        ),
         children=children,
     )
 

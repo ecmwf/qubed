@@ -16,13 +16,7 @@ import numpy as np
 from frozendict import frozendict
 
 from . import set_operations
-from .formatters import (
-    HTML,
-    _display,
-    info,
-    node_tree_to_html,
-    node_tree_to_string,
-)
+from .formatters import HTML, _display, info, node_tree_to_html, node_tree_to_string
 from .metadata import add_metadata, from_nodes, leaves_with_metadata, metadata_info
 from .protobuf.adapters import from_protobuf, to_protobuf
 from .selection import SelectMode, select
@@ -40,11 +34,7 @@ from .serialisation import (
     to_json,
 )
 from .types import NodeType
-from .value_types import (
-    QEnum,
-    ValueGroup,
-    WildcardGroup,
-)
+from .value_types import QEnum, ValueGroup, WildcardGroup
 
 
 @dataclass
@@ -559,7 +549,7 @@ class Qube:
             return False
         for k in self.metadata.keys():
             if k not in B.metadata:
-                print(f"'{k}' not in  {B.metadata.keys() = }")
+                print(f"'{k}' not in  {B.metadata.keys()=}")
                 return False
             if not np.array_equal(self.metadata[k], B.metadata[k]):
                 print(f"self.metadata[{k}] != B.metadata.[{k}]")
