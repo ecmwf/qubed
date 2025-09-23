@@ -68,12 +68,15 @@ In addition to this core datastructure, this repostitory contains a collection o
 
 ## 🚀 Deployment Instructions
 
-Deploy all components to **Kubernetes** using the provided [Helm Chart](./helm_chart).
-
+Deploy all components to **Kubernetes** using the provided [Helm Chart](./chart) and skaffold:
+```shell
+skaffold run -p prod
+```
+Not specifying a profile deploys the default dev environment.
 ---
 
 ### 🛠️ Future Enhancements
-- Intgration **Query Builder Web** with Polytope to contruct a full polytope query.
+- Integration **Query Builder Web** with Polytope to contruct a full polytope query.
 - A JS polytope client implementation to allow performing the polytope query and getting the result all in the browser.
 
 ---

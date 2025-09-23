@@ -1,12 +1,11 @@
-title: Qubed Catalogue Browser (Dev)
-branch: Development
+title: Qubed Catalogue Browser
 
 stacServer:
   enabled: true
   replicas: 1
   image:
-    repository: "eccr.ecmwf.int/qubed/stac_server_develop"
-    tag: "latest"
+    repository: eccr.ecmwf.int/qubed/stac_server
+    tag: 1.0.1
     pullPolicy: Always
   servicePort: 80
 
