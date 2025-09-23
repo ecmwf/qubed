@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from frozendict import frozendict
+
 from qubed import Qube
 
 

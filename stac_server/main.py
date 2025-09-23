@@ -11,6 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
+
 from qubed import Qube
 from qubed.formatters import node_tree_to_html
 
@@ -209,9 +210,9 @@ async def basic_stac(filters: str):
     stac_collection = {
         "type": "Catalog",
         "stac_version": "1.0.0",
-        "id": "root"
-        if not request
-        else "/".join(f"{k}={v}" for k, v in request.items()),
+        "id": (
+            "root" if not request else "/".join(f"{k}={v}" for k, v in request.items())
+        ),
         "title": f"{this_key}={this_value}",
         "description": value_info,
         "links": [make_link(leaf) for leaf in q.leaves()],
