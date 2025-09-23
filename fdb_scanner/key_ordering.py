@@ -58,8 +58,8 @@ dataset_key_orders = {
 }
 
 
-def determine_key_order(args):
-    key_val_selector_pairs = dict(pair.split("=") for pair in args.selector.split(","))
+def determine_key_order(selector):
+    key_val_selector_pairs = dict(pair.split("=") for pair in selector.split(","))
 
     dataset = key_val_selector_pairs.get("dataset")
     key_order = dataset_key_orders.get(dataset, None)
