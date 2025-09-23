@@ -1,4 +1,4 @@
-# <p align="center"><img src="https://raw.githubusercontent.com/ecmwf/qubed/refs/heads/main/docs/_static/banner.svg" width="1000"></p> 
+# <p align="center"><img src="https://raw.githubusercontent.com/ecmwf/qubed/refs/heads/main/docs/_static/banner.svg" width="1000"></p>
 [![Static Badge](https://github.com/ecmwf/codex/raw/refs/heads/main/Project%20Maturity/emerging_badge.svg)](https://github.com/ecmwf/codex/raw/refs/heads/main/Project%20Maturity#emerging)
 [![Docs](https://readthedocs.org/projects/qubed/badge/?version=latest)](https://qubed.readthedocs.io/en/latest/)
 [![PyPi](https://img.shields.io/pypi/v/qubed.svg)](https://pypi.org/project/qubed/)
@@ -45,8 +45,8 @@ In addition to this core datastructure, this repostitory contains a collection o
 
 - 🌟 Implements our proposed [Datacube STAC Extension](./structured_stac.md).
 - 🛠️ Allows efficient traversal of ECMWF's datacubes.
-- Part of the implementation of this is [🌲 Tree Compressor](./tree_compresser), a **compressed tree representation** optimised for storing trees with many duplicated subtress.
-- 🔗 **[Live Example](https://qubed.lumi.apps.dte.destination-earth.eu/api/v1/stac/climate-dt/?class=od%2Cd1&dataset=climate-dt)**.
+- Part of the implementation of this is [🌲 Qubed](./src/python/qubed), a **compressed tree representation** optimised for storing trees with many duplicated subtress.
+- 🔗 **[Live Example](https://qubed.lumi.apps.dte.destination-earth.eu/?class=d1&dataset=climate-dt)**.
 
 ---
 
