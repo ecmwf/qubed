@@ -127,6 +127,19 @@ process = psutil.Process()
 with open(args.api_secret, "r") as f:
     secret = f.read()
 
+# If a MOUNT_PATH env var is set, write output files into that directory.
+MOUNT_PATH = os.getenv("MOUNT_PATH")
+if MOUNT_PATH and not os.path.exists(MOUNT_PATH):
+    raise FileNotFoundError(f"MOUNT_PATH {MOUNT_PATH} does not exist!")
+
+# Compute the final output path for the qube JSON file
+target_filepath = (
+    args.filepath if not MOUNT_PATH else os.path.join(MOUNT_PATH, args.filepath)
+)
+if MOUNT_PATH:
+    # Ensure directory exists when writing to the mount path
+    os.makedirs(os.path.dirname(target_filepath), exist_ok=True)
+
 
 def from_ecmwf_date(s: str) -> date:
     return datetime.strptime(s, "%Y%m%d").date()
@@ -262,14 +275,14 @@ while current_span[0] >= start_date:
 
     current_span = (current_span[0] - chunk_size, current_span[0])
 
-    with open(args.filepath + ".tmp", "w") as f:
+    with open(target_filepath + ".tmp", "w") as f:
         json.dump(qube.to_json(), f)
 
 # Load in the existing qube from disk
 try:
-    existing_qube = Qube.load(args.filepath)
+    existing_qube = Qube.load(target_filepath)
 except Exception:
-    print(f"Could not load {args.filepath}!")
+    print(f"Could not load {target_filepath}!")
     existing_qube = Qube.empty()
 
 # Compute what's new
@@ -289,11 +302,11 @@ else:
 
 # Save the data
 existing_qube = existing_qube | qube
-with open(args.filepath, "w") as f:
+with open(target_filepath, "w") as f:
     json.dump(existing_qube.to_json(), f)
 
 # Delete the temporary file
-tmp_file = Path(args.filepath + ".tmp")
+tmp_file = Path(target_filepath + ".tmp")
 if tmp_file.exists():
     tmp_file.unlink()
 

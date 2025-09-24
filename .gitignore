@@ -1,6 +1,5 @@
 __pycache__
 .DS_Store
-config.yaml
 .venv
 *.json
 raw_list

@@ -1,0 +1,47 @@
+{{- if and .Values.scanJobs.enabled .Values.sharedStorage.enabled }}
+{{- range $job := .Values.scanJobs.jobs }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $job.name }}
+spec:
+  schedule: {{ $job.schedule | quote }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: {{ $job.name }}
+              image: {{ default $.Values.scanJobs.image $job.image }}
+              imagePullPolicy: {{ default (default "IfNotPresent" $.Values.scanJobs.imagePullPolicy) $job.imagePullPolicy }}
+              {{- if or $job.workingDir $.Values.scanJobs.workingDir }}
+              workingDir: {{ default $.Values.scanJobs.workingDir $job.workingDir }}
+              {{- end }}
+              {{- if $job.command }}
+              command:
+                {{- toYaml $job.command | nindent 16 }}
+              {{- end }}
+              {{- if $job.args }}
+              args:
+                {{- toYaml $job.args | nindent 16 }}
+              {{- end }}
+              env:
+                MOUNT_PATH: {{ $.Values.sharedStorage.mountPath | quote}}
+                {{- if $job.env }}
+                    {{- toYaml $job.env | nindent 16 }}
+                {{- end }}
+              {{- if $job.resources }}
+              resources:
+                {{- toYaml $job.resources | nindent 16 }}
+              {{- end }}
+              volumeMounts:
+                - name: shared-storage
+                  mountPath: {{ $.Values.sharedStorage.mountPath }}
+          volumes:
+            - name: shared-storage
+              persistentVolumeClaim:
+                claimName: {{ $.Values.sharedStorage.name }}
+{{- end }}
+{{- end }}

@@ -10,9 +10,14 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from markupsafe import Markup
 from qubed import Qube
 from qubed.formatters import node_tree_to_html
+
+# load yaml config from configmap or default path
+config_path = os.environ.get("CONFIG_PATH", "../config/config.yaml")
+with open(config_path, "r") as f:
+    config = yaml.safe_load(f)
+    print(f"Loaded config from {config_path}")
 
 app = FastAPI()
 security = HTTPBearer()
@@ -31,19 +36,13 @@ qube = Qube.empty()
 mars_language = {}
 
 prefix = Path(os.environ.get("QUBED_DATA_PREFIX", "../"))
-# For docker containers the prefix is usually /code/qubed
 
-# with open(prefix / "tests/example_qubes/on-demand-extremes-dt.json") as f:
-#     qube = Qube.from_json(json.load(f))
-
-with open(prefix / "tests/example_qubes/extremes-dt.json") as f:
-    qube = qube | Qube.from_json(json.load(f))
-
-with open(prefix / "tests/example_qubes/climate-dt.json") as f:
-    qube = qube | Qube.from_json(json.load(f))
-
-# with open(prefix / "tests/example_qubes/od.json") as f:
-#     qube = qube | Qube.from_json(json.load(f))
+for data_file in config.get("data_files", []):
+    data_path = prefix / data_file
+    print(f"Loading data from {data_path}")
+    with open(data_path, "r") as f:
+        qube = qube | Qube.from_json(json.load(f))
+    print(f"Loaded {data_path}, qube now has {len(qube.leaves())} leaves")
 
 with open(prefix / "config/language/language.yaml", "r") as f:
     mars_language = yaml.safe_load(f)
@@ -95,16 +94,10 @@ async def read_root(request: Request):
     config = {
         "request": request,
         "api_url": os.environ.get("API_URL", "/api/v2/"),
-        "branch": os.environ.get("GIT_BRANCH", "local"),
         "title": os.environ.get("TITLE", "Qubed Catalogue Browser"),
         "message": "",
         "last_database_update": "",
     }
-
-    if config["branch"] != "Main":
-        config["message"] = Markup(
-            f"This server was built from the {config['branch']} branch of <a href='https://github.com/ecmwf/qubed'>qubed</a>. Here is <a href='https://qubed.lumi.apps.dte.destination-earth.eu/'>the stable deployment</a>"
-        )
 
     return templates.TemplateResponse("index.html", config)
 

@@ -1,0 +1,5 @@
+data_files:
+  # list of data files to load on startup, relative to mountPath
+  # - on-demand-extremes-dt.json
+  - tests/example_qubes/extremes-dt.json
+  - tests/example_qubes/climate-dt.json

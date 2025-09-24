@@ -18,6 +18,11 @@ spec:
         - name: stac-server
           image: "{{ .Values.stacServer.image.repository }}:{{ .Values.stacServer.image.tag }}"
           imagePullPolicy: {{ .Values.stacServer.image.pullPolicy }}
+          volumeMounts:
+            {{- if .Values.sharedStorage.enabled }}
+            - name: shared-storage
+              mountPath: {{ .Values.sharedStorage.mountPath }}
+            {{- end }}
           env:
             - name: API_KEY
               valueFrom:
@@ -28,12 +33,16 @@ spec:
               value: "https://{{ index .Values.ingress.hostnames 0 }}/api/v2/"
             - name: QUBED_DATA_PREFIX
               value: "/code/qubed"
-            - name: GIT_BRANCH
-              value: {{ .Values.branch }}
             - name: TITLE
               value: {{ .Values.title }}
           ports:
             - containerPort: {{ .Values.stacServer.servicePort }}
+      {{- if .Values.sharedStorage.enabled }}
+      volumes:
+        - name: shared-storage
+          persistentVolumeClaim:
+            claimName: {{ .Values.sharedStorage.name }}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service
