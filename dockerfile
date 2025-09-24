@@ -29,9 +29,6 @@ COPY ./src /code/qubed/src
 # Used to provide language.yaml metadata, this could probably be pulled from a database eventually
 COPY ./config /code/qubed/config
 
-# Used to bootstrap the frontend with a bit of data, could be removed eventually
-COPY ./tests/example_qubes /code/qubed/tests/example_qubes
-
 COPY ./pyproject.toml /code/qubed/
 COPY ./Cargo.toml /code/qubed/
 COPY ./README.md /code/qubed/
@@ -41,3 +38,8 @@ COPY ./stac_server /code/stac_server
 
 WORKDIR /code/stac_server
 CMD ["fastapi", "dev", "main.py", "--proxy-headers", "--port", "80", "--host", "0.0.0.0"]
+
+
+FROM stac_server AS fdb_scanner
+COPY fdb_scanner /code/fdb_scanner
+WORKDIR /code/fdb_scanner
