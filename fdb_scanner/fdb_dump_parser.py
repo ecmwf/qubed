@@ -10,6 +10,7 @@ from pathlib import Path
 from time import time
 
 from qubed import Qube
+from .key_ordering import determine_key_order
 
 if len(sys.argv) != 2:
     print("Usage: python fdb_deblaster.py INPUT_PATH")
@@ -78,29 +79,19 @@ with decompressed.open() as f:
 
             keys = level_one | level_two | level_three
 
+            year = keys.get("year", None)
+            month = keys.get("month", None)
+            SELECTOR = {
+                "class": "d1",
+                "dataset": "climate-dt",
+                "year": str(year),
+                "month": str(month),
+            }
+
             keys.pop("year")
             keys.pop("month")
 
-            key_order = [
-                "class",
-                "dataset",
-                "stream",
-                "activity",
-                "resolution",
-                "expver",
-                "experiment",
-                "generation",
-                "model",
-                "realization",
-                "type",
-                "date",
-                "time",
-                "datetime",
-                "levtype",
-                "levelist",
-                "step",
-                "param",
-            ]
+            key_order = determine_key_order(SELECTOR)
             keys = {k: keys[k] for k in key_order if k in keys}
 
             offset_length_meta["length"] = int(offset_length_meta["length"])
