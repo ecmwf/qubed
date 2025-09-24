@@ -37,7 +37,7 @@ root
 
 Qubed provides all the algorithms on this data structure you would expect such as intersection/union/difference, compression, search, filtering etc.
 
-In addition to this core datastructure, this repostitory contains a collection of components designed to deliver user friendly cataloging for datacube data. The STAC Server, Frontend and a periodic job to do tree compression can be deployed together to kubernetes using the [helm chart](./helm_chart). Thise deployment can then be accessed either via the Query Builder Web interface or the python client.
+In addition to this core datastructure, this repostitory contains a collection of components designed to deliver user friendly cataloging for datacube data. The STAC Server, Frontend and a periodic job to do tree compression can be deployed together to kubernetes using the [helm chart](./chart). Thise deployment can then be accessed either via the Query Builder Web interface or the python client.
 
 ## 📦 Components Overview
 
