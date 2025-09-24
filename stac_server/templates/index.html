@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,13 +11,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
 
     <link rel="stylesheet" href="/static/modules/airdatepicker/air-datepicker.css" />
     <script src="/static/modules/airdatepicker/air-datepicker.js"></script>
     <script>
         var exports = {
-        default: {}
+            default: {}
         }
     </script>
 
@@ -24,14 +26,19 @@
 
     <script src="/static/app.js" defer type="module"></script>
 </head>
+
 <body>
     <div id="viewer">
         <div id="catalog-list">
             <h2>{{title}}</h2>
 
             <p>{{message}}</p>
-            <p>Select one <strong>or multiple</strong> items and then click next to iteratively build up a full request.</p>
+            <p>Select one <strong>or multiple</strong> items and then click next to iteratively build up a full request.
+            </p>
             <p>Last database update: <time>{{last_database_update}}</time></p>
+            <div id="items">
+                <!-- Items from the STAC catalog will be rendered here -->
+            </div>
             <div class="sidebar-header">
                 <a href="/"><button>Root</button></a>
                 <button id="previous-btn">Previous</button>
@@ -39,13 +46,12 @@
                 <button id="next-btn">Next</button>
             </div>
 
-            <div id="items">
-                <!-- Items from the STAC catalog will be rendered here -->
-            </div>
         </div>
         <div id="details">
             <h2>Current Selection</h2>
-            This is a <a href="https://github.com/ecmwf/datacube-spec/blob/main/spec/selection.md">MARS Selection</a> object in JSON format. Hover over a key or value for more info.
+            This is a <a href="https://github.com/ecmwf/datacube-spec/blob/main/spec/selection.md">MARS Selection</a>
+            object
+            in JSON format. Hover over a key or value for more info.
             <!-- Container for the request part, preloaded to prevent layout shift. -->
             <pre><code id="request-breakdown" class="language-json">
 {
@@ -53,12 +59,17 @@
             </code></pre>
 
             <!-- Container to show the current tree -->
-            <h2>Currently Selected Tree</h2></summary>
-            <p>This shows the data <a href="https://qubed.readthedocs.io/en/latest/quickstart.html">qube</a> that matches the current query. The leaves are the next set of available selections you can make. </p>
-            <pre id = "qube"></pre>
+            <h2>Currently Selected Tree</h2>
+            </summary>
+            <p>This shows the data <a href="https://qubed.readthedocs.io/en/latest/quickstart.html">qube</a> that
+                matches
+                the current query. The leaves are the next set of available selections you can make. </p>
+            <pre id="qube"></pre>
 
             <details>
-                <summary><h2>Example Qubed Code</h2></summary>
+                <summary>
+                    <h2>Example Qubed Code</h2>
+                </summary>
                 See the <a href="https://qubed.readthedocs.io/en/latest/">Qubed documentation</a> for more details.
                 <pre><code id="example-python" class="language-python">
 # pip install qubed requests
@@ -71,14 +82,20 @@ qube.print()
 
             <!-- Container fo the raw STAC response -->
             <details>
-                <summary><h2>Raw STAC Response</h2></summary>
-                <p>See the <a href="https://github.com/ecmwf-projects/catalogs/blob/main/structured_stac.md">STAC Extension Proposal</a> for more details on the format.</p>
+                <summary>
+                    <h2>Raw STAC Response</h2>
+                </summary>
+                <p>See the <a href="https://github.com/ecmwf-projects/catalogs/blob/main/structured_stac.md">STAC
+                        Extension
+                        Proposal</a> for more details on the format.</p>
                 <pre class="json-pre"><code id="raw-stac" class="language-json"></code></pre>
             </details>
 
             <!-- Container for the debug response -->
             <details>
-                <summary><h2>Debug Info</h2></summary>
+                <summary>
+                    <h2>Debug Info</h2>
+                </summary>
                 <pre class="json-pre"><code id="debug" class="language-json"></code></pre>
             </details>
         </div>
@@ -88,4 +105,5 @@ qube.print()
         window.API_URL = "{{ api_url }}stac/";
     </script>
 </body>
+
 </html>

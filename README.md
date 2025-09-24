@@ -1,8 +1,10 @@
-# <p align="center"><img src="https://raw.githubusercontent.com/ecmwf/qubed/refs/heads/main/docs/_static/banner.svg" width="1000"></p> 
+# <p align="center"><img src="https://raw.githubusercontent.com/ecmwf/qubed/refs/heads/main/docs/_static/banner.svg" width="1000"></p>
+<p align="center">
 [![Static Badge](https://github.com/ecmwf/codex/raw/refs/heads/main/Project%20Maturity/emerging_badge.svg)](https://github.com/ecmwf/codex/raw/refs/heads/main/Project%20Maturity#emerging)
 [![Docs](https://readthedocs.org/projects/qubed/badge/?version=latest)](https://qubed.readthedocs.io/en/latest/)
 [![PyPi](https://img.shields.io/pypi/v/qubed.svg)](https://pypi.org/project/qubed/)
 [![Wheel](https://img.shields.io/pypi/wheel/qubed.svg)](https://pypi.org/project/qubed/)
+</p>
 
 Qubed provides a datastructure primitive for working with trees of DataCubes. If a normal tree looks like this:
 ```
@@ -35,7 +37,7 @@ root
 
 Qubed provides all the algorithms on this data structure you would expect such as intersection/union/difference, compression, search, filtering etc.
 
-In addition to this core datastructure, this repostitory contains a collection of components designed to deliver user friendly cataloging for datacube data. The STAC Server, Frontend and a periodic job to do tree compression can be deployed together to kubernetes using the [helm chart](./helm_chart). Thise deployment can then be accessed either via the Query Builder Web interface or the python client.
+In addition to this core datastructure, this repostitory contains a collection of components designed to deliver user friendly cataloging for datacube data. The STAC Server, Frontend and a periodic job to do tree compression can be deployed together to kubernetes using the [helm chart](./chart). Thise deployment can then be accessed either via the Query Builder Web interface or the python client.
 
 ## 📦 Components Overview
 
@@ -45,8 +47,8 @@ In addition to this core datastructure, this repostitory contains a collection o
 
 - 🌟 Implements our proposed [Datacube STAC Extension](./structured_stac.md).
 - 🛠️ Allows efficient traversal of ECMWF's datacubes.
-- Part of the implementation of this is [🌲 Tree Compressor](./tree_compresser), a **compressed tree representation** optimised for storing trees with many duplicated subtress.
-- 🔗 **[Live Example](https://qubed.lumi.apps.dte.destination-earth.eu/api/v1/stac/climate-dt/?class=od%2Cd1&dataset=climate-dt)**.
+- Part of the implementation of this is [🌲 Qubed](./src/python/qubed), a **compressed tree representation** optimised for storing trees with many duplicated subtress.
+- 🔗 **[Live Example](https://qubed.lumi.apps.dte.destination-earth.eu/?class=d1&dataset=climate-dt)**.
 
 ---
 
@@ -68,12 +70,15 @@ In addition to this core datastructure, this repostitory contains a collection o
 
 ## 🚀 Deployment Instructions
 
-Deploy all components to **Kubernetes** using the provided [Helm Chart](./helm_chart).
-
+Deploy all components to **Kubernetes** using the provided [Helm Chart](./chart) and skaffold:
+```shell
+skaffold run -p prod
+```
+Not specifying a profile deploys the default dev environment.
 ---
 
 ### 🛠️ Future Enhancements
-- Intgration **Query Builder Web** with Polytope to contruct a full polytope query.
+- Integration **Query Builder Web** with Polytope to contruct a full polytope query.
 - A JS polytope client implementation to allow performing the polytope query and getting the result all in the browser.
 
 ---
