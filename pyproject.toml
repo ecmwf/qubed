@@ -92,7 +92,7 @@ dev = [
     "flake8",
     "pre-commit",
     "isort",
-
+    "httpx",
 ]
 
 # Support for the concise Binary Object Representation (CBOR) (RFC 8949)
