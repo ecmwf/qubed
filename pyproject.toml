@@ -69,7 +69,8 @@ cli = [
 ]
 
 stac_server = [
-    "fastapi",
+    "fastapi[standard]",
+    "Jinja2",
 ]
 
 docs = [

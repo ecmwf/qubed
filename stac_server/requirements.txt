@@ -1,5 +1,0 @@
-fastapi[standard]
-pe
-redis
-frozendict
-requests

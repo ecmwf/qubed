@@ -14,7 +14,9 @@ from qubed import Qube
 from qubed.formatters import node_tree_to_html
 
 # load yaml config from configmap or default path
-config_path = os.environ.get("CONFIG_PATH", "../config/config.yaml")
+config_path = os.environ.get(
+    "CONFIG_PATH", f"{Path(__file__).parents[1]}/config/config.yaml"
+)
 with open(config_path, "r") as f:
     config = yaml.safe_load(f)
     print(f"Loaded config from {config_path}")
@@ -29,7 +31,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount(
+    "/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static"
+)
 templates = Jinja2Templates(directory="templates")
 
 qube = Qube.empty()
@@ -91,7 +95,7 @@ async def deprecated():
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    config = {
+    index_config = {
         "request": request,
         "api_url": os.environ.get("API_URL", "/api/v2/"),
         "title": os.environ.get("TITLE", "Qubed Catalogue Browser"),
@@ -99,7 +103,7 @@ async def read_root(request: Request):
         "last_database_update": "",
     }
 
-    return templates.TemplateResponse("index.html", config)
+    return templates.TemplateResponse("index.html", index_config)
 
 
 @app.get("/api/v2/get/")

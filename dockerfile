@@ -21,19 +21,17 @@ WORKDIR /code
 
 FROM base AS stac_server
 
-COPY stac_server/requirements.txt /code/requirements.txt
-RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
-
 COPY ./src /code/qubed/src
 
 # Used to provide language.yaml metadata, this could probably be pulled from a database eventually
 COPY ./config /code/qubed/config
 
 COPY ./pyproject.toml /code/qubed/
+RUN uv install --no-cache-dir -r "/code/qubed[stac_server]"
 COPY ./Cargo.toml /code/qubed/
 COPY ./README.md /code/qubed/
 
-RUN pip install --no-cache-dir -e /code/qubed
+RUN uv install --no-cache-dir -e "/code/qubed"
 COPY ./stac_server /code/stac_server
 
 WORKDIR /code/stac_server

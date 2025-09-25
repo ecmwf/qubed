@@ -1,27 +1,11 @@
-import importlib
-import sys
-
-import pytest
+import os
 from fastapi.testclient import TestClient
 
+from . import main
 
-@pytest.fixture()
-def app_client(monkeypatch):
-    """
-    Configure env and working directory so stac_server/main.py loads the default config
-    and example data at import time, then return a TestClient.
-    """
-    # Avoid reading api_key.secret during tests
-    monkeypatch.setenv("API_KEY", "testkey")
 
-    # Import (or re-import) the app module to pick up env/cwd
-    module_name = "stac_server.main"
-    if module_name in sys.modules:
-        del sys.modules[module_name]
-    app_module = importlib.import_module(module_name)
-
-    client = TestClient(app_module.app)
-    return client
+os.setenv("API_KEY", "testkey")
+app_client = TestClient(main.app)
 
 
 def test_root_page_renders_html(app_client: TestClient):
