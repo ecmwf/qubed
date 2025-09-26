@@ -164,6 +164,15 @@ async def query(
     return paths
 
 
+@app.get("/api/v2/estimate_size")
+async def estimate_size(
+    request: dict[str, str | list[str]] = Depends(parse_request),
+):
+    sub_qube_json = qube.select(request).to_json()
+    approx_response_size = len(sub_qube_json.encode("utf-8"))
+    return approx_response_size
+
+
 @app.get("/api/v2/basicstac/{filters:path}")
 async def basic_stac(filters: str):
     pairs = filters.strip("/").split("/")
