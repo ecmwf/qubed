@@ -8,7 +8,7 @@ build:
       template: '{{.GIT}}{{if .POSTFIX}}-{{.POSTFIX}}{{end}}'
       components:
         - name: GIT
-          gitCommit: 
+          gitCommit:
             ignoreChanges: true
         - name: POSTFIX
           envTemplate:
@@ -17,6 +17,13 @@ build:
     - image: eccr.ecmwf.int/qubed/stac_server
       docker:
         dockerfile: dockerfile
+        target: stac_server
+        # cliFlags:
+        #   - --no-cache # for debug purposes
+    - image: eccr.ecmwf.int/qubed/fdb_scanner
+      docker:
+        dockerfile: dockerfile
+        target: fdb_scanner
 
 deploy:
   helm:
@@ -26,7 +33,7 @@ deploy:
         setValueTemplates:
           stacServer.image.repository: '{{.IMAGE_REPO_eccr_ecmwf_int_qubed_stac_server}}'
           stacServer.image.tag: '{{.IMAGE_TAG_eccr_ecmwf_int_qubed_stac_server}}@{{.IMAGE_DIGEST_eccr_ecmwf_int_qubed_stac_server}}'
-        namespace: qubed-dev
+          scanJobs.image: '{{.IMAGE_FULLY_QUALIFIED_eccr_ecmwf_int_qubed_fdb_scanner}}'
         valuesFiles:
           - chart/values.yaml
         wait: false

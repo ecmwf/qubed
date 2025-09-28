@@ -17,6 +17,8 @@ from qubed.formatters import node_tree_to_html
 config_path = os.environ.get(
     "CONFIG_PATH", f"{Path(__file__).parents[1]}/config/config.yaml"
 )
+if not Path(config_path).exists():
+    raise FileNotFoundError(f"Config file not found at {config_path}")
 with open(config_path, "r") as f:
     config = yaml.safe_load(f)
     print(f"Loaded config from {config_path}")
@@ -46,7 +48,9 @@ for data_file in config.get("data_files", []):
     print(f"Loading data from {data_path}")
     with open(data_path, "r") as f:
         qube = qube | Qube.from_json(json.load(f))
-    print(f"Loaded {data_path}, qube now has {len(qube.leaves())} leaves")
+    print(
+        f"Loaded {data_path}. Now have {qube.n_nodes} nodes and {qube.n_leaves} leaves."
+    )
 
 with open(prefix / "config/language/language.yaml", "r") as f:
     mars_language = yaml.safe_load(f)
@@ -96,14 +100,13 @@ async def deprecated():
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     index_config = {
-        "request": request,
         "api_url": os.environ.get("API_URL", "/api/v2/"),
         "title": os.environ.get("TITLE", "Qubed Catalogue Browser"),
         "message": "",
         "last_database_update": "",
     }
 
-    return templates.TemplateResponse("index.html", index_config)
+    return templates.TemplateResponse(request, "index.html", index_config)
 
 
 @app.get("/api/v2/get/")

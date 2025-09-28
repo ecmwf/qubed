@@ -23,6 +23,9 @@ spec:
             - name: shared-storage
               mountPath: {{ .Values.sharedStorage.mountPath }}
             {{- end }}
+            - name: stac-server-config
+              mountPath: /etc/stac-server-config
+              readOnly: true
           env:
             - name: API_KEY
               valueFrom:
@@ -31,18 +34,23 @@ spec:
                     key: API_KEY
             - name: API_URL
               value: "https://{{ index .Values.ingress.hostnames 0 }}/api/v2/"
+            - name: CONFIG_PATH
+              value: "/etc/stac-server-config/config.yaml"
             - name: QUBED_DATA_PREFIX
               value: "/code/qubed"
             - name: TITLE
               value: {{ .Values.title }}
           ports:
             - containerPort: {{ .Values.stacServer.servicePort }}
-      {{- if .Values.sharedStorage.enabled }}
       volumes:
+        {{- if .Values.sharedStorage.enabled }}
         - name: shared-storage
           persistentVolumeClaim:
             claimName: {{ .Values.sharedStorage.name }}
-      {{- end }}
+        {{- end }}
+        - name: stac-server-config
+          configMap:
+            name: stac-server-config
 ---
 apiVersion: v1
 kind: Service

@@ -33,39 +33,67 @@ sharedStorage:
 
 # Configurable scan CronJobs
 scanJobs:
-  enabled: true
+  enabled: true # won't work without sharedStorage enabled
   # optional defaults applied to all jobs unless overridden
   image: eccr.ecmwf.int/qubed/fdb_scanner
   imagePullPolicy: IfNotPresent
   jobs:
     # On Demand Extremes DT Full scan every day at 4am
     - name: on-demand-extremes-dt-full-daily
-      schedule: "0 4 * * *"
+      # schedule: "0 4 * * *" # cronjob schedule. Leave empty to disable regular runs
+      init_run: true # run once at startup
       command: ["python"]
       args:
-        - "./scan.py --quiet --full --selector class=d1,dataset=on-demand-extremes-dt --filepath on-demand-extremes-dt.json"
+        - "./scan.py"
+        - "--quiet"
+        - "--full"
+        - "--selector"
+        - "class=d1,dataset=on-demand-extremes-dt"
+        - "--filepath"
+        - "on-demand-extremes-dt.json"
       env: []
 
     # On Demand Extremes DT Partial scan every three hours
     - name: on-demand-extremes-dt-partial-3h
-      schedule: "37 */3 * * *"
+      # schedule: "37 */3 * * *"
+      init_run: true
       command: ["python"]
       args:
-        - "./scan.py --quiet --last_n_days=14 --selector class=d1,dataset=on-demand-extremes-dt --filepath on-demand-extremes-dt.json"
+        - "./scan.py"
+        - "--quiet"
+        - "--last_n_days=14"
+        - "--selector"
+        - "class=d1,dataset=on-demand-extremes-dt"
+        - "--filepath"
+        - "on-demand-extremes-dt.json"
       env: []
 
     # Extremes-dt Daily Partial scan every three hours
     - name: extremes-dt-partial-3h
-      schedule: "12 */3 * * *"
+      # schedule: "12 */3 * * *"
+      init_run: true
       command: ["python"]
       args:
-        - "./scan.py --quiet --last_n_days=14 --selector class=d1,dataset=extremes-dt --filepath extremes-dt.json"
+        - "./scan.py"
+        - "--quiet"
+        - "--last_n_days=14"
+        - "--selector"
+        - "class=d1,dataset=extremes-dt"
+        - "--filepath"
+        - "extremes-dt.json"
       env: []
 
     # Climate dt gen 2 Weekly on Sunday at 2am
     - name: climate-dt-gen2-weekly
-      schedule: "0 2 * * 0"
+      # schedule: "0 2 * * 0"
+      init_run: true
       command: ["python"]
       args:
-        - "./scan.py --quiet --full --selector class=d1,dataset=climate-dt,generation=2 --filepath climate-dt-gen-2.json"
+        - "./scan.py"
+        - "--quiet"
+        - "--full"
+        - "--selector"
+        - "class=d1,dataset=climate-dt,generation=2"
+        - "--filepath"
+        - "climate-dt-gen-2.json"
       env: []

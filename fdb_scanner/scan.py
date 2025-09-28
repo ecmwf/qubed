@@ -49,7 +49,14 @@ import argparse
 import os
 from enum import Enum
 from pathlib import Path
-from .key_ordering import determine_key_order
+
+if __package__ in (None, ""):
+    import sys
+
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    from key_ordering import determine_key_order
+else:
+    from .key_ordering import determine_key_order
 
 
 class ScanMode(Enum):
@@ -115,7 +122,7 @@ def parse_args():
 
     if not os.path.exists(args.fdb_config):
         parser.error(f"Configuration file does not exist: {args.fdb_config}")
-    if not os.path.exists(args.api_secret):
+    if os.environ.get("API_KEY") is None and not os.path.exists(args.api_secret):
         parser.error(f"API secrets file does not exist: {args.api_secret}")
 
     return args
@@ -123,9 +130,13 @@ def parse_args():
 
 args = parse_args()
 process = psutil.Process()
-
-with open(args.api_secret, "r") as f:
-    secret = f.read()
+if os.environ.get("API_KEY") is not None:
+    print("Got api key from env var API_KEY")
+    secret = os.environ["API_KEY"]
+else:
+    print(f"Getting api key from file {args.api_secret}")
+    with open(args.api_secret, "r") as f:
+        secret = f.read()
 
 # If a MOUNT_PATH env var is set, write output files into that directory.
 MOUNT_PATH = os.getenv("MOUNT_PATH")
