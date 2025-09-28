@@ -7,16 +7,12 @@ RUN apt-get update && apt-get install -y \
     git \
     && apt-get clean
 
-RUN pip install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 RUN uv venv /opt/venv
 # Use the virtual environment automatically
 ENV VIRTUAL_ENV=/opt/venv
 # Place entry points in the environment at the front of the path
 ENV PATH="/opt/venv/bin:$PATH"
-
-# Allows cloning private repos using RUN --mount=type=ssh git clone
-RUN mkdir -p -m 0600 ~/.ssh && \
-    ssh-keyscan -H github.com >> ~/.ssh/known_hosts
 
 # Get Rust
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
@@ -31,13 +27,14 @@ COPY ./pyproject.toml /code/qubed/
 COPY ./Cargo.toml /code/qubed/
 COPY ./README.md /code/qubed/
 COPY ./src /code/qubed/src
+WORKDIR /code/qubed
 
 FROM base AS stac_server
-RUN uv pip install --no-cache-dir qubed[stac_server]
-COPY ./stac_server /code/stac_server
+RUN uv pip install '.[stac_server]'
+COPY stac_server /code/stac_server
 
 WORKDIR /code/stac_server
-CMD ["fastapi", "dev", "main.py", "--proxy-headers", "--port", "80", "--host", "0.0.0.0"]
+CMD ["uv", "run", "fastapi", "dev", "main.py", "--proxy-headers", "--port", "80", "--host", "0.0.0.0"]
 
 
 FROM python:3.12-bookworm AS fdb-base
@@ -116,7 +113,7 @@ RUN set -eux \
 
 
 FROM base AS fdb_scanner
-RUN uv pip install --no-cache-dir /code/qubed[cli]
+RUN uv pip install '.[cli]'
 
 COPY fdb_scanner /code/fdb_scanner
 WORKDIR /code/fdb_scanner

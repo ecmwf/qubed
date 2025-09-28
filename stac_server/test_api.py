@@ -1,7 +1,9 @@
 import os
+from pathlib import Path
 from fastapi.testclient import TestClient
 
 os.environ["API_KEY"] = "testkey"
+os.environ["QUBED_DATA_PREFIX"] = str(Path(__file__).parent.parent)
 
 
 from . import main

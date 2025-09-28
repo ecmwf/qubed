@@ -42,8 +42,9 @@ scanJobs:
     - name: on-demand-extremes-dt-full-daily
       # schedule: "0 4 * * *" # cronjob schedule. Leave empty to disable regular runs
       init_run: true # run once at startup
-      command: ["python"]
+      command: ["uv"]
       args:
+        - "run"
         - "./scan.py"
         - "--quiet"
         - "--full"
@@ -57,8 +58,9 @@ scanJobs:
     - name: on-demand-extremes-dt-partial-3h
       # schedule: "37 */3 * * *"
       init_run: true
-      command: ["python"]
+      command: ["uv"]
       args:
+        - "run"
         - "./scan.py"
         - "--quiet"
         - "--last_n_days=14"
@@ -72,8 +74,9 @@ scanJobs:
     - name: extremes-dt-partial-3h
       # schedule: "12 */3 * * *"
       init_run: true
-      command: ["python"]
+      command: ["uv"]
       args:
+        - "run"
         - "./scan.py"
         - "--quiet"
         - "--last_n_days=14"
@@ -87,8 +90,9 @@ scanJobs:
     - name: climate-dt-gen2-weekly
       # schedule: "0 2 * * 0"
       init_run: true
-      command: ["python"]
+      command: ["uv"]
       args:
+        - "run"
         - "./scan.py"
         - "--quiet"
         - "--full"

@@ -36,7 +36,7 @@ app.add_middleware(
 app.mount(
     "/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static"
 )
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 qube = Qube.empty()
 mars_language = {}
