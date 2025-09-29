@@ -22,10 +22,6 @@ def test_remove_branch():
         └── expver=0002, param=1/2
                         """)
 
-    print(a.remove_branch(b))
-    print("AND")
-    print(c)
-
     assert a.remove_branch(b) == c
 
 
@@ -48,9 +44,6 @@ def test_2():
     └── class=rd
         ├── expver=0001, param=3
                         """)
-
-    print(a.remove_branch(b))
-    print(c)
 
     assert a.remove_branch(b) == c
 
@@ -76,8 +69,5 @@ def test_3():
         ├── expver=0001, param=3
         └── expver=0002, param=1/2
                         """)
-
-    print(a.remove_branch(b))
-    print(c)
 
     assert a.remove_branch(b) == c

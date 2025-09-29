@@ -520,7 +520,11 @@ class Qube:
             if c.key == b_key:
                 update_c = type(self).make_root(children=(c,), update_depth=False)
                 new_c = set_operations.set_operation(
-                    update_c, b, set_operations.SetOperation.DIFFERENCE, type(self)
+                    update_c,
+                    b,
+                    set_operations.SetOperation.DIFFERENCE,
+                    type(self),
+                    check_depth=False,
                 )
                 if len(new_c.children) != 0:
                     new_children.extend(new_c.children)

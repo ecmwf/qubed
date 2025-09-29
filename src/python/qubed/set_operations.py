@@ -324,7 +324,7 @@ def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
 
 # @line_profiler.profile
 def set_operation(
-    A: Qube, B: Qube, operation_type: SetOperation, node_type, depth=0
+    A: Qube, B: Qube, operation_type: SetOperation, node_type, depth=0, check_depth=True
 ) -> Qube | None:
     if DEBUG:
         print(f"{pad()}operation({operation_type.name}, depth={depth})")
@@ -334,7 +334,8 @@ def set_operation(
     assert A.key == B.key
     assert A.type == B.type
     assert A.values == B.values
-    # assert A.depth == B.depth
+    if check_depth:
+        assert A.depth == B.depth
 
     new_children: list[Qube] = []
 
@@ -347,7 +348,9 @@ def set_operation(
     # For every node group, perform the set operation
     for A_nodes, B_nodes in nodes_by_key.values():
         output = list(
-            _set_operation(A_nodes, B_nodes, operation_type, node_type, depth + 1)
+            _set_operation(
+                A_nodes, B_nodes, operation_type, node_type, depth + 1, check_depth
+            )
         )
         new_children.extend(output)
 
@@ -398,6 +401,7 @@ def _set_operation(
     operation_type: SetOperation,
     node_type,
     depth: int,
+    check_depth,
 ) -> Iterable[Qube]:
     """
     This operation get called from `operation` when we've found two nodes that match and now need
@@ -461,6 +465,7 @@ def _set_operation(
                     operation_type,
                     node_type,
                     depth=depth + 1,
+                    check_depth=check_depth,
                 )
                 if result is not None:
                     # If we're doing a difference or xor we might want to throw away the intersection
