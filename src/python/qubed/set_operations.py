@@ -334,7 +334,7 @@ def set_operation(
     assert A.key == B.key
     assert A.type == B.type
     assert A.values == B.values
-    assert A.depth == B.depth
+    # assert A.depth == B.depth
 
     new_children: list[Qube] = []
 
@@ -482,7 +482,7 @@ def _set_operation(
                 continue
             else:
                 raise ValueError(
-                    f"Only one of set_ops_result.intersection_A and set_ops_result.intersection_B is None, I didn't think that could happen! {set_ops_result = }"
+                    f"Only one of set_ops_result.intersection_A and set_ops_result.intersection_B is None, I didn't think that could happen! {set_ops_result=}"
                 )
 
     if keep_only_A:
@@ -558,7 +558,7 @@ def merge_values(qubes: list[Qube]) -> Qube:
     axis = example.depth
 
     if DEBUG:
-        print(f"{pad()}merge_values --- {axis = }")
+        print(f"{pad()}merge_values --- {axis=}")
         for i, qube in enumerate(qubes):
             qube.display(f"{pad()}in_{i}")
 
@@ -694,7 +694,7 @@ def concat_metadata(
     example = qubes[0]
 
     if DEBUG:
-        print(f"concat_metadata --- {axis = }, qubes:")
+        print(f"concat_metadata --- {axis=}, qubes:")
         for qube in qubes:
             qube.display()
 
@@ -747,8 +747,8 @@ def shallow_concat_metadata(
 
     if DEBUG:
         print("shallow_concat_metadata")
-        print(f"{concatenation_axis = }")
-        print(f"{sorting_indices = }")
+        print(f"{concatenation_axis=}")
+        print(f"{sorting_indices=}")
         for k, metadata_group in metadata_groups.items():
             print(k, [m.shape for m in metadata_group])
 

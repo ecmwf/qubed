@@ -513,22 +513,21 @@ class Qube:
         return hash_node(self)
 
     def remove_branch(self, b: Qube) -> Qube:
-        for c in self.children:
-            if c.key != b.key:
-                c.remove_branch(b)
+        b_key = b.children[0].key
 
-        # We have c.key = b.key, so we take the difference of the two Qubes
         new_children = []
         for c in self.children:
-            if c.key == b.key:
+            if c.key == b_key:
+                update_c = type(self).make_root(children=(c,), update_depth=False)
                 new_c = set_operations.set_operation(
-                    c, b, set_operations.SetOperation.DIFFERENCE, type(self)
+                    update_c, b, set_operations.SetOperation.DIFFERENCE, type(self)
                 )
-                new_children.append(new_c)
+                if len(new_c.children) != 0:
+                    new_children.extend(new_c.children)
             else:
-                new_children.append(c)
-
-        # and replace the children with the resulting Qube
+                c = c.remove_branch(b)
+                if len(c.children) != 0:
+                    new_children.append(c)
         return self.replace(children=tuple(sorted(new_children)))
 
     def compress(self) -> Qube:
