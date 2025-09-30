@@ -29,6 +29,7 @@ deploy:
   helm:
     releases:
       - name: qubed-dev
+        namespace: qubed-dev
         chartPath: chart
         setValueTemplates:
           stacServer.image.repository: '{{.IMAGE_REPO_eccr_ecmwf_int_qubed_stac_server}}'

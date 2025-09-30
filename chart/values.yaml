@@ -65,7 +65,7 @@ scanJobs:
         - "on-demand-extremes-dt.json"
       env: []
 
-    # On Demand Extremes DT Partial scan every three hours
+    # On Demand Extremes DT Partial scan every three hours <1s
     on-demand-extremes-dt-partial-3h:
       schedule: "37 */3 * * *"
       # init_run: true
@@ -83,7 +83,7 @@ scanJobs:
         - "http://stac-server:80/api/v2"
       env: []
 
-    # Extremes-dt Daily Partial scan every three hours
+    # Extremes-dt Daily Partial scan every three hours # takes 10s
     extremes-dt-partial-3h:
       schedule: "12 */3 * * *"
       # init_run: true
@@ -101,7 +101,7 @@ scanJobs:
         - "http://stac-server:80/api/v2"
       env: []
 
-    # # Climate dt gen 2 Weekly on Sunday at 2am
+    # # Climate dt gen 2 Weekly on Sunday at 2am, takes 45min
     climate-dt-gen2-weekly:
       schedule: "0 2 * * 0"
       # init_run: true
@@ -117,7 +117,7 @@ scanJobs:
         - "climate-dt-gen-2.json"
       env: []
       
-    # # Climate dt gen 1
+    # # Climate dt gen 1, takes 6h
     # climate-dt-gen1-single:
     #   # schedule: "0 3 * * 0"
     #   init_run: true
