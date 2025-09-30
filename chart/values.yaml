@@ -10,9 +10,10 @@ stacServer:
   servicePort: 80
   config: # config mounted as configmap
     data_files: # list of data files to load on startup, relative to mountPath
-      # - on-demand-extremes-dt.json
+      - on-demand-extremes-dt.json
       - extremes-dt.json
-      - climate-dt.json
+      - climate-dt-gen-1.json
+      - climate-dt-gen-2.json
 
 ingress:
   enabled: True
@@ -31,21 +32,31 @@ sharedStorage:
   storageClassName: "" # set to your storage class or leave empty to use default
   mountPath: /data/shared # available as $MOUNT_PATH in scan jobs and QUBED_DATA_PREFIX in stac-server
 
-# Configurable scan CronJobs
+# Configurable scan Init and Cron Jobs
 scanJobs:
   enabled: true # won't work without sharedStorage enabled
   # optional defaults applied to all jobs unless overridden
   image: eccr.ecmwf.int/qubed/fdb_scanner
   imagePullPolicy: IfNotPresent
   jobs:
+    # - name: dev-job
+    #   init_run: true
+    #   command: ["/bin/bash"]
+    #   args: 
+    #     - -c
+    #     - |
+    #       trap : TERM INT; while true; do sleep 3600; done
+    #   env: []
     # On Demand Extremes DT Full scan every day at 4am
     - name: on-demand-extremes-dt-full-daily
-      # schedule: "0 4 * * *" # cronjob schedule. Leave empty to disable regular runs
-      init_run: true # run once at startup
+      schedule: "0 4 * * *" # cronjob schedule. Leave empty to disable regular runs
+      # init_run: true # run once at startup
       command: ["uv"]
       args:
         - "run"
         - "./scan.py"
+        - "--api"
+        - "https://qubed-dev.lumi.apps.dte.destination-earth.eu"
         - "--quiet"
         - "--full"
         - "--selector"
@@ -56,8 +67,8 @@ scanJobs:
 
     # On Demand Extremes DT Partial scan every three hours
     - name: on-demand-extremes-dt-partial-3h
-      # schedule: "37 */3 * * *"
-      init_run: true
+      schedule: "37 */3 * * *"
+      # init_run: true
       command: ["uv"]
       args:
         - "run"
@@ -68,12 +79,14 @@ scanJobs:
         - "class=d1,dataset=on-demand-extremes-dt"
         - "--filepath"
         - "on-demand-extremes-dt.json"
+        - "--api"
+        - "http://stac-server:80/api/v2"
       env: []
 
     # Extremes-dt Daily Partial scan every three hours
     - name: extremes-dt-partial-3h
-      # schedule: "12 */3 * * *"
-      init_run: true
+      schedule: "12 */3 * * *"
+      # init_run: true
       command: ["uv"]
       args:
         - "run"
@@ -84,12 +97,14 @@ scanJobs:
         - "class=d1,dataset=extremes-dt"
         - "--filepath"
         - "extremes-dt.json"
+        - "--api"
+        - "http://stac-server:80/api/v2"
       env: []
 
-    # Climate dt gen 2 Weekly on Sunday at 2am
+    # # Climate dt gen 2 Weekly on Sunday at 2am
     - name: climate-dt-gen2-weekly
-      # schedule: "0 2 * * 0"
-      init_run: true
+      schedule: "0 2 * * 0"
+      # init_run: true
       command: ["uv"]
       args:
         - "run"
@@ -101,3 +116,19 @@ scanJobs:
         - "--filepath"
         - "climate-dt-gen-2.json"
       env: []
+      
+    # # Climate dt gen 1 
+    # - name: climate-dt-gen1-single
+    #   # schedule: "0 3 * * 0"
+    #   init_run: true
+    #   command: ["uv"]
+    #   args:
+    #     - "run"
+    #     - "./scan.py"
+    #     - "--quiet"
+    #     - "--full"
+    #     - "--selector"
+    #     - "class=d1,dataset=climate-dt,generation=1"
+    #     - "--filepath"
+    #     - "climate-dt-gen-1.json"
+    #   env: []

@@ -18,6 +18,8 @@ spec:
         - name: stac-server
           image: "{{ .Values.stacServer.image.repository }}:{{ .Values.stacServer.image.tag }}"
           imagePullPolicy: {{ .Values.stacServer.image.pullPolicy }}
+          command: ["uvicorn"]
+          args: ["main:app", "--proxy-headers", "--port", "80", "--host", "0.0.0.0", "--log-level", "info"]
           volumeMounts:
             {{- if .Values.sharedStorage.enabled }}
             - name: shared-storage
@@ -36,8 +38,12 @@ spec:
               value: "https://{{ index .Values.ingress.hostnames 0 }}/api/v2/"
             - name: CONFIG_PATH
               value: "/etc/stac-server-config/config.yaml"
+            - name: LOG_LEVEL
+              value: {{ default "DEBUG" .Values.logLevel }}
+            {{- if .Values.sharedStorage.enabled }}
             - name: QUBED_DATA_PREFIX
-              value: "/code/qubed"
+              value: {{ .Values.sharedStorage.mountPath }}
+            {{- end }}
             - name: TITLE
               value: {{ .Values.title }}
           ports:

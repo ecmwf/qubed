@@ -1,7 +1,21 @@
 {{- define "scanjob.jobSpec" }}
+backoffLimit: {{ default 0 .root.Values.scanJobs.backoffLimit }}
 template:
   spec:
-    restartPolicy: OnFailure
+    restartPolicy: Never
+    podFailurePolicy:
+      {{- if .root.Values.scanJobs.podFailurePolicy }}
+      {{- toYaml .root.Values.scanJobs.podFailurePolicy | nindent 6 }}
+      {{- else }}
+      # Default pod failure policy: fail the job on any container failure
+      rules:
+        - action: FailJob
+          onExitCodes:
+            containerName: "*"
+            operator: NotIn
+            values:
+              - 0
+      {{- end }}
     containers:
       - name: {{ .name }}
         image: {{ default .root.Values.scanJobs.image .image }}
@@ -70,10 +84,10 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ printf "%s-%s-%d" $job.name $.Release.Name $.Release.Revision | trunc 63 | trimSuffix "-" }}
+  name: {{ printf "%s-%s" $job.name $.Release.Name }}
   annotations:
-    "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "helm.sh/hook": post-install, post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   {{- include "scanjob.jobSpec" (dict
     "name" $job.name
@@ -89,3 +103,4 @@ spec:
   {{- end }}
 {{- end }}
 {{- end }}
+

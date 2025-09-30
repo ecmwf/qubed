@@ -11,6 +11,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 RUN uv venv /opt/venv
 # Use the virtual environment automatically
 ENV VIRTUAL_ENV=/opt/venv
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 # Place entry points in the environment at the front of the path
 ENV PATH="/opt/venv/bin:$PATH"
 
@@ -20,7 +21,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /code
 
-# Used to provide language.yaml metadata, this could probably be pulled from a database eventually
+# Used to provide language.yaml metadata and fdb config, could probably be pulled from a database eventually
 COPY ./config /code/qubed/config
 
 COPY ./pyproject.toml /code/qubed/
@@ -31,9 +32,9 @@ WORKDIR /code/qubed
 
 FROM base AS stac_server
 RUN uv pip install '.[stac_server]'
-COPY stac_server /code/stac_server
+COPY stac_server /code/qubed/stac_server
 
-WORKDIR /code/stac_server
+WORKDIR /code/qubed/stac_server
 CMD ["uv", "run", "fastapi", "dev", "main.py", "--proxy-headers", "--port", "80", "--host", "0.0.0.0"]
 
 
@@ -113,13 +114,15 @@ RUN set -eux \
 
 
 FROM base AS fdb_scanner
+RUN apt-get install -y libaec0 libopenjp2-7
 RUN uv pip install '.[cli]'
 
-COPY fdb_scanner /code/fdb_scanner
-WORKDIR /code/fdb_scanner
+COPY fdb_scanner /code/qubed/fdb_scanner
+WORKDIR /code/qubed/fdb_scanner
 # Copy FDB-related artifacts
 COPY --from=fdb-base /opt/fdb/ /opt/fdb/
+ENV PATH="/opt/fdb/bin:${PATH}"
 # copy fdb config
-COPY config/fdb_config.yaml /code/fdb_scanner/config/fdb_config.yaml
+COPY config/fdb_config.yaml /code/qubed/fdb_scanner/config/fdb_config.yaml
 ENV LD_LIBRARY_PATH=/opt/fdb/lib
 COPY --from=fdb-base /root/.local /root/.local

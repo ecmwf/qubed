@@ -129,14 +129,18 @@ def parse_args():
 
 
 args = parse_args()
+print(f"Using args {args}")
 process = psutil.Process()
 if os.environ.get("API_KEY") is not None:
     print("Got api key from env var API_KEY")
-    secret = os.environ["API_KEY"]
+    secret = os.environ["API_KEY"].strip()
 else:
     print(f"Getting api key from file {args.api_secret}")
     with open(args.api_secret, "r") as f:
-        secret = f.read()
+        secret = f.read().strip()
+
+if not secret:
+    raise ValueError("API key is empty after trimming whitespace; check configuration.")
 
 # If a MOUNT_PATH env var is set, write output files into that directory.
 MOUNT_PATH = os.getenv("MOUNT_PATH")
@@ -177,7 +181,7 @@ print(f"Running scan at {start_time}")
 # Use fdb axes to determine date range
 output = run_command(
     [
-        f"/usr/local/bin/fdb axes --json --config {args.fdb_config} --minimum-keys=class {args.selector}"
+        f"fdb axes --json --config {args.fdb_config} --minimum-keys=class {args.selector}"
     ]
 )
 axes = json.loads(output)
@@ -221,7 +225,7 @@ while current_span[0] >= start_date:
 
     subqube = Qube.empty()
     command = [
-        f"/usr/local/bin/fdb list --compact --config {args.fdb_config} --minimum-keys=date {args.selector},date={start}/to/{end}"
+        f"fdb list --compact --config {args.fdb_config} --minimum-keys=date {args.selector},date={start}/to/{end}"
     ]
 
     if not args.quiet:
