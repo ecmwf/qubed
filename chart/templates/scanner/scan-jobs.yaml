@@ -55,19 +55,19 @@ template:
           claimName: {{ .root.Values.sharedStorage.name }}
 {{- end }}
 {{- if and .Values.scanJobs.enabled .Values.sharedStorage.enabled }}
-{{- range $index, $job := .Values.scanJobs.jobs }}
+{{- range $jobName, $job := .Values.scanJobs.jobs }}
   {{- if $job.schedule }}
 ---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ $job.name }}
+  name: {{ $jobName }}
 spec:
   schedule: {{ $job.schedule | quote }}
   jobTemplate:
     spec:
       {{- include "scanjob.jobSpec" (dict
-        "name" $job.name
+        "name" $jobName
         "image" $job.image
         "imagePullPolicy" $job.imagePullPolicy
         "workingDir" $job.workingDir
@@ -84,13 +84,13 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ printf "%s-%s" $job.name $.Release.Name }}
+  name: {{ printf "%s-%s" $jobName $.Release.Name }}
   annotations:
     "helm.sh/hook": post-install, post-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   {{- include "scanjob.jobSpec" (dict
-    "name" $job.name
+    "name" $jobName
     "image" $job.image
     "imagePullPolicy" $job.imagePullPolicy
     "workingDir" $job.workingDir

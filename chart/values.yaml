@@ -39,16 +39,16 @@ scanJobs:
   image: eccr.ecmwf.int/qubed/fdb_scanner
   imagePullPolicy: IfNotPresent
   jobs:
-    # - name: dev-job
+    # dev-job:
     #   init_run: true
     #   command: ["/bin/bash"]
-    #   args: 
+    #   args:
     #     - -c
     #     - |
     #       trap : TERM INT; while true; do sleep 3600; done
     #   env: []
     # On Demand Extremes DT Full scan every day at 4am
-    - name: on-demand-extremes-dt-full-daily
+    on-demand-extremes-dt-full-daily:
       schedule: "0 4 * * *" # cronjob schedule. Leave empty to disable regular runs
       # init_run: true # run once at startup
       command: ["uv"]
@@ -66,7 +66,7 @@ scanJobs:
       env: []
 
     # On Demand Extremes DT Partial scan every three hours
-    - name: on-demand-extremes-dt-partial-3h
+    on-demand-extremes-dt-partial-3h:
       schedule: "37 */3 * * *"
       # init_run: true
       command: ["uv"]
@@ -84,7 +84,7 @@ scanJobs:
       env: []
 
     # Extremes-dt Daily Partial scan every three hours
-    - name: extremes-dt-partial-3h
+    extremes-dt-partial-3h:
       schedule: "12 */3 * * *"
       # init_run: true
       command: ["uv"]
@@ -102,7 +102,7 @@ scanJobs:
       env: []
 
     # # Climate dt gen 2 Weekly on Sunday at 2am
-    - name: climate-dt-gen2-weekly
+    climate-dt-gen2-weekly:
       schedule: "0 2 * * 0"
       # init_run: true
       command: ["uv"]
@@ -117,8 +117,8 @@ scanJobs:
         - "climate-dt-gen-2.json"
       env: []
       
-    # # Climate dt gen 1 
-    # - name: climate-dt-gen1-single
+    # # Climate dt gen 1
+    # climate-dt-gen1-single:
     #   # schedule: "0 3 * * 0"
     #   init_run: true
     #   command: ["uv"]
