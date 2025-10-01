@@ -32,7 +32,7 @@ with open(config_path, "r") as f:
     config = yaml.safe_load(f)
     logger.info(f"Loaded config from {config_path}")
 
-prefix = Path(os.environ.get("QUBED_DATA_PREFIX", "../"))
+prefix = Path(os.environ.get("QUBED_DATA_PREFIX", "../tests/example_qubes/"))
 
 if "API_KEY" in os.environ:
     api_key = os.environ["API_KEY"].strip()
