@@ -55,14 +55,14 @@ scanJobs:
       args:
         - "run"
         - "./scan.py"
-        - "--api"
-        - "https://qubed-dev.lumi.apps.dte.destination-earth.eu"
         - "--quiet"
         - "--full"
         - "--selector"
         - "class=d1,dataset=on-demand-extremes-dt"
         - "--filepath"
         - "on-demand-extremes-dt.json"
+        - "--api"
+        - "http://stac-server:80/api/v2"
       env: []
 
     # On Demand Extremes DT Partial scan every three hours <1s
@@ -115,6 +115,8 @@ scanJobs:
         - "class=d1,dataset=climate-dt,generation=2"
         - "--filepath"
         - "climate-dt-gen-2.json"
+        - "--api"
+        - "http://stac-server:80/api/v2"
       env: []
       
     # # Climate dt gen 1, takes 6h
