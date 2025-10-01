@@ -217,9 +217,7 @@ async def basic_stac(filters: str):
     # key_desc = key_info.get(
     #     "description", f"No description for `key` {this_key} found."
     # )
-    logger.info(this_key, this_value)
-
-    logger.info(this_key, key_info)
+    logger.info(f"{this_key}, {this_value}")
     stac_collection = {
         "type": "Catalog",
         "stac_version": "1.0.0",
