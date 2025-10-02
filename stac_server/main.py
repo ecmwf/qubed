@@ -220,78 +220,89 @@ async def basic_stac(filters: str):
     return stac_collection
 
 
-@app.get("/api/v2/stac/")
-async def get_STAC(
-    request: dict[str, str | list[str]] = Depends(parse_request),
-):
-    q, axes = follow_query(request, qube)
+def make_link(axis, request_params):
+    """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
+    key_name = axis["key"]
 
-    kvs = [
-        f"{k}={','.join(v)}" if isinstance(v, list) else f"{k}={v}"
-        for k, v in request.items()
-    ]
-    request_params = "&".join(kvs)
+    href_template = f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
 
-    def make_link(axis):
-        """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
-        key_name = axis["key"]
-
-        href_template = f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
-
-        values_from_language_yaml = mars_language.get(key_name, {}).get("values", {})
-        value_descriptions = {
-            v: values_from_language_yaml[v]
-            for v in axis["values"]
-            if v in values_from_language_yaml
-        }
-
-        return {
-            "title": key_name,
-            "uriTemplate": href_template,
-            "rel": "child",
-            "type": "application/json",
-            "variables": {
-                key_name: {
-                    "type": axis["dtype"],
-                    "description": mars_language.get(key_name, {}).get(
-                        "description", ""
-                    ),
-                    "enum": axis["values"],
-                    "value_descriptions": value_descriptions,
-                    "on_frontier": axis["on_frontier"],
-                }
-            },
-        }
-
-    descriptions = {
-        key: {
-            "key": key,
-            "values": values,
-            "description": mars_language.get(key, {}).get("description", ""),
-            "value_descriptions": mars_language.get(key, {}).get("values", {}),
-        }
-        for key, values in request.items()
+    values_from_language_yaml = mars_language.get(key_name, {}).get("values", {})
+    value_descriptions = {
+        v: values_from_language_yaml[v]
+        for v in axis["values"]
+        if v in values_from_language_yaml
     }
 
-    # Format the response as a STAC collection
-    stac_collection = {
-        "type": "Catalog",
-        "stac_version": "1.0.0",
-        "id": "root" if not request else "/stac?" + request_params,
-        "description": "STAC collection representing potential children of this request",
-        "links": [make_link(a) for a in axes],
-        "debug": {
-            "descriptions": descriptions,
-            "qube": node_tree_to_html(
-                q,
-                collapse=True,
-                depth=10,
-                include_css=False,
-                include_js=False,
-                max_summary_length=200,
-                css_id="qube",
-            ),
+    return {
+        "title": key_name,
+        "uriTemplate": href_template,
+        "rel": "child",
+        "type": "application/json",
+        "variables": {
+            key_name: {
+                "type": axis["dtype"],
+                "description": mars_language.get(key_name, {}).get("description", ""),
+                "enum": axis["values"],
+                "value_descriptions": value_descriptions,
+                "on_frontier": axis["on_frontier"],
+            }
         },
     }
+
+
+@app.get("/api/v2/stac/")
+async def get_STAC(
+    request: list[dict[str, str | list[str]]] = Depends(parse_request),
+):
+    # TODO: need to identify branching to be able to represent 2 requests or more at the same time
+
+    # TODO: If we server several requests, then request should really be a list[dict[str, str | list[str]]]
+    stac_collections = []
+
+    print(request)
+
+    # for request in requests:
+    #     print(request)
+    if True:
+        q, axes = follow_query(request, qube)
+
+        kvs = [
+            f"{k}={','.join(v)}" if isinstance(v, list) else f"{k}={v}"
+            for k, v in request.items()
+        ]
+        request_params = "&".join(kvs)
+
+        descriptions = {
+            key: {
+                "key": key,
+                "values": values,
+                "description": mars_language.get(key, {}).get("description", ""),
+                "value_descriptions": mars_language.get(key, {}).get("values", {}),
+            }
+            for key, values in request.items()
+        }
+
+        # Format the response as a STAC collection
+        stac_collection = {
+            "type": "Catalog",
+            "stac_version": "1.0.0",
+            "id": "root" if not request else "/stac?" + request_params,
+            "description": "STAC collection representing potential children of this request",
+            "links": [make_link(a, request_params) for a in axes],
+            "debug": {
+                "descriptions": descriptions,
+                "qube": node_tree_to_html(
+                    q,
+                    collapse=True,
+                    depth=10,
+                    include_css=False,
+                    include_js=False,
+                    max_summary_length=200,
+                    css_id="qube",
+                ),
+            },
+        }
+        stac_collections.append(stac_collection)
+    print(stac_collection)
 
     return stac_collection
