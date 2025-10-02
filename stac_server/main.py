@@ -126,6 +126,36 @@ async def union(
     return qube.to_json()
 
 
+climate_dt_keys = [
+    "class",
+    "dataset",
+    "activity",
+    "experiment",
+    "generation",
+    "model",
+    "realization",
+    "expver",
+    "stream",
+    "date",
+    "resolution",
+    "type",
+    "levtype",
+    "time",
+    "levelist",
+    "param",
+]
+
+
+def find_relevant_datacubes(request: dict[str, str | list[str]], qube: Qube):
+    # TODO: from the qube, create the complete list of available datacubes
+    # TODO: from the list of datacubes, look at the next key in the request and refine which datacubes correspond to this sub-request
+    # NOTE: this key will come from a static list of next keys to follow and once we have treated a key, we can add it to the seen keys
+    # TODO: then once we have the list of sub-datacubes of interest, recreate a sub-qube by unioning the set of flat sub-datacubes
+    # TODO: then return this sub-qube and the relevant STAC query info
+
+    pass
+
+
 def follow_query(request: dict[str, str | list[str]], qube: Qube):
     # Compute the axes for the full tree
     full_axes = qube.select(request, consume=False).axes_info()
@@ -133,10 +163,20 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
     seen_keys = list(request.keys())
 
     # Also compute the selected tree just to the point where our selection ends
-    s = qube.select(request, mode=Qube.select_modes.NextLevel, consume=False).compress()
+    # s = qube.select(request, mode=Qube.select_modes.NextLevel,
+    #                 consume=False).compress()
+
+    s = qube.select(request, mode=Qube.select_modes.Relaxed, consume=False).compress()
+
+    print(s)
+    # print(full_axes)
 
     # Compute the set of keys that are needed to advance the selection frontier
-    frontier_keys = {node.key for _, node in s.leaf_nodes()}
+    # frontier_keys = {node.key for _, node in s.leaf_nodes()}
+    frontier_keys = next((x for x in climate_dt_keys if x not in seen_keys), None)
+
+    print(frontier_keys)
+    print(seen_keys)
 
     return s, [
         {
@@ -220,10 +260,42 @@ async def basic_stac(filters: str):
     return stac_collection
 
 
+def make_link(axis, request_params):
+    """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
+    key_name = axis["key"]
+
+    href_template = f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
+
+    values_from_language_yaml = mars_language.get(key_name, {}).get("values", {})
+    value_descriptions = {
+        v: values_from_language_yaml[v]
+        for v in axis["values"]
+        if v in values_from_language_yaml
+    }
+
+    return {
+        "title": key_name,
+        "uriTemplate": href_template,
+        "rel": "child",
+        "type": "application/json",
+        "variables": {
+            key_name: {
+                "type": axis["dtype"],
+                "description": mars_language.get(key_name, {}).get("description", ""),
+                "enum": axis["values"],
+                "value_descriptions": value_descriptions,
+                "on_frontier": axis["on_frontier"],
+            }
+        },
+    }
+
+
 @app.get("/api/v2/stac/")
 async def get_STAC(
     request: dict[str, str | list[str]] = Depends(parse_request),
 ):
+    # TODO: need to prevent branching requests
+    # TODO: can order next axis in any pre-defined order we want
     q, axes = follow_query(request, qube)
 
     kvs = [
@@ -232,36 +304,7 @@ async def get_STAC(
     ]
     request_params = "&".join(kvs)
 
-    def make_link(axis):
-        """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
-        key_name = axis["key"]
-
-        href_template = f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
-
-        values_from_language_yaml = mars_language.get(key_name, {}).get("values", {})
-        value_descriptions = {
-            v: values_from_language_yaml[v]
-            for v in axis["values"]
-            if v in values_from_language_yaml
-        }
-
-        return {
-            "title": key_name,
-            "uriTemplate": href_template,
-            "rel": "child",
-            "type": "application/json",
-            "variables": {
-                key_name: {
-                    "type": axis["dtype"],
-                    "description": mars_language.get(key_name, {}).get(
-                        "description", ""
-                    ),
-                    "enum": axis["values"],
-                    "value_descriptions": value_descriptions,
-                    "on_frontier": axis["on_frontier"],
-                }
-            },
-        }
+    print(request_params)
 
     descriptions = {
         key: {
@@ -279,7 +322,7 @@ async def get_STAC(
         "stac_version": "1.0.0",
         "id": "root" if not request else "/stac?" + request_params,
         "description": "STAC collection representing potential children of this request",
-        "links": [make_link(a) for a in axes],
+        "links": [make_link(a, request_params) for a in axes],
         "debug": {
             "descriptions": descriptions,
             "qube": node_tree_to_html(
