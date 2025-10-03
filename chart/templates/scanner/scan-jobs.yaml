@@ -1,0 +1,93 @@
+{{- define "scanjob.jobSpec" }}
+backoffLimit: {{ default 0 .root.Values.scanJobs.backoffLimit }}
+template:
+  spec:
+    restartPolicy: Never
+    containers:
+      - name: {{ .name }}
+        image: {{ default .root.Values.scanJobs.image .image }}
+        imagePullPolicy: {{ default (default "IfNotPresent" .root.Values.scanJobs.imagePullPolicy) .imagePullPolicy }}
+        {{- if or .workingDir .root.Values.scanJobs.workingDir }}
+        workingDir: {{ default .root.Values.scanJobs.workingDir .workingDir }}
+        {{- end }}
+        {{- if .command }}
+        command:
+          {{- toYaml .command | nindent 10 }}
+        {{- end }}
+        {{- if .args }}
+        args:
+          {{- toYaml .args | nindent 10 }}
+        {{- end }}
+        env:
+          - name: API_KEY
+            valueFrom:
+              secretKeyRef:
+                  name: api-key
+                  key: API_KEY
+          - name: MOUNT_PATH
+            value: {{ .root.Values.sharedStorage.mountPath | quote }}
+          {{- if .env }}
+          {{- toYaml .env | nindent 10 }}
+          {{- end }}
+        {{- if .resources }}
+        resources:
+          {{- toYaml .resources | nindent 10 }}
+        {{- end }}
+        volumeMounts:
+          - name: shared-storage
+            mountPath: {{ .root.Values.sharedStorage.mountPath }}
+    volumes:
+      - name: shared-storage
+        persistentVolumeClaim:
+          claimName: {{ .root.Values.sharedStorage.name }}
+{{- end }}
+{{- if and .Values.scanJobs.enabled .Values.sharedStorage.enabled }}
+{{- range $jobName, $job := .Values.scanJobs.jobs }}
+  {{- if $job.schedule }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $jobName }}
+spec:
+  schedule: {{ $job.schedule | quote }}
+  jobTemplate:
+    spec:
+      {{- include "scanjob.jobSpec" (dict
+  "name" (printf "%s-cronjob" $jobName)
+        "image" $job.image
+        "imagePullPolicy" $job.imagePullPolicy
+        "workingDir" $job.workingDir
+        "command" $job.command
+        "args" $job.args
+        "env" $job.env
+        "resources" $job.resources
+        "root" $
+      ) | nindent 6 }}
+  {{- end }}
+
+  {{- if $job.init_run }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-%s" $jobName $.Release.Name }}
+  annotations:
+    "helm.sh/hook": post-install, post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  {{- include "scanjob.jobSpec" (dict
+    "name" (printf "%s-initjob" $jobName)
+    "image" $job.image
+    "imagePullPolicy" $job.imagePullPolicy
+    "workingDir" $job.workingDir
+    "command" $job.command
+    "args" $job.args
+    "env" $job.env
+    "resources" $job.resources
+    "root" $
+  ) | nindent 2 }}
+  {{- end }}
+{{- end }}
+{{- end }}
+
