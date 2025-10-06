@@ -212,17 +212,29 @@ def find_relevant_datacubes(request: dict[str, str | list[str]], qube: Qube):
 def follow_query(request: dict[str, str | list[str]], qube: Qube):
     # TODO: from the qube, create the complete list of available datacubes
 
-    datacubes = qube.datacubes()
+    print("HERE FIRST")
+    print(request)
 
-    full_axes = qube.select(request, consume=False).axes_info()
+    rel_qube = qube.select(request, consume=False)
+
+    datacubes = rel_qube.datacubes()
+
+    full_axes = rel_qube.axes_info()
+    print(full_axes)
 
     seen_keys = list(request.keys())
 
-    frontier_keys = next((x for x in climate_dt_keys if x not in seen_keys), None)
+    # available_keys = list(set(full_axes.keys()) & set(climate_dt_keys))
+    available_keys = [key for key in climate_dt_keys if key in list(full_axes.keys())]
+
+    print("HERE LOOK NOW")
+    print(available_keys)
+
+    frontier_keys = next((x for x in available_keys if x not in seen_keys), None)
 
     if len(list(request.keys())) == 0:
         # Request is empty so we want to return the original qube
-        return qube, [
+        return rel_qube, [
             {
                 "key": key,
                 "values": sorted(info.values, reverse=True),
@@ -233,6 +245,9 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
         ]
 
     next_key = seen_keys[-1]
+    print(seen_keys)
+    print(next_key)
+    print(frontier_keys)
 
     relevant_datacubes = []
 
@@ -240,10 +255,10 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
     # NOTE: this key will come from a static list of next keys to follow and once we have treated a key, we can add it to the seen keys
 
     for datacube in list(datacubes):
-        print("NEXT KEY")
-        print(next_key)
-        print("DATACUBE KEYS")
-        print(list(datacube.keys()))
+        # print("NEXT KEY")
+        # print(next_key)
+        # print("DATACUBE KEYS")
+        # print(list(datacube.keys()))
         if next_key in list(datacube.keys()):
             # print("DATACUBE KEYS")
             # print(list(datacube.keys()))
@@ -251,14 +266,14 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
 
             # print(request[next_key])
             # print(possible_key_vals)
-            print((type(request[next_key]), type(possible_key_vals[0])))
-            print(request[next_key] in possible_key_vals)
+            # print((type(request[next_key]), type(possible_key_vals[0])))
+            # print(request[next_key] in possible_key_vals)
 
             if request[next_key] in possible_key_vals:
                 relevant_datacubes.append(datacube)
-                print(next_key)
-                print(possible_key_vals)
-                print(request)
+                # print(next_key)
+                # print(possible_key_vals)
+                # print(request)
 
     # TODO: then once we have the list of sub-datacubes of interest, recreate a sub-qube by unioning the set of flat sub-datacubes
     datacube_subqubes = [
@@ -273,7 +288,7 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
 
     # TODO: could we also somehow check here that we are never branching since really, we never would like to be able to access multiple datacubes at the same time for a single request
 
-    print(sub_qube)
+    # print(sub_qube)
     return sub_qube, [
         {
             "key": key,
@@ -431,6 +446,12 @@ async def get_STAC(
     # TODO: can order next axis in any pre-defined order we want
 
     # TODO: still, need to somehow update qube used in follow_query to the recursive sub-qube q so that this becomes faster
+    # if not hasattr(request, "q"):
+    #     request.q = qube  # first time: root
+    # # q, axes = follow_query(request, qube)
+    # q, axes = follow_query(request, request.q)
+    # # request.q = q
+
     q, axes = follow_query(request, qube)
 
     kvs = [
