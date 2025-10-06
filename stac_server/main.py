@@ -217,7 +217,7 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
 
     rel_qube = qube.select(request, consume=False)
 
-    datacubes = rel_qube.datacubes()
+    # datacubes = rel_qube.datacubes()
 
     full_axes = rel_qube.axes_info()
     print(full_axes)
@@ -249,47 +249,48 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
     print(next_key)
     print(frontier_keys)
 
-    relevant_datacubes = []
+    # relevant_datacubes = []
 
-    # TODO: from the list of datacubes, look at the next key in the request and refine which datacubes correspond to this sub-request
-    # NOTE: this key will come from a static list of next keys to follow and once we have treated a key, we can add it to the seen keys
+    # # TODO: from the list of datacubes, look at the next key in the request and refine which datacubes correspond to this sub-request
+    # # NOTE: this key will come from a static list of next keys to follow and once we have treated a key, we can add it to the seen keys
 
-    for datacube in list(datacubes):
-        # print("NEXT KEY")
-        # print(next_key)
-        # print("DATACUBE KEYS")
-        # print(list(datacube.keys()))
-        if next_key in list(datacube.keys()):
-            # print("DATACUBE KEYS")
-            # print(list(datacube.keys()))
-            possible_key_vals = [str(val) for val in datacube[next_key]]
+    # for datacube in list(datacubes):
+    #     # print("NEXT KEY")
+    #     # print(next_key)
+    #     # print("DATACUBE KEYS")
+    #     # print(list(datacube.keys()))
+    #     if next_key in list(datacube.keys()):
+    #         # print("DATACUBE KEYS")
+    #         # print(list(datacube.keys()))
+    #         possible_key_vals = [str(val) for val in datacube[next_key]]
 
-            # print(request[next_key])
-            # print(possible_key_vals)
-            # print((type(request[next_key]), type(possible_key_vals[0])))
-            # print(request[next_key] in possible_key_vals)
+    #         # print(request[next_key])
+    #         # print(possible_key_vals)
+    #         # print((type(request[next_key]), type(possible_key_vals[0])))
+    #         # print(request[next_key] in possible_key_vals)
 
-            if request[next_key] in possible_key_vals:
-                relevant_datacubes.append(datacube)
-                # print(next_key)
-                # print(possible_key_vals)
-                # print(request)
+    #         if request[next_key] in possible_key_vals:
+    #             relevant_datacubes.append(datacube)
+    #             # print(next_key)
+    #             # print(possible_key_vals)
+    #             # print(request)
 
-    # TODO: then once we have the list of sub-datacubes of interest, recreate a sub-qube by unioning the set of flat sub-datacubes
-    datacube_subqubes = [
-        Qube.from_datacube(datacube) for datacube in relevant_datacubes
-    ]
-    # sub_qube = functools.reduce(union, datacube_subqubes, Qube.empty())
-    sub_qube = datacube_subqubes[0]
-    for q in datacube_subqubes[1:]:
-        sub_qube = sub_qube | q
+    # # TODO: then once we have the list of sub-datacubes of interest, recreate a sub-qube by unioning the set of flat sub-datacubes
+    # datacube_subqubes = [
+    #     Qube.from_datacube(datacube) for datacube in relevant_datacubes
+    # ]
+    # # sub_qube = functools.reduce(union, datacube_subqubes, Qube.empty())
+    # sub_qube = datacube_subqubes[0]
+    # for q in datacube_subqubes[1:]:
+    #     sub_qube = sub_qube | q
 
     # TODO: then return this sub-qube and the relevant STAC query info
 
     # TODO: could we also somehow check here that we are never branching since really, we never would like to be able to access multiple datacubes at the same time for a single request
 
     # print(sub_qube)
-    return sub_qube, [
+    # return sub_qube, [
+    return rel_qube, [
         {
             "key": key,
             "values": sorted(info.values, reverse=True),
