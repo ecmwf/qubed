@@ -11,6 +11,7 @@ os.environ["ECCODES_PYTHON_USE_FINDLIBS"] = "1"
 
 
 process = psutil.Process()
+
 SELECTOR = {
     "class": "od",
     "stream": "oper",
@@ -19,6 +20,16 @@ SELECTOR = {
     "date": "20251007",
     "time": "0000",
 }
+
+SELECTOR = {
+    "class": "od",
+    "stream": "enfo",
+    "expver": "0001",
+    "type": "pf",
+    "date": "20251007",
+    "time": "0000",
+}
+
 FILEPATH = "tests/example_qubes/oper_with_metadata.json"
 FULL_OR_PARTIAL = "FULL"
 
