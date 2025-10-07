@@ -42,6 +42,7 @@ key_order = [
     "domain",
     "expver",
     "type",
+    "number",
     "date",
     "time",
     "levtype",
