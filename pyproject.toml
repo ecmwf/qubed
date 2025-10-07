@@ -100,3 +100,8 @@ dev = [
 cbor = [
     "cbor2"
 ]
+
+gen_from_fdb = [
+    "pyfdb",
+    "psutil",
+]
