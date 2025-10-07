@@ -104,4 +104,5 @@ cbor = [
 gen_from_fdb = [
     "pyfdb",
     "psutil",
+    "pyyaml",
 ]
