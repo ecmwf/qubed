@@ -49,7 +49,6 @@ import argparse
 import os
 from enum import Enum
 from pathlib import Path
-from .key_ordering import determine_key_order
 
 
 class ScanMode(Enum):
@@ -115,17 +114,38 @@ def parse_args():
 
     if not os.path.exists(args.fdb_config):
         parser.error(f"Configuration file does not exist: {args.fdb_config}")
-    if not os.path.exists(args.api_secret):
+    if os.environ.get("API_KEY") is None and not os.path.exists(args.api_secret):
         parser.error(f"API secrets file does not exist: {args.api_secret}")
 
     return args
 
 
 args = parse_args()
+print(f"Using args {args}")
 process = psutil.Process()
+if os.environ.get("API_KEY") is not None:
+    print("Got api key from env var API_KEY")
+    secret = os.environ["API_KEY"].strip()
+else:
+    print(f"Getting api key from file {args.api_secret}")
+    with open(args.api_secret, "r") as f:
+        secret = f.read().strip()
 
-with open(args.api_secret, "r") as f:
-    secret = f.read()
+if not secret:
+    raise ValueError("API key is empty after trimming whitespace; check configuration.")
+
+# If a MOUNT_PATH env var is set, write output files into that directory.
+MOUNT_PATH = os.getenv("MOUNT_PATH")
+if MOUNT_PATH and not os.path.exists(MOUNT_PATH):
+    raise FileNotFoundError(f"MOUNT_PATH {MOUNT_PATH} does not exist!")
+
+# Compute the final output path for the qube JSON file
+target_filepath = (
+    args.filepath if not MOUNT_PATH else os.path.join(MOUNT_PATH, args.filepath)
+)
+if MOUNT_PATH:
+    # Ensure directory exists when writing to the mount path
+    os.makedirs(os.path.dirname(target_filepath), exist_ok=True)
 
 
 def from_ecmwf_date(s: str) -> date:
@@ -152,9 +172,7 @@ print(f"Running scan at {start_time}")
 
 # Use fdb axes to determine date range
 output = run_command(
-    [
-        f"/usr/local/bin/fdb axes --json --config {args.fdb_config} --minimum-keys=class {args.selector}"
-    ]
+    [f"fdb axes --json --config {args.fdb_config} --minimum-keys=class {args.selector}"]
 )
 axes = json.loads(output)
 dates = [from_ecmwf_date(s) for s in axes["date"]]
@@ -197,7 +215,7 @@ while current_span[0] >= start_date:
 
     subqube = Qube.empty()
     command = [
-        f"/usr/local/bin/fdb list --compact --config {args.fdb_config} --minimum-keys=date {args.selector},date={start}/to/{end}"
+        f"fdb list --compact --config {args.fdb_config} --minimum-keys=date {args.selector},date={start}/to/{end}"
     ]
 
     if not args.quiet:
@@ -225,7 +243,26 @@ while current_span[0] >= start_date:
         request.pop("month", None)
 
         # Order the keys
-        key_order = determine_key_order(args.selector)
+        key_order = [
+            "class",
+            "dataset",
+            "stream",
+            "activity",
+            "resolution",
+            "expver",
+            "experiment",
+            "generation",
+            "model",
+            "realization",
+            "type",
+            "date",
+            "time",
+            "datetime",
+            "levtype",
+            "levelist",
+            "step",
+            "param",
+        ]
         request = {k: request[k] for k in key_order if k in request}
 
         q = Qube.from_datacube(request).convert_dtypes(
@@ -262,14 +299,14 @@ while current_span[0] >= start_date:
 
     current_span = (current_span[0] - chunk_size, current_span[0])
 
-    with open(args.filepath + ".tmp", "w") as f:
+    with open(target_filepath + ".tmp", "w") as f:
         json.dump(qube.to_json(), f)
 
 # Load in the existing qube from disk
 try:
-    existing_qube = Qube.load(args.filepath)
+    existing_qube = Qube.load(target_filepath)
 except Exception:
-    print(f"Could not load {args.filepath}!")
+    print(f"Could not load {target_filepath}!")
     existing_qube = Qube.empty()
 
 # Compute what's new
@@ -289,11 +326,11 @@ else:
 
 # Save the data
 existing_qube = existing_qube | qube
-with open(args.filepath, "w") as f:
+with open(target_filepath, "w") as f:
     json.dump(existing_qube.to_json(), f)
 
 # Delete the temporary file
-tmp_file = Path(args.filepath + ".tmp")
+tmp_file = Path(target_filepath + ".tmp")
 if tmp_file.exists():
     tmp_file.unlink()
 

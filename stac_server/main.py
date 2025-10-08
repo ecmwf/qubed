@@ -1,5 +1,6 @@
 from key_ordering import dataset_key_orders
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Mapping
@@ -11,9 +12,36 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from markupsafe import Markup
 from qubed import Qube
 from qubed.formatters import node_tree_to_html
+
+logger = logging.getLogger("uvicorn.error")
+log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+if log_level in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+    logger.setLevel(log_level)
+    logger.info(f"Set log level to {log_level}")
+else:
+    logger.warning(f"Invalid LOG_LEVEL {log_level}, defaulting to INFO")
+    logger.setLevel(logging.INFO)
+# load yaml config from configmap or default path
+config_path = os.environ.get(
+    "CONFIG_PATH", f"{Path(__file__).parents[1]}/config/config.yaml"
+)
+if not Path(config_path).exists():
+    raise FileNotFoundError(f"Config file not found at {config_path}")
+with open(config_path, "r") as f:
+    config = yaml.safe_load(f)
+    logger.info(f"Loaded config from {config_path}")
+
+prefix = Path(os.environ.get("QUBED_DATA_PREFIX", Path(__file__).parents[1] / "tests/example_qubes/"))
+
+if "API_KEY" in os.environ:
+    api_key = os.environ["API_KEY"].strip()
+    logger.info("Got api key from env key API_KEY")
+else:
+    with open("api_key.secret", "r") as f:
+        api_key = f.read().strip()
+    logger.info("Got api_key from local file 'api_key.secret'")
 
 app = FastAPI()
 security = HTTPBearer()
@@ -25,39 +53,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+app.mount(
+    "/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static"
+)
+templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 qube = Qube.empty()
 mars_language = {}
 
-prefix = Path(os.environ.get("QUBED_DATA_PREFIX", "../"))
-# For docker containers the prefix is usually /code/qubed
+for data_file in config.get("data_files", []):
+    data_path = prefix / data_file
+    if not data_path.exists():
+        logger.warning(f"Data file {data_path} does not exist, skipping")
+        continue
+    logger.info(f"Loading data from {data_path}")
+    with open(data_path, "r") as f:
+        qube = qube | Qube.from_json(json.load(f))
+    logger.info(
+        f"Loaded {data_path}. Now have {qube.n_nodes} nodes and {qube.n_leaves} leaves."
+    )
 
-# with open(prefix / "tests/example_qubes/on-demand-extremes-dt.json") as f:
-#     qube = Qube.from_json(json.load(f))
-
-with open(prefix / "tests/example_qubes/extremes-dt.json") as f:
-    qube = qube | Qube.from_json(json.load(f))
-
-with open(prefix / "tests/example_qubes/climate-dt.json") as f:
-    qube = qube | Qube.from_json(json.load(f))
-
-# with open(prefix / "tests/example_qubes/od.json") as f:
-#     qube = qube | Qube.from_json(json.load(f))
-
-with open(prefix / "config/language/language.yaml", "r") as f:
+with open(Path(__file__).parents[1] / "config/language/language.yaml", "r") as f:
     mars_language = yaml.safe_load(f)
 
-if "API_KEY" in os.environ:
-    api_key = os.environ["API_KEY"]
-    print("Got api key from env key API_KEY")
-else:
-    with open("api_key.secret", "r") as f:
-        api_key = f.read()
-    print("Got api_key from local file 'api_key.secret'")
 
-print("Ready to serve requests!")
+logger.info("Ready to serve requests!")
 
 
 async def get_body_json(request: Request):
@@ -76,6 +96,7 @@ def parse_request(request: Request) -> dict[str, str | list[str]]:
 
 
 def validate_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    logger.info(f"Validating API key: {credentials.scheme} {credentials.credentials}, correct key is {api_key.strip()}")
     if credentials.credentials != api_key.strip():
         raise HTTPException(status_code=403, detail="Incorrect API Key")
     return credentials
@@ -93,21 +114,14 @@ async def deprecated():
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    config = {
-        "request": request,
+    index_config = {
         "api_url": os.environ.get("API_URL", "/api/v2/"),
-        "branch": os.environ.get("GIT_BRANCH", "local"),
         "title": os.environ.get("TITLE", "Qubed Catalogue Browser"),
         "message": "",
         "last_database_update": "",
     }
 
-    if config["branch"] != "Main":
-        config["message"] = Markup(
-            f"This server was built from the {config['branch']} branch of <a href='https://github.com/ecmwf/qubed'>qubed</a>. Here is <a href='https://qubed.lumi.apps.dte.destination-earth.eu/'>the stable deployment</a>"
-        )
-
-    return templates.TemplateResponse("index.html", config)
+    return templates.TemplateResponse(request, "index.html", index_config)
 
 
 @app.get("/api/v2/get/")
@@ -242,9 +256,7 @@ async def basic_stac(filters: str):
     # key_desc = key_info.get(
     #     "description", f"No description for `key` {this_key} found."
     # )
-    print(this_key, this_value)
-
-    print(this_key, key_info)
+    logger.info(f"{this_key}, {this_value}")
     stac_collection = {
         "type": "Catalog",
         "stac_version": "1.0.0",

@@ -52,13 +52,13 @@ env_list = [
 
 [tool.tox.env_run_base]
 description = "Run test under {base_python}"
-deps = [".[dev,cbor]"]
+deps = [".[dev,cbor,stac_server]"]
 commands = [["pytest"]]
 
 [tool.tox.env.numpy1.x]
 description = "run tests with different numpy major versions"
 base_python = ["py312"]
-deps = [".[dev,cbor]", "numpy<2"]
+deps = [".[dev,cbor,stac_server]", "numpy<2"]
 
 [project.optional-dependencies]
 
@@ -69,7 +69,8 @@ cli = [
 ]
 
 stac_server = [
-    "fastapi",
+    "fastapi[standard]",
+    "Jinja2",
 ]
 
 docs = [
@@ -92,7 +93,7 @@ dev = [
     "flake8",
     "pre-commit",
     "isort",
-
+    "httpx",
 ]
 
 # Support for the concise Binary Object Representation (CBOR) (RFC 8949)
