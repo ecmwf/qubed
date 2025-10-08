@@ -1,3 +1,4 @@
+from key_ordering import dataset_key_orders
 import json
 import os
 from pathlib import Path
@@ -126,24 +127,24 @@ async def union(
     return qube.to_json()
 
 
-climate_dt_keys = [
-    "class",
-    "dataset",
-    "activity",
-    "experiment",
-    "generation",
-    "model",
-    "realization",
-    "expver",
-    "stream",
-    "date",
-    "resolution",
-    "type",
-    "levtype",
-    "time",
-    "levelist",
-    "param",
-]
+# climate_dt_keys = [
+#     "class",
+#     "dataset",
+#     "activity",
+#     "experiment",
+#     "generation",
+#     "model",
+#     "realization",
+#     "expver",
+#     "stream",
+#     "date",
+#     "resolution",
+#     "type",
+#     "levtype",
+#     "time",
+#     "levelist",
+#     "param",
+# ]
 
 
 def follow_query(request: dict[str, str | list[str]], qube: Qube):
@@ -153,11 +154,30 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
 
     seen_keys = list(request.keys())
 
-    available_keys = [key for key in climate_dt_keys if key in list(full_axes.keys())]
+    dataset_key_ordering = None
 
-    frontier_keys = next((x for x in available_keys if x not in seen_keys), [])
+    # Also compute the selected tree just to the point where our selection ends
+    s = qube.select(request, mode=Qube.select_modes.NextLevel, consume=False).compress()
 
-    return rel_qube, [
+    if seen_keys and seen_keys[-1] == "dataset":
+        # if request["dataset"] == "climate-dt":
+        #     dataset_key_ordering = climate_dt_keys
+        if dataset_key_orders.get(request["dataset"], None):
+            dataset_key_ordering = dataset_key_orders[request["dataset"]]
+        else:
+            print("No pre-specified key ordering for dataset")
+            pass
+
+    if dataset_key_ordering is None:
+        frontier_keys = {node.key for _, node in s.leaf_nodes()}
+        frontier_keys = next((x for x in frontier_keys if x not in seen_keys), [])
+    else:
+        available_keys = [
+            key for key in dataset_key_ordering if key in list(full_axes.keys())
+        ]
+        frontier_keys = next((x for x in available_keys if x not in seen_keys), [])
+
+    return s, [
         {
             "key": key,
             "values": sorted(info.values, reverse=True),

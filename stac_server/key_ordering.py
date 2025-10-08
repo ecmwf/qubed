@@ -56,15 +56,3 @@ dataset_key_orders = {
     "extremes-dt": extremes_dt_keys,
     "on-demand-extremes-dt": on_demands_dt_keys,
 }
-
-
-def determine_key_order(selector):
-    key_val_selector_pairs = dict(pair.split("=") for pair in selector.split(","))
-
-    dataset = key_val_selector_pairs.get("dataset")
-    key_order = dataset_key_orders.get(dataset, None)
-
-    if key_order:
-        return key_order
-    else:
-        raise ValueError("No pre-determined axis key order for this dataset.")
