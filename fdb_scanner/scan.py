@@ -50,14 +50,6 @@ import os
 from enum import Enum
 from pathlib import Path
 
-if __package__ in (None, ""):
-    import sys
-
-    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    from key_ordering import determine_key_order
-else:
-    from .key_ordering import determine_key_order
-
 
 class ScanMode(Enum):
     Full = "full"
@@ -180,9 +172,7 @@ print(f"Running scan at {start_time}")
 
 # Use fdb axes to determine date range
 output = run_command(
-    [
-        f"fdb axes --json --config {args.fdb_config} --minimum-keys=class {args.selector}"
-    ]
+    [f"fdb axes --json --config {args.fdb_config} --minimum-keys=class {args.selector}"]
 )
 axes = json.loads(output)
 dates = [from_ecmwf_date(s) for s in axes["date"]]
@@ -253,7 +243,26 @@ while current_span[0] >= start_date:
         request.pop("month", None)
 
         # Order the keys
-        key_order = determine_key_order(args.selector)
+        key_order = [
+            "class",
+            "dataset",
+            "stream",
+            "activity",
+            "resolution",
+            "expver",
+            "experiment",
+            "generation",
+            "model",
+            "realization",
+            "type",
+            "date",
+            "time",
+            "datetime",
+            "levtype",
+            "levelist",
+            "step",
+            "param",
+        ]
         request = {k: request[k] for k in key_order if k in request}
 
         q = Qube.from_datacube(request).convert_dtypes(
