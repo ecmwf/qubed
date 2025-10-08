@@ -66,6 +66,8 @@ cli = [
   "rich",
   "click",
   "psutil",
+  "pyfdb",
+  "pyyaml",
 ]
 
 stac_server = [
@@ -99,10 +101,4 @@ dev = [
 # Support for the concise Binary Object Representation (CBOR) (RFC 8949)
 cbor = [
     "cbor2"
-]
-
-gen_from_fdb = [
-    "pyfdb",
-    "psutil",
-    "pyyaml",
 ]
