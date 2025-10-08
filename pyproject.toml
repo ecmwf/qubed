@@ -66,6 +66,8 @@ cli = [
   "rich",
   "click",
   "psutil",
+  "pyfdb",
+  "pyyaml",
 ]
 
 stac_server = [
