@@ -1,4 +1,4 @@
-from key_ordering import dataset_key_orders
+from .key_ordering import dataset_key_orders
 import json
 import logging
 import os
@@ -33,7 +33,11 @@ with open(config_path, "r") as f:
     config = yaml.safe_load(f)
     logger.info(f"Loaded config from {config_path}")
 
-prefix = Path(os.environ.get("QUBED_DATA_PREFIX", Path(__file__).parents[1] / "tests/example_qubes/"))
+prefix = Path(
+    os.environ.get(
+        "QUBED_DATA_PREFIX", Path(__file__).parents[1] / "tests/example_qubes/"
+    )
+)
 
 if "API_KEY" in os.environ:
     api_key = os.environ["API_KEY"].strip()
@@ -96,7 +100,9 @@ def parse_request(request: Request) -> dict[str, str | list[str]]:
 
 
 def validate_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    logger.info(f"Validating API key: {credentials.scheme} {credentials.credentials}, correct key is {api_key.strip()}")
+    logger.info(
+        f"Validating API key: {credentials.scheme} {credentials.credentials}, correct key is {api_key.strip()}"
+    )
     if credentials.credentials != api_key.strip():
         raise HTTPException(status_code=403, detail="Incorrect API Key")
     return credentials
