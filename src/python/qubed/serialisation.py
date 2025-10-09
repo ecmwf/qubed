@@ -110,7 +110,7 @@ def from_datacube(
     """
     key_vals = list(datacube.items())[::-1]
     if axes:
-        assert set(axes) == set(datacube.keys())
+        assert set(datacube.keys()).issubset(axes)
         key_vals = sorted(key_vals, key=lambda kv: axes.index(kv[0]))[::-1]
 
     children: list[Qube] = []
