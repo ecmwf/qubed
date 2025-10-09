@@ -4,7 +4,7 @@ import base64
 import json
 from datetime import timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterator, Mapping, Sequence
+from typing import TYPE_CHECKING, Iterator, Mapping, Sequence, List
 
 import numpy as np
 import requests
@@ -95,7 +95,9 @@ def to_dict(q: Qube) -> dict:
 
 
 def from_datacube(
-    cls: type[Qube], datacube: Mapping[str, ValueType | Sequence[ValueType]]
+    cls: type[Qube],
+    datacube: Mapping[str, ValueType | Sequence[ValueType]],
+    axes: List[str] = None,
 ) -> Qube:
     """
     Construct a qube from an input like:
@@ -107,6 +109,9 @@ def from_datacube(
     This can only create dense qubes but you can use it in conjunction with union to create more complex qubes.
     """
     key_vals = list(datacube.items())[::-1]
+    if axes:
+        assert set(axes) == set(datacube.keys())
+        key_vals = sorted(key_vals, key=lambda kv: axes.index(kv[0]))[::-1]
 
     children: list[Qube] = []
     for key, values in key_vals:
@@ -123,7 +128,7 @@ def from_datacube(
     return cls.make_root(children)
 
 
-#### JSON Serialisation ####
+####  JSON Serialisation ####
 
 
 def numpy_to_json(a: np.ndarray):
@@ -212,7 +217,7 @@ def to_json(q: Qube) -> dict:
     return to_json(q)
 
 
-##### CBOR Serialisation ########
+#####  CBOR Serialisation ########
 
 
 def numpy_to_cbor(a: np.ndarray):

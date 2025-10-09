@@ -54,3 +54,21 @@ def test_simple_2():
     """)
 
     assert models == models2
+
+
+def test_simple_3():
+    models = Qube.from_datacube(
+        dict(
+            param="10u/10v/2d/2t/cp/msl/skt/sp/tcw/tp".split("/"),
+            threshold="*",
+            levtype="sfc",
+            frequency="6:00:00",
+        ),
+        axes=["param", "frequency", "levtype", "threshold"],
+    )
+
+    models2 = Qube.from_tree("""
+    root, param=10u/10v/2d/2t/cp/msl/skt/sp/tcw/tp, frequency=6:00:00, levtype=sfc, threshold=*
+    """)
+
+    assert models == models2
