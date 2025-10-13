@@ -1,3 +1,4 @@
+from .key_ordering import dataset_key_orders
 import json
 import logging
 import os
@@ -32,7 +33,11 @@ with open(config_path, "r") as f:
     config = yaml.safe_load(f)
     logger.info(f"Loaded config from {config_path}")
 
-prefix = Path(os.environ.get("QUBED_DATA_PREFIX", Path(__file__).parents[1] / "tests/example_qubes/"))
+prefix = Path(
+    os.environ.get(
+        "QUBED_DATA_PREFIX", Path(__file__).parents[1] / "tests/example_qubes/"
+    )
+)
 
 if "API_KEY" in os.environ:
     api_key = os.environ["API_KEY"].strip()
@@ -95,7 +100,9 @@ def parse_request(request: Request) -> dict[str, str | list[str]]:
 
 
 def validate_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    logger.info(f"Validating API key: {credentials.scheme} {credentials.credentials}, correct key is {api_key.strip()}")
+    logger.info(
+        f"Validating API key: {credentials.scheme} {credentials.credentials}, correct key is {api_key.strip()}"
+    )
     if credentials.credentials != api_key.strip():
         raise HTTPException(status_code=403, detail="Incorrect API Key")
     return credentials
@@ -141,16 +148,34 @@ async def union(
 
 
 def follow_query(request: dict[str, str | list[str]], qube: Qube):
-    # Compute the axes for the full tree
-    full_axes = qube.select(request, consume=False).axes_info()
+    rel_qube = qube.select(request, consume=False)
+
+    full_axes = rel_qube.axes_info()
 
     seen_keys = list(request.keys())
+
+    dataset_key_ordering = None
 
     # Also compute the selected tree just to the point where our selection ends
     s = qube.select(request, mode=Qube.select_modes.NextLevel, consume=False).compress()
 
-    # Compute the set of keys that are needed to advance the selection frontier
-    frontier_keys = {node.key for _, node in s.leaf_nodes()}
+    if seen_keys and seen_keys[-1] == "dataset":
+        # if request["dataset"] == "climate-dt":
+        #     dataset_key_ordering = climate_dt_keys
+        if dataset_key_orders.get(request["dataset"], None):
+            dataset_key_ordering = dataset_key_orders[request["dataset"]]
+        else:
+            print("No pre-specified key ordering for dataset")
+            pass
+
+    if dataset_key_ordering is None:
+        available_keys = {node.key for _, node in s.leaf_nodes()}
+    else:
+        available_keys = [
+            key for key in dataset_key_ordering if key in list(full_axes.keys())
+        ]
+    
+    frontier_keys = next((x for x in available_keys if x not in seen_keys), [])
 
     return s, [
         {
@@ -232,10 +257,50 @@ async def basic_stac(filters: str):
     return stac_collection
 
 
+def make_link(axis, request_params):
+    """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
+    key_name = axis["key"]
+
+    href_template = f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
+
+    values_from_language_yaml = mars_language.get(key_name, {}).get("values", {})
+    value_descriptions = {
+        v: values_from_language_yaml[v]
+        for v in axis["values"]
+        if v in values_from_language_yaml
+    }
+
+    return {
+        "title": key_name,
+        "uriTemplate": href_template,
+        "rel": "child",
+        "type": "application/json",
+        "variables": {
+            key_name: {
+                "type": axis["dtype"],
+                "description": mars_language.get(key_name, {}).get("description", ""),
+                "enum": axis["values"],
+                "value_descriptions": value_descriptions,
+                "on_frontier": axis["on_frontier"],
+            }
+        },
+    }
+
+
 @app.get("/api/v2/stac/")
 async def get_STAC(
     request: dict[str, str | list[str]] = Depends(parse_request),
 ):
+    # TODO: need to prevent branching requests
+    # TODO: can order next axis in any pre-defined order we want
+
+    # TODO: still, need to somehow update qube used in follow_query to the recursive sub-qube q so that this becomes faster
+    # if not hasattr(request, "q"):
+    #     request.q = qube  # first time: root
+    # # q, axes = follow_query(request, qube)
+    # q, axes = follow_query(request, request.q)
+    # # request.q = q
+
     q, axes = follow_query(request, qube)
 
     kvs = [
@@ -244,36 +309,7 @@ async def get_STAC(
     ]
     request_params = "&".join(kvs)
 
-    def make_link(axis):
-        """Take a MARS Key and information about which paths matched up to this point and use it to make a STAC Link"""
-        key_name = axis["key"]
-
-        href_template = f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
-
-        values_from_language_yaml = mars_language.get(key_name, {}).get("values", {})
-        value_descriptions = {
-            v: values_from_language_yaml[v]
-            for v in axis["values"]
-            if v in values_from_language_yaml
-        }
-
-        return {
-            "title": key_name,
-            "uriTemplate": href_template,
-            "rel": "child",
-            "type": "application/json",
-            "variables": {
-                key_name: {
-                    "type": axis["dtype"],
-                    "description": mars_language.get(key_name, {}).get(
-                        "description", ""
-                    ),
-                    "enum": axis["values"],
-                    "value_descriptions": value_descriptions,
-                    "on_frontier": axis["on_frontier"],
-                }
-            },
-        }
+    # print(request_params)
 
     descriptions = {
         key: {
@@ -291,7 +327,7 @@ async def get_STAC(
         "stac_version": "1.0.0",
         "id": "root" if not request else "/stac?" + request_params,
         "description": "STAC collection representing potential children of this request",
-        "links": [make_link(a) for a in axes],
+        "links": [make_link(a, request_params) for a in axes],
         "debug": {
             "descriptions": descriptions,
             "qube": node_tree_to_html(
