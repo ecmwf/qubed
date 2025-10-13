@@ -147,26 +147,6 @@ async def union(
     return qube.to_json()
 
 
-# climate_dt_keys = [
-#     "class",
-#     "dataset",
-#     "activity",
-#     "experiment",
-#     "generation",
-#     "model",
-#     "realization",
-#     "expver",
-#     "stream",
-#     "date",
-#     "resolution",
-#     "type",
-#     "levtype",
-#     "time",
-#     "levelist",
-#     "param",
-# ]
-
-
 def follow_query(request: dict[str, str | list[str]], qube: Qube):
     rel_qube = qube.select(request, consume=False)
 
