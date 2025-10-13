@@ -189,13 +189,13 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
             pass
 
     if dataset_key_ordering is None:
-        frontier_keys = {node.key for _, node in s.leaf_nodes()}
-        frontier_keys = next((x for x in frontier_keys if x not in seen_keys), [])
+        available_keys = {node.key for _, node in s.leaf_nodes()}
     else:
         available_keys = [
             key for key in dataset_key_ordering if key in list(full_axes.keys())
         ]
-        frontier_keys = next((x for x in available_keys if x not in seen_keys), [])
+    
+    frontier_keys = next((x for x in available_keys if x not in seen_keys), [])
 
     return s, [
         {
