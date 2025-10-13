@@ -1,6 +1,4 @@
 """
-WARNING: BROKEN SCRIPT
-
 Convert fdb data with metadata from disk into a qube as fast as possible
 
 Example running this in parallel ls test_scripts/data/*.zst | xargs -n 1 -P 10 python test_scripts/fdb_dump_parser.py
@@ -9,7 +7,7 @@ Example running this in parallel ls test_scripts/data/*.zst | xargs -n 1 -P 10 p
 import subprocess
 import sys
 from pathlib import Path
-from time import time
+import time
 
 from qubed import Qube
 
@@ -21,7 +19,7 @@ assert sys.argv[1].endswith(".zst")
 
 p = Path(sys.argv[1])  # Compressed file
 decompressed = p.parent / f"{p.stem}"  # decompressed file
-output = p.parents[1] / Path(f"monthly/{p.stem[:-5]}.json")
+output = p.parent / Path(f"monthly/{p.stem[:-5]}.json")
 
 if output.exists():
     sys.exit()
@@ -45,7 +43,7 @@ level_one_qube = Qube.empty()
 level_two_qube = Qube.empty()
 level_three_qube = Qube.empty()
 
-t0 = time()
+t0 = time.time()
 with decompressed.open() as f:
     for i, line in enumerate(f.readlines()):
         level, key, *metadata = line.strip().split(" ")
@@ -54,36 +52,31 @@ with decompressed.open() as f:
             level_one_qube |= level_two_qube
             level_two_qube = Qube.empty()
 
-            level_one = dict(v.split("=") for v in key.split("/"))
+            level_one = dict(item.split("=", 1) for item in key.split(","))
             one_count += 1
-            print(f"{one_count}th level one key, {i / (time() - t0):.0f} leaves/s")
-
-            # if one_count > 1:
-            #     print(qube)
-            #     break
+            print(f"{one_count}th level one key, {i / (time.time() - t0):.0f} leaves/s")
 
         elif level == "1":
             level_two_qube |= level_three_qube.add_metadata(path_meta)
             level_three_qube = Qube.empty()
 
-            level_two = dict(v.split("=") for v in key.split("/"))
-            path_meta = dict(v.split("=") for v in metadata[0].split("/", 3))
+            level_two = dict(item.split("=", 1) for item in key.split(","))
+            path_meta = dict(item.split("=", 1) for item in metadata[0].split(","))
             two_count += 1
-            print(f"{two_count}th level two key, {i / (time() - t0):.0f} leaves/s")
-            # if two_count > 1:
-            #     print(qube)
-            #     break
+            print(f"{two_count}th level two key, {i / (time.time() - t0):.0f} leaves/s")
 
-        elif level == "3":
-            level_three = dict(v.split("=") for v in key.split("/"))
-            offset_length_meta = dict(v.split("=") for v in metadata[0].split("/"))
+        elif level == "2":
+            level_three = dict(item.split("=", 1) for item in key.split(","))
+            offset_length_meta = dict(
+                item.split("=", 1) for item in metadata[0].split(",")
+            )
 
             keys = level_one | level_two | level_three
 
-            keys.pop("year")
-            keys.pop("month")
+            keys.pop("year", None)
+            keys.pop("month", None)
 
-            key_order = [
+            key_order = key_order = [
                 "class",
                 "dataset",
                 "stream",
@@ -97,6 +90,7 @@ with decompressed.open() as f:
                 "type",
                 "date",
                 "time",
+                "number",
                 "datetime",
                 "levtype",
                 "levelist",
@@ -111,8 +105,15 @@ with decompressed.open() as f:
             level_three_qube |= Qube.from_datacube(keys).add_metadata(
                 offset_length_meta
             )
+
+    level_two_qube |= level_three_qube.add_metadata(path_meta)
+    level_one_qube |= level_two_qube
+
+print(level_one_qube)
 level_one_qube.save(str(output))
 
 if decompressed.exists():
     print(f"Removing {decompressed}")
     decompressed.unlink()
+
+print("ENDED SCRIPT")
