@@ -209,7 +209,7 @@ current_span: tuple[date, date] = (end_date - chunk_size, end_date)
 qube = Qube.empty()
 
 
-while current_span[0] >= start_date:
+while current_span[1] >= start_date:
     t0 = time()
     start, end = map(to_ecmwf_date, current_span)
 
