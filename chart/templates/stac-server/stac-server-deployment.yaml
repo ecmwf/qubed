@@ -19,7 +19,17 @@ spec:
           image: "{{ .Values.stacServer.image.repository }}:{{ .Values.stacServer.image.tag }}"
           imagePullPolicy: {{ .Values.stacServer.image.pullPolicy }}
           command: ["uvicorn"]
-          args: ["main:app", "--proxy-headers", "--port", "80", "--host", "0.0.0.0", "--log-level", "info"]
+          args:
+            - "stac_server.main:app"
+            - "--proxy-headers"
+            - "--port"
+            - "80"
+            - "--host"
+            - "0.0.0.0"
+            - "--log-level"
+            - "info"
+            - "--app-dir"
+            - "/code/qubed" 
           volumeMounts:
             {{- if .Values.sharedStorage.enabled }}
             - name: shared-storage
