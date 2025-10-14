@@ -159,14 +159,14 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
     # Also compute the selected tree just to the point where our selection ends
     s = qube.select(request, mode=Qube.select_modes.NextLevel, consume=False).compress()
 
-    if seen_keys and seen_keys[-1] == "dataset":
-        # if request["dataset"] == "climate-dt":
-        #     dataset_key_ordering = climate_dt_keys
-        if dataset_key_orders.get(request["dataset"], None):
+    if seen_keys and "dataset" in seen_keys:
+        if (
+            not isinstance(request["dataset"], list)
+            and request["dataset"] in dataset_key_orders.keys()
+        ):
             dataset_key_ordering = dataset_key_orders[request["dataset"]]
         else:
-            print("No pre-specified key ordering for dataset")
-            pass
+            dataset_key_ordering = dataset_key_orders["default"]
 
     if dataset_key_ordering is None:
         available_keys = {node.key for _, node in s.leaf_nodes()}
@@ -174,7 +174,7 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
         available_keys = [
             key for key in dataset_key_ordering if key in list(full_axes.keys())
         ]
-    
+
     frontier_keys = next((x for x in available_keys if x not in seen_keys), [])
 
     return s, [
