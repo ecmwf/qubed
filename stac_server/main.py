@@ -165,6 +165,8 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
             and request["dataset"] in dataset_key_orders.keys()
         ):
             dataset_key_ordering = dataset_key_orders[request["dataset"]]
+        elif isinstance(request["dataset"], list) and len(request["dataset"]) == 1:
+            dataset_key_ordering = dataset_key_orders[request["dataset"][0]]
         else:
             dataset_key_ordering = dataset_key_orders["default"]
 
