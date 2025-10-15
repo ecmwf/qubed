@@ -50,9 +50,31 @@ on_demands_dt_keys = [
     "direction",
 ]
 
+default_keys = [
+    "class",
+    "dataset",
+    "stream",
+    "activity",
+    "resolution",
+    "expver",
+    "experiment",
+    "generation",
+    "model",
+    "realization",
+    "type",
+    "date",
+    "time",
+    "datetime",
+    "levtype",
+    "levelist",
+    "step",
+    "param",
+]
+
 
 dataset_key_orders = {
     "climate-dt": climate_dt_keys,
     "extremes-dt": extremes_dt_keys,
     "on-demand-extremes-dt": on_demands_dt_keys,
+    "default": default_keys,
 }
