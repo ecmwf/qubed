@@ -1,6 +1,6 @@
 The main script here is the scan.py script which uses `fdb axes` and `fdb list` to get a Qube tree that the Stac server uses.
 
-That script is run as a cronjob with the corrent crontab shown below.
+That script is run as a cronjob with the current crontab shown below.
 
 Additionally, we suggest running initial scans and using the utility script `kube_init.sh` to upload the files to the pvc where the Stac-server can read it upon restart.
 
