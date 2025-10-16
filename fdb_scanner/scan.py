@@ -259,20 +259,14 @@ while current_span[1] >= start_date:
             "time",
             "datetime",
             "levtype",
+            "georef",
             "levelist",
             "step",
             "param",
         ]
         request = {k: request[k] for k in key_order if k in request}
 
-        q = Qube.from_datacube(request).convert_dtypes(
-            {
-                "generation": int,
-                "realization": int,
-                "param": int,
-                "date": lambda s: datetime.strptime(s, "%Y%m%d").date(),
-            }
-        )
+        q = Qube.from_datacube(request)
         subqube = subqube | q
 
     if not args.quiet:
