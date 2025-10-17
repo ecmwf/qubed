@@ -258,20 +258,85 @@ function renderCheckboxList(link) {
   return toHTML(`<div class="checkbox-container">${checkboxes}</div>`);
 }
 
-// Render catalog items in the sidebar
-function renderCatalogItems(links) {
+// // Render catalog items in the sidebar
+// function renderCatalogItems(links, finalObject = null) {
+//   const itemsContainer = document.getElementById("items");
+//   itemsContainer.innerHTML = ""; // Clear previous items
+
+//   console.log("Number of Links:", links);
+//   const children = links.filter(
+//     (link) => link.rel === "child" || link.rel === "items"
+//   );
+//   console.log("Number of Children:", children.length);
+
+//   const details = document.getElementById("details");
+//   const finalContainer = document.getElementById("final-object");
+//   const finalCode = document.getElementById("final-object-json");
+
+//   // Default: hide both sections
+//   details.style.display = "none";
+//   finalContainer.style.display = "none";
+//   console.log("WHAT HAPPENS HERE??")
+//   if (children.length === 0) {
+//     console.log("HERE")
+//     // ✅ End of traversal
+//     details.style.display = "block";
+
+//     // If backend provided a final object, show it
+//     if (finalObject) {
+//       finalContainer.style.display = "block";
+//       finalCode.textContent = JSON.stringify(finalObject, null, 2);
+
+//       // Highlight if highlight.js is available
+//       if (window.hljs) {
+//         hljs.highlightElement(finalCode);
+//       }
+//     }
+//   }
+
+//   children.forEach((link) => {
+//     createCatalogItem(link, itemsContainer);
+//   });
+// }
+
+function renderCatalogItems(links, finalObject = null) {
   const itemsContainer = document.getElementById("items");
   itemsContainer.innerHTML = ""; // Clear previous items
 
-  console.log("Number of Links:", links);
-  const children = links.filter(
-    (link) => link.rel === "child" || link.rel === "items"
-  );
-  console.log("Number of Children:", children.length);
+  const children = links.filter(l => l.rel === "child" || l.rel === "items");
 
-  children.forEach((link) => {
-    createCatalogItem(link, itemsContainer);
-  });
+  // Determine if we are at the end (no child link has on_frontier === true)
+  // const anyFrontier = children.some(link => {
+  //   const key = Object.keys(link.variables || {})[0];
+  //   return link.variables?.[key]?.on_frontier;
+  // });
+
+  // const details = document.getElementById("details");
+  // const finalContainer = document.getElementById("final-object");
+  // const finalCode = document.getElementById("final-object-json");
+
+  // Default: hide both sections
+  // details.style.display = "none";
+  // finalContainer.style.display = "none";
+
+  // if (!anyFrontier) {
+  //   // ✅ End of traversal
+  //   details.style.display = "block";
+
+  //   if (finalObject) {
+  //     finalContainer.style.display = "block";
+  //     finalCode.textContent = JSON.stringify(finalObject, null, 2);
+  //     if (window.hljs) hljs.highlightElement(finalCode);
+  //   }
+  // }
+
+  // Only render children that are on the frontier
+  children
+    .filter(link => {
+      const key = Object.keys(link.variables || {})[0];
+      return link.variables?.[key]?.on_frontier;
+    })
+    .forEach(link => createCatalogItem(link, itemsContainer));
 }
 
 function renderRequestBreakdown(request, descriptions) {
@@ -314,31 +379,175 @@ function renderRawSTACResponse(catalog) {
   qube_container.innerHTML = catalog.debug.qube;
 }
 
-// Fetch STAC catalog and display items
+// // Fetch STAC catalog and display items
+// async function fetchCatalog(request, stacUrl) {
+//   try {
+//     const response = await fetch(stacUrl);
+//     const catalog = await response.json();
+
+//     // Render the request breakdown in the sidebar
+//     renderRequestBreakdown(request, catalog.debug.descriptions);
+
+//     // Show the raw STAC in the sidebar
+//     renderRawSTACResponse(catalog);
+
+//     Render the items from the catalog
+//     if (catalog.links) {
+//       console.log("Fetched STAC catalog:", stacUrl, catalog.links);
+//       const finalObject = catalog.final_object || null;
+//       renderCatalogItems(catalog.links, finalObject);
+//     }
+
+//     // if (catalog.links && catalog.links.length > 0) {
+//     //   console.log("Fetched STAC catalog:", stacUrl, catalog.links);
+//     //   renderCatalogItems(catalog.links);
+
+//     //   // Hide final object section (not at the end yet)
+//     //   document.getElementById("final-object").style.display = "none";
+//     // }
+//     // // If no more links — we've reached the end!
+//     // else if (catalog.final_object) {
+//     //   console.log("Traversal complete — showing final MARS object");
+//     //   await renderFinalObject(catalog.final_object);
+//     // }
+//     // // Edge case: no links and no final object
+//     // else {
+//     //   console.warn("No further links and no final object returned.");
+//     // }
+
+//     // Highlight the request and raw STAC
+//     hljs.highlightElement(document.getElementById("raw-stac"));
+//     hljs.highlightElement(document.getElementById("debug"));
+//     hljs.highlightElement(document.getElementById("example-python"));
+//   } catch (error) {
+//     console.error("Error fetching STAC catalog:", error);
+//   }
+// }
+
+// async function fetchCatalog(request, stacUrl) {
+//   try {
+//     const response = await fetch(stacUrl);
+//     const catalog = await response.json();
+
+//     // Render request breakdown and raw STAC as usual
+//     renderRequestBreakdown(request, catalog.debug.descriptions);
+//     renderRawSTACResponse(catalog);
+
+//     // Check if there are children
+//     const children = catalog.links?.filter(l => l.rel === "child" || l.rel === "items") || [];
+
+//     if (children.length > 0) {
+//       // Still traversing
+//       renderCatalogItems(children);
+//       document.getElementById("final-object").style.display = "none";
+//     } else if (catalog.debug?.final_object) {
+//       // End of traversal — show the final object
+//       renderFinalObject(catalog.debug.final_object);
+//     }
+
+//     // Highlight code blocks
+//     if (window.hljs) {
+//       hljs.highlightElement(document.getElementById("raw-stac"));
+//       hljs.highlightElement(document.getElementById("debug"));
+//       hljs.highlightElement(document.getElementById("example-python"));
+//     }
+//   } catch (error) {
+//     console.error("Error fetching STAC catalog:", error);
+//   }
+// }
+
+// // Fetch STAC catalog and display items
+// async function fetchCatalog(request, stacUrl) {
+//   try {
+//     const response = await fetch(stacUrl);
+//     const catalog = await response.json();
+
+//     // Render request breakdown and raw STAC as usual
+//     renderRequestBreakdown(request, catalog.debug.descriptions);
+//     renderRawSTACResponse(catalog);
+
+//     // Filter only child/item links
+//     const children = catalog.links?.filter(l => l.rel === "child" || l.rel === "items") || [];
+
+//     // Determine if traversal has reached the end:
+//     // "end" = no links have on_frontier === true
+//     const anyFrontier = children.some(link => {
+//       const key = Object.keys(link.variables || {})[0];
+//       return link.variables?.[key]?.on_frontier;
+//     });
+
+//     if (children.length > 0 && anyFrontier) {
+//       // Still traversing
+//       renderCatalogItems(children);
+//       document.getElementById("final-object").style.display = "none";
+//     }
+//     else if (catalog.debug?.final_object) {
+//       // End of traversal — show the final object
+//       renderFinalObject(catalog.debug.final_object);
+//     }
+//     else {
+//       console.warn("No final object returned or no children at the end.");
+//     }
+
+//     // Highlight code blocks
+//     if (window.hljs) {
+//       hljs.highlightElement(document.getElementById("raw-stac"));
+//       hljs.highlightElement(document.getElementById("debug"));
+//       hljs.highlightElement(document.getElementById("example-python"));
+//     }
+
+//   } catch (error) {
+//     console.error("Error fetching STAC catalog:", error);
+//   }
+// }
+
 async function fetchCatalog(request, stacUrl) {
   try {
     const response = await fetch(stacUrl);
     const catalog = await response.json();
 
-    // Render the request breakdown in the sidebar
     renderRequestBreakdown(request, catalog.debug.descriptions);
-
-    // Show the raw STAC in the sidebar
     renderRawSTACResponse(catalog);
 
-    // Render the items from the catalog
+    const finalObject = catalog.final_object || null;
+
     if (catalog.links) {
-      console.log("Fetched STAC catalog:", stacUrl, catalog.links);
-      renderCatalogItems(catalog.links);
+      renderCatalogItems(catalog.links, finalObject);
     }
 
-    // Highlight the request and raw STAC
-    hljs.highlightElement(document.getElementById("raw-stac"));
-    hljs.highlightElement(document.getElementById("debug"));
-    hljs.highlightElement(document.getElementById("example-python"));
+    // Highlight code blocks
+    if (window.hljs) {
+      hljs.highlightElement(document.getElementById("raw-stac"));
+      hljs.highlightElement(document.getElementById("debug"));
+      hljs.highlightElement(document.getElementById("example-python"));
+    }
   } catch (error) {
     console.error("Error fetching STAC catalog:", error);
   }
+}
+
+// Render the final MARS Selection object at the end of traversal
+async function renderFinalObject(finalObject) {
+  const container = document.getElementById("final-object");
+
+  if (!finalObject || finalObject.length === 0) {
+    container.style.display = "none";
+    return;
+  }
+
+  // Make the container visible
+  container.style.display = "block";
+
+  // Pretty-print JSON
+  const jsonBlock = document.getElementById("final-object-json");
+  jsonBlock.textContent = JSON.stringify(finalObject, null, 2);
+
+  // Apply syntax highlighting if available
+  if (window.hljs) {
+    hljs.highlightElement(jsonBlock);
+  }
+
+  console.log("Rendered final MARS Selection Object:", finalObject);
 }
 
 // Initialize the viewer by fetching the STAC catalog
