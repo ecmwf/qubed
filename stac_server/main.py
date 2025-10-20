@@ -179,15 +179,25 @@ def follow_query(request: dict[str, str | list[str]], qube: Qube):
 
     frontier_keys = next((x for x in available_keys if x not in seen_keys), [])
 
-    return s, [
-        {
+    return_axes = []
+    for key, info in full_axes.items():
+        return_axes_key = {
             "key": key,
-            "values": sorted(info.values, reverse=True),
             "dtype": list(info.dtypes)[0],
             "on_frontier": (key in frontier_keys) and (key not in seen_keys),
         }
-        for key, info in full_axes.items()
-    ]
+        if isinstance(list(info.values)[0], str):
+            try:
+                int(list(info.values)[0])
+                sorted_vals = sorted(info.values, key=int)
+            except ValueError:
+                sorted_vals = sorted(info.values)
+        else:
+            sorted_vals = sorted(info.values)
+        return_axes_key["values"] = sorted_vals
+        return_axes.append(return_axes_key)
+
+    return s, return_axes
 
 
 @app.get("/api/v2/select/")
