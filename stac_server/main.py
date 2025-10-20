@@ -305,6 +305,26 @@ async def get_STAC(
 
     q, axes = follow_query(request, qube)
 
+    end_of_traversal = not any(a["on_frontier"] for a in axes)
+
+    final_object = []
+    if end_of_traversal:
+        print("HERE NOW")
+        print(q)
+        print(list(q.datacubes()))
+        # Example: build your final MARS Selection structure
+        # final_object = {
+        #     "type": "MARSSelection",
+        #     # "request": request,
+        #     "request": list(q.datacubes()),
+        #     "metadata": {
+        #         # "dimensions": list(q.axes_info().keys()),
+        #         # "npoints": q.size,
+        #         "description": "Final resolved MARS selection at end of traversal"
+        #     },
+        # }
+        final_object = list(q.datacubes())
+
     kvs = [
         f"{k}={','.join(v)}" if isinstance(v, list) else f"{k}={v}"
         for k, v in request.items()
@@ -323,6 +343,21 @@ async def get_STAC(
         for key, values in request.items()
     }
 
+    final_descriptions = [
+        {
+            key: {
+                "key": key,
+                "values": values,
+                "description": mars_language.get(key, {}).get("description", ""),
+                "value_descriptions": mars_language.get(key, {}).get("values", {}),
+            }
+            for key, values in _request.items()
+        }
+        for _request in final_object
+    ]
+
+    print("ALWAYS HERE")
+    print(final_object)
     # Format the response as a STAC collection
     stac_collection = {
         "type": "Catalog",
@@ -330,8 +365,10 @@ async def get_STAC(
         "id": "root" if not request else "/stac?" + request_params,
         "description": "STAC collection representing potential children of this request",
         "links": [make_link(a, request_params) for a in axes],
+        "final_object": final_object,
         "debug": {
             "descriptions": descriptions,
+            "final_descriptions": final_descriptions,
             "qube": node_tree_to_html(
                 q,
                 collapse=True,

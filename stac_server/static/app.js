@@ -300,6 +300,152 @@ function renderRequestBreakdown(request, descriptions) {
   container.innerHTML = html;
 }
 
+
+// function renderFinalMarsRequests(request, descriptions) {
+//   const container = document.getElementById("request-breakdown");
+//   const format_value = (key, value) => {
+//     return `<span class="value" title="${descriptions[key]["value_descriptions"][value]}">"${value}"</span>`;
+//   };
+
+//   const format_values = (key, values) => {
+//     if (values.length === 1) {
+//       return format_value(key, values[0]);
+//     }
+//     return `[${values.map((v) => format_value(key, v)).join(", ")}]`;
+//   };
+
+//   let html =
+//     `{\n` +
+//     request
+//       .map(
+//         ([key, values]) =>
+//           `    <span class="key" title="${descriptions[key]["description"]
+//           }">"${key}"</span>: ${format_values(key, values)},`
+//       )
+//       .join("\n") +
+//     `\n}`;
+//   container.innerHTML = html;
+// }
+
+// function renderFinalMarsRequests(requests, descriptionList) {
+//   const container = document.getElementById("request-breakdown");
+//   container.innerHTML = ""; // Clear previous content
+
+//   if (!requests || requests.length === 0) return;
+
+//   // Helper: find description for a key in any description object
+//   const getDescription = (key) => {
+//     for (const desc of descriptionList) {
+//       if (desc[key]) return desc[key];
+//     }
+//     return { description: "", value_descriptions: {} };
+//   };
+
+//   const format_value = (key, value) => {
+//     const desc = getDescription(key);
+//     return `<span class="value" title="${desc.value_descriptions[value] || ''}">"${value}"</span>`;
+//   };
+
+//   const format_values = (key, values) => {
+//     if (values.length === 1) return format_value(key, values[0]);
+//     return `[${values.map(v => format_value(key, v)).join(", ")}]`;
+//   };
+
+//   // Render each request in the list
+//   requests.forEach((request, idx) => {
+//     const html =
+//       `{\n` +
+//       request
+//         .map(
+//           ([key, values]) => {
+//             const desc = getDescription(key);
+//             return `    <span class="key" title="${desc.description || ''}">"${key}"</span>: ${format_values(key, values)},`;
+//           }
+//         )
+//         .join("\n") +
+//       `\n}`;
+
+//     // Wrap each request in a <pre> block
+//     const pre = document.createElement("pre");
+//     pre.innerHTML = html;
+//     container.appendChild(pre);
+
+//     // Optional: separator between requests
+//     if (idx < requests.length - 1) {
+//       const hr = document.createElement("hr");
+//       container.appendChild(hr);
+//     }
+//   });
+// }
+
+function renderFinalObject(finalObject, descriptionList) {
+  // const codeBlock = document.getElementById("final-object-json");
+  // const container = document.getElementById("mars-request-breakdown");
+  const codeBlock = document.getElementById("final-object-container");
+  const container = document.getElementById("final-object");
+
+
+  if (!finalObject || finalObject.length === 0) {
+    container.style.display = "none";
+    return;
+  }
+
+  // Show container
+  container.style.display = "block";
+
+  // Pretty-print JSON into the existing code block
+  codeBlock.textContent = JSON.stringify(finalObject, null, 2);
+
+  // Syntax highlighting
+  if (window.hljs) hljs.highlightElement(codeBlock);
+
+  console.log("Rendered final MARS selection:", finalObject);
+}
+
+// function renderFinalMarsRequests(finalObject, descriptionList) {
+//   const container = document.getElementById("mars-request-breakdown");
+//   container.innerHTML = ""; // clear previous
+
+//   if (!finalObject || finalObject.length === 0) return;
+
+//   // Normalize first
+//   const requests = normalizeFinalObject(finalObject);
+
+//   const getDescription = (key) => {
+//     for (const desc of descriptionList) {
+//       if (desc[key]) return desc[key];
+//     }
+//     return { description: "", value_descriptions: {} };
+//   };
+
+//   const format_value = (key, value) => {
+//     const desc = getDescription(key);
+//     return `<span class="value" title="${desc.value_descriptions[value] || ''}">"${value}"</span>`;
+//   };
+
+//   const format_values = (key, values) => {
+//     if (values.length === 1) return format_value(key, values[0]);
+//     return `[${values.map(v => format_value(key, v)).join(", ")}]`;
+//   };
+
+//   // Render each request
+//   requests.forEach(req => {
+//     const html =
+//       `{\n` +
+//       req
+//         .map(([key, values]) => {
+//           const desc = getDescription(key);
+//           return `  <span class="key" title="${desc.description || ''}">"${key}"</span>: ${format_values(key, values)},`;
+//         })
+//         .join("\n") +
+//       `\n}`;
+
+//     const pre = document.createElement("pre");
+//     pre.innerHTML = html;
+//     container.appendChild(pre);
+//   });
+// }
+
 function renderRawSTACResponse(catalog) {
   const itemDetails = document.getElementById("raw-stac");
   // create new object without debug key
@@ -322,12 +468,18 @@ async function fetchCatalog(request, stacUrl) {
 
     // Render the request breakdown in the sidebar
     renderRequestBreakdown(request, catalog.debug.descriptions);
+    console.log("REQEUST IS", request);
+    if (catalog.final_object) {
+      console.log("FINAL OBJECT:", catalog.final_object);
+      renderFinalMarsRequests(catalog.final_object, catalog.debug.final_descriptions);
+    }
 
     // Show the raw STAC in the sidebar
     renderRawSTACResponse(catalog);
 
     // Render the items from the catalog
     if (catalog.links) {
+      console.log("Request is: ");
       console.log("Fetched STAC catalog:", stacUrl, catalog.links);
       renderCatalogItems(catalog.links);
     }
