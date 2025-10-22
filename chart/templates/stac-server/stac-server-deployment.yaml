@@ -5,7 +5,7 @@ kind: Deployment
 metadata:
   name: stac-server
 spec:
-  deploymentStrategy:
+  strategy:
     type: Recreate
   replicas: {{ .Values.stacServer.replicas }}
   selector:
@@ -14,7 +14,7 @@ spec:
   template:
     metadata:
       labels:
-        app: stac-server
+        app: stac-server  
     spec:
       containers:
         - name: stac-server
