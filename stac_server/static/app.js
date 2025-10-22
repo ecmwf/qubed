@@ -225,7 +225,7 @@ function renderCheckboxList(link) {
   function renderCheckbox(key, value, desc) {
     const id = `${key}=${value}`;
     let more_info = desc.url
-      ? ` <a target=”_blank” class="more-info" href=${desc.url}>?<a>`
+      ? ` <a target="_blank" class="more-info" href="${desc.url}">?</a>`
       : "";
 
     let human_label, code_label;
