@@ -259,6 +259,7 @@ while current_span[1] >= start_date:
             "time",
             "datetime",
             "levtype",
+            "georef",
             "levelist",
             "step",
             "param",
@@ -270,6 +271,7 @@ while current_span[1] >= start_date:
                 "generation": int,
                 "realization": int,
                 "param": int,
+                "levelist": int,
                 "date": lambda s: datetime.strptime(s, "%Y%m%d").date(),
             }
         )
