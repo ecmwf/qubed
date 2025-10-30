@@ -20,7 +20,7 @@ dependencies = [
     "frozendict",
     "numpy>=1.26",
     "protobuf",
-    "requests"
+    "requests",
     "objsize",
     "humanize",
     "pandas",
