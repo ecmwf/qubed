@@ -21,6 +21,9 @@ dependencies = [
     "numpy>=1.26",
     "protobuf",
     "requests"
+    "objsize",
+    "humanize",
+    "pandas",
 ]
 
 # Because this is a mixed rust/python project the structure is src/python/qubed rather than the more typical src/qubed
@@ -83,9 +86,6 @@ docs = [
     "jupyterlab",
     "ipykernel",
     "scipy",
-    "objsize",
-    "humanize",
-    "pandas"
 ]
 
 dev = [
