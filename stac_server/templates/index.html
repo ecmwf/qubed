@@ -25,6 +25,20 @@
     <script src="/static/modules/airdatepicker/locale/en.js"></script>
 
     <script src="/static/app.js" defer type="module"></script>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw/dist/leaflet.draw.js"></script>
+
+  <style>
+    #map {
+      height: 400px;
+      width: 100%;
+      margin-top: 1em;
+      border: 1px solid #ccc;
+    }
+  </style>
 </head>
 
 <body>
@@ -57,6 +71,14 @@
 {
 }
             </code></pre>
+
+            <!-- Load map from map.js file -->
+             <pre id="map"> </pre>
+            <script type="module">
+                import { renderMapAndPickPolygon } from '../static/map.js';
+                renderMapAndPickPolygon("map");
+            </script>
+
 
             <!-- Container to show the current tree -->
             <h2>Currently Selected Tree</h2>
