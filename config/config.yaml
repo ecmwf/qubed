@@ -1,9 +1,0 @@
-data_files:
-  # list of data files to load on startup, relative to mountPath
-  # - cads.json
-  - climate-dt.json
-  - extremes-dt.json
-  # - extremes-dt_with_metadata.json
-  # - extremes-dt_with_metadata_large.zstd
-  # - on-demand-extremes-dt.cbor
-  # - test.json

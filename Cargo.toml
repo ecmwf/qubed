@@ -1,27 +1,13 @@
 [package]
 name = "qubed"
-version = "0.0.0"
-edition = "2021"
-repository = "https://github.com/ecmwf/qubed"
+version = "0.1.0"
+edition = "2024"
 
 [dependencies]
-# rsfdb = {git = "https://github.com/ecmwf/rsfdb", branch = "develop"}
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-pyo3 = "0.25"
 lasso = "0.7.3"
-itertools = "0.14.0"
-
-[package.metadata.maturin]
-version-from-git = true
-
-[lib]
-name = "tree_traverser"
-crate-type = ["cdylib"]
-path = "./src/rust/lib.rs"
-
-# [patch.'https://github.com/ecmwf/rsfdb']
-# rsfdb = { path = "../rsfdb" }
-
-# [patch.'https://github.com/ecmwf-projects/rsfindlibs']
-# rsfindlibs = { path = "../rsfindlibs" }
+roaring = "0.11.2"
+serde_json = "1.0.145"
+serde_yaml = "0.9.34"
+slotmap = "1.0.7"
+smallbitvec = "2.6.0"
+tiny-vec = "0.10.0"
