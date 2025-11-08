@@ -1,5 +1,5 @@
 
-use crate::{Qube, QubeKey, QubeNodeId, QubeNodeValues, QubeView};
+use crate::{Qube, Dimension, QubeNodeId, Coordinates, QubeView};
 
 
 impl Qube {
@@ -8,7 +8,7 @@ impl Qube {
     // Select takes a dictionary of key-vecvalues pairs and returns a QubeView
     // It does not matter which order the keys are specified
 
-    pub fn select(&self, selection: &std::collections::HashMap<QubeKey, QubeNodeValues>) -> Result<QubeView, String> {
+    pub fn select(&self, selection: &std::collections::HashMap<Dimension, Coordinates>) -> Result<QubeView, String> {
         
         let root = self.root();
         let mut view = QubeView::new(self);
@@ -25,7 +25,7 @@ impl Qube {
         
     }
 
-    fn select_recurse(&self, selection: &std::collections::HashMap<QubeKey, QubeNodeValues>, id: QubeNodeId, view: &mut QubeView) -> Result<(), String> {
+    fn select_recurse(&self, selection: &std::collections::HashMap<Dimension, Coordinates>, id: QubeNodeId, view: &mut QubeView) -> Result<(), String> {
         
         let node = self.get_node(id).ok_or(format!("Node {:?} not found", id))?;
 

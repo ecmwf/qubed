@@ -1,5 +1,5 @@
 use serde_json::{Value, Map};
-use crate::{Qube, QubeNodeId, QubeNodeValues};
+use crate::{Qube, QubeNodeId, Coordinates};
 
 // ---------------- JSON Deserialization ----------------
 
@@ -27,7 +27,7 @@ fn parse_json_object(
         let (key, values_str) = key_value.split_once('=')
             .ok_or_else(|| format!("Invalid node format: '{}', expected 'key=value'", key_value))?;
         
-        let values = QubeNodeValues::from_string(values_str);
+        let values = Coordinates::from_string(values_str);
         let child = qube.create_child(key, parent, Some(values))?;
         
         if let Value::Object(child_map) = child_value {
@@ -54,19 +54,19 @@ fn serialize_children_json(qube: &Qube, parent_id: QubeNodeId, output: &mut Map<
     };
 
     for child_id in children_ids.iter() {
-        let key = qube.get_key_of(*child_id).unwrap_or("unknown");
-        let values = qube.get_values_of(*child_id).unwrap_or(&QubeNodeValues::None(()));
+        let key = qube.get_dimension_of(*child_id).unwrap_or("unknown");
+        let values = qube.get_coordinates_of(*child_id).unwrap_or(&Coordinates::None(()));
         
         let values_str = match values {
-            QubeNodeValues::None(_) => "".to_string(),
-            QubeNodeValues::Integer(i) => i.to_string(),
-            QubeNodeValues::IntegerList(list) => {
+            Coordinates::None(_) => "".to_string(),
+            Coordinates::Integer(i) => i.to_string(),
+            Coordinates::IntegerList(list) => {
                 list.iter()
                     .map(|v| v.to_string())
                     .collect::<Vec<String>>()
                     .join("/")
             },
-            QubeNodeValues::String(s) => s.clone(),
+            Coordinates::String(s) => s.clone(),
             _ => "complex".to_string(),
         };
 

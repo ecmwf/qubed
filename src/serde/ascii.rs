@@ -1,8 +1,7 @@
 use std::iter::Peekable;
 use std::str::Lines;
 
-use crate::{QubeNodeValues, qube::{Qube, QubeNodeId}};
-
+use crate::{Coordinates, qube::{Qube, QubeNodeId}};
 
 // ---------------- ASCII Deserialization ----------------
 
@@ -25,15 +24,15 @@ impl Qube {
 }
 
 // TODO: This isn't very generic!
-impl QubeNodeValues {
-    pub fn from_string(s: &str) -> Self {
-        let mut values = QubeNodeValues::None(());
+impl Coordinates {
+    pub fn deserialize(s: &str) -> Self {
+        let mut values = Coordinates::None(());
         let split: Vec<String> = s.split('/').map(|v| v.to_string()).collect();
         for s in split {
             if s.parse::<i32>().is_ok() {
-                values.append(QubeNodeValues::Integer(s.parse().unwrap()));
+                values.append(Coordinates::Integer(s.parse().unwrap()));
             } else {
-                values.append(QubeNodeValues::String(s));
+                values.append(Coordinates::String(s));
             }
         }
         values
@@ -80,7 +79,7 @@ fn parse_children(qube: &mut Qube, lines: &mut Peekable<Lines>, parent: QubeNode
 
         // We are a child
         let (key, values) = content.split_once("=").ok_or(format!("Invalid node format: '{}', expected 'key=value'", content))?;
-        let values = QubeNodeValues::from_string(values);
+        let values = Coordinates::from_string(values);
         let child = qube.create_child(key, parent, Some(values))?;
 
         // Consume the line
@@ -136,13 +135,13 @@ fn serialize_children(qube: &Qube, parent_id: QubeNodeId, prefix: &str, output: 
         let is_last = i == children_ids.len() - 1;
         let branch = if is_last { "└──" } else { "├──" };
         
-        let key = qube.get_key_of(*child_id).unwrap_or("unknown");
-        let values = qube.get_values_of(*child_id).unwrap_or(&QubeNodeValues::None(()));
+        let key = qube.get_dimension_of(*child_id).unwrap_or("unknown");
+        let values = qube.get_coordinates_of(*child_id).unwrap_or(&Coordinates::None(()));
         let values_str = match values {
-            QubeNodeValues::None(_) => "".to_string(),
-            QubeNodeValues::Integer(i) => i.to_string(),
-            QubeNodeValues::IntegerList(list) => list.iter().map(|v| v.to_string()).collect::<Vec<String>>().join("/"),
-            QubeNodeValues::String(s) => s.clone(),
+            Coordinates::None(_) => "".to_string(),
+            Coordinates::Integer(i) => i.to_string(),
+            Coordinates::IntegerList(list) => list.iter().map(|v| v.to_string()).collect::<Vec<String>>().join("/"),
+            Coordinates::String(s) => s.clone(),
             _ => "complex".to_string(), // Simplified for this example
         };
 

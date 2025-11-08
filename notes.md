@@ -36,3 +36,9 @@ Keys of the nodes are interned to reduce memory usage.
 
 Nodes of the Qube store multiple values. The values are an enum of different types which can be compressed differently. Care should be taken to ensure set operations can be done efficiently on different value storage types.
 
+# Selects and Unions
+
+A union of two Qubes involves recursively iterating the incoming nodes and merging them into the existing tree. For each merge, we need to check all children of the existing node and the children of the incoming node. If the keys are the same, and the structural hash of each pair of children are the same, we do set operations on the values to create three kinds of children:
+    * children only in the existing node
+    * children only in the incoming node
+    * children in both nodes, which need to be merged recursively

@@ -1,7 +1,7 @@
 
 use std::collections::HashMap;
 
-use crate::{QubeKey, QubeNodeValues, qube::{Qube, QubeNode, QubeNodeId}};
+use crate::{Dimension, Coordinates, qube::{Qube, QubeNode, QubeNodeId}};
 
 use smallbitvec::SmallBitVec;
 
@@ -96,7 +96,7 @@ impl QubeView <'_> {
         Ok(filtered_children.into_iter())
     }
 
-    pub fn get_children_of(&self, node_id: QubeNodeId, key: QubeKey) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
+    pub fn get_children_of(&self, node_id: QubeNodeId, key: Dimension) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
         
         let mask = self.get_mask(node_id)?;
         let node = self.get_node(node_id)?;

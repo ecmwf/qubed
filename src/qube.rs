@@ -4,21 +4,23 @@ use slotmap::{SlotMap, new_key_type};
 use lasso::{MiniSpur, Rodeo};
 use tiny_vec::TinyVec;
 
-use crate::values::QubeNodeValues;
+use crate::coordinates::Coordinates;
 
 new_key_type! {
     pub struct QubeNodeId;
 }
 
+pub struct QubeString(MiniSpur);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct QubeKey(MiniSpur);
+pub struct Dimension(MiniSpur);
 
 #[derive(Debug)]
 pub(crate) struct QubeNode {
-    key: QubeKey,
-    pub values: QubeNodeValues,
+    dim: Dimension,
+    pub coords: Coordinates,
     pub _parent: Option<QubeNodeId>,
-    pub children: BTreeMap<QubeKey, TinyVec<QubeNodeId, 4>>, // maintains order so we can use a mask on it
+    pub children: BTreeMap<Dimension, TinyVec<QubeNodeId, 4>>, // maintains order so we can use a mask on it
 }
 
 #[derive(Debug)]
@@ -30,17 +32,17 @@ pub struct Qube {
 
 impl Qube {
     pub fn new() -> Self {
-        let mut key_store = Rodeo::<MiniSpur>::new();
+        let mut string_store = Rodeo::<MiniSpur>::new();
         let mut nodes = SlotMap::with_key();
         let root_id = nodes.insert(QubeNode {
-            key: QubeKey(key_store.get_or_intern("root")),
-            values: QubeNodeValues::None(()),
+            dim: Dimension(string_store.get_or_intern("root")),
+            coords: Coordinates::None(()),
             children: BTreeMap::new(),
             _parent: None,
         });
         
         
-        Qube { nodes, root_id, key_store: key_store }
+        Qube { nodes, root_id, key_store: string_store }
     }
 
 
@@ -48,17 +50,17 @@ impl Qube {
         self.root_id
     }
 
-    pub fn create_child(&mut self, key: &str, parent_id: QubeNodeId, values: Option<QubeNodeValues>) -> Result<QubeNodeId, String> {
+    pub fn create_child(&mut self, key: &str, parent_id: QubeNodeId, coordinates: Option<Coordinates>) -> Result<QubeNodeId, String> {
         
         if self.nodes.get(parent_id).is_none() {
             return Err(format!("Parent node {:?} not found", parent_id));
         }
 
-        let key = QubeKey(self.key_store.get_or_intern(key));
+        let key = Dimension(self.key_store.get_or_intern(key));
 
         let node_id = self.nodes.insert(QubeNode {
-            key: key,
-            values: values.unwrap_or(QubeNodeValues::None(())),
+            dim: key,
+            coords: coordinates.unwrap_or(Coordinates::None(())),
             children: BTreeMap::new(),
             _parent: Some(parent_id),
         });
@@ -71,11 +73,11 @@ impl Qube {
         Ok(node_id)
     }
 
-    pub fn get_span_of(&self, id: QubeNodeId) -> Option<impl Iterator<Item = &QubeKey> + '_> {
+    pub fn get_span_of(&self, id: QubeNodeId) -> Option<impl Iterator<Item = &Dimension> + '_> {
         self.nodes.get(id).map(|node| node.children.keys())
     }
 
-    pub fn get_children_of(&self, id: QubeNodeId, key: QubeKey) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
+    pub fn get_children_of(&self, id: QubeNodeId, key: Dimension) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
         let node = self.nodes.get(id).ok_or(format!("Node {:?} not found", id))?;
         Ok(node.children.get(&key).ok_or(format!("No children with key {:?}", key))?.iter())
     }
@@ -87,15 +89,15 @@ impl Qube {
     }
 
     
-    pub fn get_key_of(&self, id: QubeNodeId) -> Option<&str> {
-        self.nodes.get(id).and_then(|node| self.key_store.try_resolve(&node.key.0))
+    pub fn get_dimension_of(&self, id: QubeNodeId) -> Option<&str> {
+        self.nodes.get(id).and_then(|node| self.key_store.try_resolve(&node.dim.0))
     }
 
-    pub fn get_values_of(&self, id: QubeNodeId) -> Option<&QubeNodeValues> {
-        self.nodes.get(id).map(|node| &node.values)
+    pub fn get_coordinates_of(&self, id: QubeNodeId) -> Option<&Coordinates> {
+        self.nodes.get(id).map(|node| &node.coords)
     }
-    pub fn get_values_of_mut(&mut self, id: QubeNodeId) -> Option<&mut QubeNodeValues> {
-        self.get_node_mut(id).map(|node| &mut node.values)
+    pub fn get_coordinates_of_mut(&mut self, id: QubeNodeId) -> Option<&mut Coordinates> {
+        self.get_node_mut(id).map(|node| &mut node.coords)
     }
 
 
@@ -136,6 +138,6 @@ impl QubeNode {
         self.children.values().map(|v| v.len()).sum()
     }
     pub fn values_count(&self) -> usize {
-        self.values.len()
+        self.coords.len()
     }
 }
