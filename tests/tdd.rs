@@ -1,36 +1,33 @@
-use qubed::{Qube};
-use tiny_vec::tinyvec;
-
+use qubed::Qube;
 
 #[test]
-fn view() {
-
-
-
-}
+fn view() {}
 
 #[test]
 fn tdd2() -> Result<(), String> {
-    
     let mut qube = Qube::new();
     let class_od = qube.create_child("class", qube.root(), None).unwrap();
 
-    let class_od_values = qube.get_coordinates_of_mut(class_od).ok_or("No values for class_od".to_string())?;
-    class_od_values.append(qubed::Coordinates::Integer(1));
-    class_od_values.append(qubed::Coordinates::Integer(2));
-    class_od_values.append(qubed::Coordinates::Integer(3));
-    class_od_values.append(qubed::Coordinates::Integer(4));
-    class_od_values.append(qubed::Coordinates::IntegerList(tinyvec![10,20,30]));
+    let class_od_values = qube
+        .get_coordinates_of_mut(class_od)
+        .ok_or("No values for class_od".to_string())?;
 
-    let _type_fc = qube.create_child("type", class_od, None).unwrap();
+    // Use From trait implementations instead of enum variants
+    class_od_values.append(&1.into());
+    class_od_values.append(&2.into());
+    class_od_values.append(&3.into());
+    class_od_values.append(&4.into());
+    class_od_values.append(&vec![10, 20, 30].into());
 
-    for child in qube.get_all_children_of(qube.root()).unwrap() {
-        println!("Child of class: {:?}={:?}",
+    let _type_fc = qube.create_child("type", class_od, None)?;
+
+    for child in qube.get_all_children_of(qube.root())? {
+        println!(
+            "Child of class: {:?}={:?}",
             qube.get_dimension_of(*child).unwrap(),
             qube.get_coordinates_of(*child).unwrap()
         );
-    };
+    }
 
     Ok(())
-
 }
