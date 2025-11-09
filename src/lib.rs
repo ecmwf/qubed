@@ -1,8 +1,8 @@
-mod qube;
 mod coordinates;
-mod view;
+mod qube;
 mod select;
-pub mod serde;
-pub use qube::{Qube, QubeNodeId, Dimension};
+// pub mod serde;
+mod view;
 pub use coordinates::Coordinates;
+pub use qube::{Dimension, Qube, QubeNodeId};
 pub use view::QubeView;
