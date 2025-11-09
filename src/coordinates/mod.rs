@@ -189,21 +189,45 @@ impl Coordinates {
         Coordinates::Empty
     }
 
-    /// These are not needed after the From<> traits but one could easily argue
-    /// these from_ functions are better in a way as they generally don't require
-    /// type annotations and can be seen as self documented functions
-    ///
-    // pub fn from_integer(value: i32) -> Self {
-    //     Coordinates::Integers(IntegerCoordinates::Single(value))
-    // }
-    //
-    // pub fn from_float(value: f64) -> Self {
-    //     Coordinates::Floats(FloatCoordinates::Single(value))
-    // }
-    //
-    // pub fn from_string(value: &str) -> Self {
-    //     Coordinates::Strings(StringCoordinates::Single(TinyString::from_str(&value).unwrap())) // TODO: unwrap
-    // }
+    /// Proxy functions that make use of from trait
+    /// Compiler will inline these, they are zero-cost
+    /// These might be clearer for user as now they don't need to know
+    /// if from trait is implemented
+
+    /// Creates Coordinates from an integer value.
+    pub fn from_integer(value: i32) -> Self {
+        Self::from(value)
+    }
+
+    /// Creates Coordinates from a float value.
+    pub fn from_float(value: f64) -> Self {
+        Self::from(value)
+    }
+
+    /// Creates Coordinates from a string value.
+    pub fn from_string(value: &str) -> Self {
+        Self::from(value)
+    }
+
+    /// Creates Coordinates from a vector of integers.
+    pub fn from_integers(values: Vec<i32>) -> Self {
+        Self::from(values)
+    }
+
+    /// Creates Coordinates from a vector of floats.
+    pub fn from_floats(values: Vec<f64>) -> Self {
+        Self::from(values)
+    }
+
+    /// Creates Coordinates from a vector of strings.
+    pub fn from_strings(values: Vec<String>) -> Self {
+        Self::from(values)
+    }
+
+    /// Creates Coordinates from an integer range.
+    pub fn from_range(range: IntegerRange) -> Self {
+        Self::from(IntegerCoordinates::from(range))
+    }
 
     pub fn append(&mut self, new_coords: &Coordinates) {
         match new_coords {
