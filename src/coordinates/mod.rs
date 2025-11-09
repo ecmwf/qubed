@@ -2,7 +2,6 @@ pub mod integers;
 pub mod ops;
 use integers::IntegerCoordinates;
 
-use std::{default, mem, str::FromStr};
 
 use smallbitvec::SmallBitVec;
 use tiny_str::TinyString;

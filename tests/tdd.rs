@@ -1,7 +1,5 @@
 use qubed::Qube;
-use tiny_vec::tinyvec;
 
-use qubed::IntegerCoordinates;
 
 #[test]
 fn view() {}

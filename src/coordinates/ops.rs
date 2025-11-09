@@ -1,8 +1,5 @@
 use crate::coordinates::CoordinateTypes;
-use crate::{
-    Coordinates,
-    coordinates::{FloatCoordinates, StringCoordinates, integers::IntegerCoordinates},
-};
+use crate::Coordinates;
 use tiny_str::TinyString;
 
 impl Coordinates {

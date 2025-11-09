@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    Coordinates, Dimension,
-    qube::{Qube, QubeNode, QubeNodeId},
+    Dimension,
+    qube::{Qube, QubeNodeId},
 };
 
 use smallbitvec::SmallBitVec;
