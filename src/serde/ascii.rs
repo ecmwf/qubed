@@ -1,42 +1,25 @@
 use std::iter::Peekable;
 use std::str::Lines;
 
-use crate::{Coordinates, qube::{Qube, QubeNodeId}};
+use crate::{
+    Coordinates,
+    qube::{Qube, QubeNodeId},
+};
 
 // ---------------- ASCII Deserialization ----------------
 
 impl Qube {
-
     pub fn from_ascii(input: &str) -> Result<Qube, String> {
-
         let mut qube = Qube::new();
-        
+
         let mut lines = input.lines().peekable();
         let root = qube.root();
-
 
         skip_blank_lines(&mut lines);
         parse_root(&mut lines)?;
         parse_children(&mut qube, &mut lines, root, 0)?;
-        
-        Ok(qube)
-    }
-}
 
-// TODO: This isn't very generic!
-impl Coordinates {
-    pub fn deserialize(s: &str) -> Self {
-        let mut values = Coordinates::None(());
-        let split: Vec<String> = s.split('/').map(|v| v.to_string()).collect();
-        for s in split {
-            if s.parse::<i32>().is_ok() {
-                values.append(Coordinates::Integer(s.parse().unwrap()));
-            } else {
-                values.append(Coordinates::String(s));
-            }
-        }
-        values
-        
+        Ok(qube)
     }
 }
 
@@ -50,12 +33,14 @@ fn skip_blank_lines(lines: &mut Peekable<Lines>) {
     }
 }
 
-
 fn parse_root(lines: &mut Peekable<Lines>) -> Result<(), String> {
     let line = lines.next().ok_or("Input is empty")?;
     let (indent, content) = parse_line(line)?;
     if indent != 0 {
-        return Err(format!("Root node must have zero indentation, found {}", indent));
+        return Err(format!(
+            "Root node must have zero indentation, found {}",
+            indent
+        ));
     }
     if content != "root" {
         return Err(format!("Root node must be 'root', found '{}'", content));
@@ -63,10 +48,13 @@ fn parse_root(lines: &mut Peekable<Lines>) -> Result<(), String> {
     Ok(())
 }
 
-fn parse_children(qube: &mut Qube, lines: &mut Peekable<Lines>, parent: QubeNodeId, parent_indent: usize) -> Result<(), String> {
-    
+fn parse_children(
+    qube: &mut Qube,
+    lines: &mut Peekable<Lines>,
+    parent: QubeNodeId,
+    parent_indent: usize,
+) -> Result<(), String> {
     while let Some(line) = lines.peek() {
-
         let (indent, content) = parse_line(line)?;
 
         // Check if we need to break the recursion because we reached a non-sibling
@@ -74,11 +62,18 @@ fn parse_children(qube: &mut Qube, lines: &mut Peekable<Lines>, parent: QubeNode
             break;
         }
         if indent > parent_indent + 1 {
-            return Err(format!("Unexpected indentation level: expected {} or less, got {}", parent_indent + 1, indent));
+            return Err(format!(
+                "Unexpected indentation level: expected {} or less, got {}",
+                parent_indent + 1,
+                indent
+            ));
         }
 
         // We are a child
-        let (key, values) = content.split_once("=").ok_or(format!("Invalid node format: '{}', expected 'key=value'", content))?;
+        let (key, values) = content.split_once("=").ok_or(format!(
+            "Invalid node format: '{}', expected 'key=value'",
+            content
+        ))?;
         let values = Coordinates::from_string(values);
         let child = qube.create_child(key, parent, Some(values))?;
 
@@ -87,7 +82,6 @@ fn parse_children(qube: &mut Qube, lines: &mut Peekable<Lines>, parent: QubeNode
 
         // Recurse into children
         parse_children(qube, lines, child, indent)?;
-
     }
     Ok(())
 }
@@ -95,18 +89,21 @@ fn parse_children(qube: &mut Qube, lines: &mut Peekable<Lines>, parent: QubeNode
 fn parse_line(line: &str) -> Result<(usize, String), String> {
     let chars: Vec<char> = line.chars().collect();
     let mut i = 0;
-    
+
     while i < chars.len() {
         match chars[i] {
             '├' | '└' | '│' | ' ' | '─' => i += 1,
             _ => break,
         }
     }
-    
+
     if i % 4 != 0 {
-        return Err(format!("Invalid indentation: {} characters is not divisible by 4", i));
+        return Err(format!(
+            "Invalid indentation: {} characters is not divisible by 4",
+            i
+        ));
     }
-    
+
     let indentation = i / 4;
     let content = chars[i..].iter().collect::<String>().trim().to_string();
     Ok((indentation, content))
@@ -115,14 +112,12 @@ fn parse_line(line: &str) -> Result<(usize, String), String> {
 // ---------------- ASCII Serialization ----------------
 
 impl Qube {
-
     pub fn to_ascii(&self) -> String {
         let mut output = String::new();
         output.push_str("root\n");
         serialize_children(self, self.root(), "", &mut output);
         output
     }
-    
 }
 
 fn serialize_children(qube: &Qube, parent_id: QubeNodeId, prefix: &str, output: &mut String) {
@@ -134,23 +129,19 @@ fn serialize_children(qube: &Qube, parent_id: QubeNodeId, prefix: &str, output: 
     for (i, child_id) in children_ids.iter().enumerate() {
         let is_last = i == children_ids.len() - 1;
         let branch = if is_last { "└──" } else { "├──" };
-        
+
         let key = qube.get_dimension_of(*child_id).unwrap_or("unknown");
-        let values = qube.get_coordinates_of(*child_id).unwrap_or(&Coordinates::None(()));
-        let values_str = match values {
-            Coordinates::None(_) => "".to_string(),
-            Coordinates::Integer(i) => i.to_string(),
-            Coordinates::IntegerList(list) => list.iter().map(|v| v.to_string()).collect::<Vec<String>>().join("/"),
-            Coordinates::String(s) => s.clone(),
-            _ => "complex".to_string(), // Simplified for this example
-        };
+        let values = qube
+            .get_coordinates_of(*child_id)
+            .unwrap_or(&Coordinates::Empty);
+        let values_str = values.to_string();
 
         output.push_str(prefix);
         output.push_str(branch);
         output.push(' ');
         output.push_str(&format!("{}={}", key, values_str));
         output.push('\n');
-        
+
         let next_prefix = if is_last {
             format!("{}    ", prefix)
         } else {
@@ -185,7 +176,6 @@ mod tests {
         ├── param=1
         └── param=2"#;
         let _qube = Qube::from_ascii(input).unwrap();
-
     }
 
     #[test]
@@ -234,10 +224,8 @@ mod tests {
         let re_serialized = re_parsed.to_ascii();
 
         println!("Serialized:\n{}", serialized);
-        
+
         assert_eq!(input, serialized);
         assert_eq!(serialized, re_serialized);
     }
-
-
 }

@@ -1,7 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
-use slotmap::{SlotMap, new_key_type};
 use lasso::{MiniSpur, Rodeo};
+use slotmap::{SlotMap, new_key_type};
 use tiny_vec::TinyVec;
 
 use crate::coordinates::Coordinates;
@@ -36,22 +36,28 @@ impl Qube {
         let mut nodes = SlotMap::with_key();
         let root_id = nodes.insert(QubeNode {
             dim: Dimension(string_store.get_or_intern("root")),
-            coords: Coordinates::None(()),
+            coords: Coordinates::Empty,
             children: BTreeMap::new(),
             _parent: None,
         });
-        
-        
-        Qube { nodes, root_id, key_store: string_store }
-    }
 
+        Qube {
+            nodes,
+            root_id,
+            key_store: string_store,
+        }
+    }
 
     pub fn root(&self) -> QubeNodeId {
         self.root_id
     }
 
-    pub fn create_child(&mut self, key: &str, parent_id: QubeNodeId, coordinates: Option<Coordinates>) -> Result<QubeNodeId, String> {
-        
+    pub fn create_child(
+        &mut self,
+        key: &str,
+        parent_id: QubeNodeId,
+        coordinates: Option<Coordinates>,
+    ) -> Result<QubeNodeId, String> {
         if self.nodes.get(parent_id).is_none() {
             return Err(format!("Parent node {:?} not found", parent_id));
         }
@@ -60,14 +66,18 @@ impl Qube {
 
         let node_id = self.nodes.insert(QubeNode {
             dim: key,
-            coords: coordinates.unwrap_or(Coordinates::None(())),
+            coords: coordinates.unwrap_or(Coordinates::Empty),
             children: BTreeMap::new(),
             _parent: Some(parent_id),
         });
-        
+
         let parent = self.get_node_mut(parent_id);
         if let Some(parent) = parent {
-            parent.children.entry(key).or_insert_with(TinyVec::new).push(node_id);
+            parent
+                .children
+                .entry(key)
+                .or_insert_with(TinyVec::new)
+                .push(node_id);
         }
 
         Ok(node_id)
@@ -77,20 +87,38 @@ impl Qube {
         self.nodes.get(id).map(|node| node.children.keys())
     }
 
-    pub fn get_children_of(&self, id: QubeNodeId, key: Dimension) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
-        let node = self.nodes.get(id).ok_or(format!("Node {:?} not found", id))?;
-        Ok(node.children.get(&key).ok_or(format!("No children with key {:?}", key))?.iter())
+    pub fn get_children_of(
+        &self,
+        id: QubeNodeId,
+        key: Dimension,
+    ) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
+        let node = self
+            .nodes
+            .get(id)
+            .ok_or(format!("Node {:?} not found", id))?;
+        Ok(node
+            .children
+            .get(&key)
+            .ok_or(format!("No children with key {:?}", key))?
+            .iter())
     }
 
-    pub fn get_all_children_of(&self, id: QubeNodeId) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
-        let node = self.nodes.get(id).ok_or(format!("Node {:?} not found", id))?;
+    pub fn get_all_children_of(
+        &self,
+        id: QubeNodeId,
+    ) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
+        let node = self
+            .nodes
+            .get(id)
+            .ok_or(format!("Node {:?} not found", id))?;
         let all_children = node.children.values().flatten();
         Ok(all_children)
     }
 
-    
     pub fn get_dimension_of(&self, id: QubeNodeId) -> Option<&str> {
-        self.nodes.get(id).and_then(|node| self.key_store.try_resolve(&node.dim.0))
+        self.nodes
+            .get(id)
+            .and_then(|node| self.key_store.try_resolve(&node.dim.0))
     }
 
     pub fn get_coordinates_of(&self, id: QubeNodeId) -> Option<&Coordinates> {
@@ -100,25 +128,23 @@ impl Qube {
         self.get_node_mut(id).map(|node| &mut node.coords)
     }
 
-
     // Not sure we really need this...
     // pub fn walk(&self, id: QubeNodeId) -> Result<(impl Iterator<Item = &QubeNodeId> + '_, impl Iterator<Item = &QubeNodeId> + '_), String> {
-        
+
     //     let node = self.nodes.get(id).ok_or(format!("Node {:?} not found", id))?;
 
     //     let all_children = node.children.values().flatten();
     //     let branches = all_children.filter(move |&id| {
     //         self.get_node(*id).map_or(false, |n| !n.children.is_empty())
     //     });
-        
+
     //     let all_children = node.children.values().flatten();
     //     let leaves = all_children.filter(move |&id| {
     //         self.get_node(*id).map_or(false, |n| n.children.is_empty())
     //     });
-        
+
     //     Ok((branches, leaves))
     // }
-
 
     // These functions might be a trap. You can't really do anything directly on a node, because almost everything is interned or arena'd inside the Qube.
     // They might have value if you are doing multiple things and want to avoid the repeated lookup
@@ -130,7 +156,6 @@ impl Qube {
     fn get_node_mut(&mut self, id: QubeNodeId) -> Option<&mut QubeNode> {
         self.nodes.get_mut(id)
     }
-    
 }
 
 impl QubeNode {

@@ -1,20 +1,20 @@
-
 use std::collections::HashMap;
 
-use crate::{Dimension, Coordinates, qube::{Qube, QubeNode, QubeNodeId}};
+use crate::{
+    Coordinates, Dimension,
+    qube::{Qube, QubeNode, QubeNodeId},
+};
 
 use smallbitvec::SmallBitVec;
 
 pub struct QubeView<'a> {
     qube: &'a Qube,
-    
+
     /// Mapping from QubeNodeId to QubeViewNode
     masks: HashMap<QubeNodeId, QubeNodeMask>,
-
 }
 
 struct QubeNodeMask {
-    
     /// The ID of the node in the original Qube
     node_id: QubeNodeId,
 
@@ -22,7 +22,7 @@ struct QubeNodeMask {
     children_mask: SmallBitVec,
 }
 
-impl QubeView <'_> {
+impl QubeView<'_> {
     pub fn new(qube: &Qube) -> QubeView {
         let mut view = QubeView {
             qube,
@@ -35,21 +35,27 @@ impl QubeView <'_> {
         view
     }
 
-    pub fn add_to_view(&mut self, node_id: QubeNodeId, values_mask: SmallBitVec, children_mask: SmallBitVec) -> Result<(), String> {
-
+    pub fn add_to_view(
+        &mut self,
+        node_id: QubeNodeId,
+        values_mask: SmallBitVec,
+        children_mask: SmallBitVec,
+    ) -> Result<(), String> {
         let mask = self.create_mask(node_id)?;
 
         // Check the parent has already been added. We don't allow floating nodes.
         if let Some(node) = self.qube.get_node(node_id) {
             if let Some(parent_id) = node._parent {
                 if !self.masks.contains_key(&parent_id) && parent_id != self.qube.root() {
-                    return Err(format!("Parent node {:?} has not been added to the view yet", parent_id));
+                    return Err(format!(
+                        "Parent node {:?} has not been added to the view yet",
+                        parent_id
+                    ));
                 }
             }
         } else {
             return Err(format!("Node {:?} not found in the original Qube", node_id));
         }
-
 
         self.masks.insert(node_id, mask);
 
@@ -57,7 +63,10 @@ impl QubeView <'_> {
     }
 
     fn create_mask(&mut self, node_id: QubeNodeId) -> Result<QubeNodeMask, String> {
-        let node = self.qube.get_node(node_id).ok_or(format!("Node {:?} not found in the original Qube", node_id))?;
+        let node = self
+            .qube
+            .get_node(node_id)
+            .ok_or(format!("Node {:?} not found in the original Qube", node_id))?;
         let num_values = node.values_count();
         let num_children = node.children_count();
 
@@ -70,19 +79,25 @@ impl QubeView <'_> {
     }
 
     fn get_mask(&self, node_id: QubeNodeId) -> Result<&QubeNodeMask, String> {
-        self.masks.get(&node_id).ok_or(format!("No mask found for node id {:?}", node_id))
+        self.masks
+            .get(&node_id)
+            .ok_or(format!("No mask found for node id {:?}", node_id))
     }
 
     fn get_node(&self, node_id: QubeNodeId) -> Result<&crate::qube::QubeNode, String> {
-        self.qube.get_node(node_id).ok_or(format!("No node found for id {:?}", node_id))
+        self.qube
+            .get_node(node_id)
+            .ok_or(format!("No node found for id {:?}", node_id))
     }
 
-    pub fn get_all_children_of(&self, node_id: QubeNodeId) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
-        
+    pub fn get_all_children_of(
+        &self,
+        node_id: QubeNodeId,
+    ) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
         let mask = self.get_mask(node_id)?;
         let node = self.get_node(node_id)?;
         let mut filtered_children = Vec::new();
-        
+
         // the mask covers the entire BTreeMap<MiniSpur, TinyVec<QubeNodeId, 4>> so we need to iterate over it
         let mut i = 0;
         for (_child_key, children) in node.children.iter() {
@@ -92,16 +107,19 @@ impl QubeView <'_> {
                     filtered_children.push(child_id);
                 }
             }
-        };
+        }
         Ok(filtered_children.into_iter())
     }
 
-    pub fn get_children_of(&self, node_id: QubeNodeId, key: Dimension) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
-        
+    pub fn get_children_of(
+        &self,
+        node_id: QubeNodeId,
+        key: Dimension,
+    ) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
         let mask = self.get_mask(node_id)?;
         let node = self.get_node(node_id)?;
         let mut filtered_children = Vec::new();
-        
+
         // the mask covers the entire BTreeMap<MiniSpur, TinyVec<QubeNodeId, 4>> so we need to iterate over it
         let mut i = 0;
         for (child_key, children) in node.children.iter() {
@@ -115,9 +133,7 @@ impl QubeView <'_> {
                     filtered_children.push(child_id);
                 }
             }
-        };
+        }
         Ok(filtered_children.into_iter())
     }
-
-
 }

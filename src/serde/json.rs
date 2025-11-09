@@ -1,35 +1,36 @@
-use serde_json::{Value, Map};
-use crate::{Qube, QubeNodeId, Coordinates};
+use crate::{Coordinates, Qube, QubeNodeId};
+use serde_json::{Map, Value};
 
 // ---------------- JSON Deserialization ----------------
 
 impl Qube {
     pub fn from_json(value: Value) -> Result<Qube, String> {
         let mut qube = Qube::new();
-        
+
         if let Value::Object(map) = value {
             let root = qube.root();
             parse_json_object(&mut qube, root, &map)?;
         } else {
             return Err("Expected JSON object at root".to_string());
         }
-        
+
         Ok(qube)
     }
 }
 
 fn parse_json_object(
-    qube: &mut Qube, 
-    parent: QubeNodeId, 
-    map: &Map<String, Value>
+    qube: &mut Qube,
+    parent: QubeNodeId,
+    map: &Map<String, Value>,
 ) -> Result<(), String> {
     for (key_value, child_value) in map {
-        let (key, values_str) = key_value.split_once('=')
+        let (key, values_str) = key_value
+            .split_once('=')
             .ok_or_else(|| format!("Invalid node format: '{}', expected 'key=value'", key_value))?;
-        
+
         let values = Coordinates::from_string(values_str);
         let child = qube.create_child(key, parent, Some(values))?;
-        
+
         if let Value::Object(child_map) = child_value {
             parse_json_object(qube, child, child_map)?;
         }
@@ -55,27 +56,18 @@ fn serialize_children_json(qube: &Qube, parent_id: QubeNodeId, output: &mut Map<
 
     for child_id in children_ids.iter() {
         let key = qube.get_dimension_of(*child_id).unwrap_or("unknown");
-        let values = qube.get_coordinates_of(*child_id).unwrap_or(&Coordinates::None(()));
-        
-        let values_str = match values {
-            Coordinates::None(_) => "".to_string(),
-            Coordinates::Integer(i) => i.to_string(),
-            Coordinates::IntegerList(list) => {
-                list.iter()
-                    .map(|v| v.to_string())
-                    .collect::<Vec<String>>()
-                    .join("/")
-            },
-            Coordinates::String(s) => s.clone(),
-            _ => "complex".to_string(),
-        };
+        let values = qube
+            .get_coordinates_of(*child_id)
+            .unwrap_or(&Coordinates::Empty);
+
+        let values_str = values.to_string();
 
         let key_value = format!("{}={}", key, values_str);
-        
+
         // Recursively build child object
         let mut child_map = Map::new();
         serialize_children_json(qube, *child_id, &mut child_map);
-        
+
         output.insert(key_value, Value::Object(child_map));
     }
 }
@@ -103,12 +95,11 @@ mod json_tests {
                 "expver=0001": {"param=1/2/3": {}},
                 "expver=0002": {"param=1/2": {}}
             }
-        })).unwrap();
+        }))
+        .unwrap();
 
         // Verify structure
-        let root_children: Vec<_> = qube.get_all_children_of(qube.root())
-            .unwrap()
-            .collect();
+        let root_children: Vec<_> = qube.get_all_children_of(qube.root()).unwrap().collect();
         assert_eq!(root_children.len(), 2);
     }
 
@@ -120,11 +111,12 @@ mod json_tests {
                     "param=1": {}
                 }
             }
-        })).unwrap();
+        }))
+        .unwrap();
 
         let json_output = qube.to_json();
         println!("{}", serde_json::to_string_pretty(&json_output).unwrap());
-        
+
         // Verify it's a valid object
         assert!(json_output.is_object());
     }
@@ -150,12 +142,16 @@ mod json_tests {
         assert_eq!(original, serialized);
 
         // Verify structure is preserved
-        println!("Original:\n{}", serde_json::to_string_pretty(&original).unwrap());
-        println!("Serialized:\n{}", serde_json::to_string_pretty(&serialized).unwrap());
+        println!(
+            "Original:\n{}",
+            serde_json::to_string_pretty(&original).unwrap()
+        );
+        println!(
+            "Serialized:\n{}",
+            serde_json::to_string_pretty(&serialized).unwrap()
+        );
     }
 
     #[test]
-    fn test_from_json_large() {
-
-    }
+    fn test_from_json_large() {}
 }

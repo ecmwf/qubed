@@ -21,16 +21,15 @@ pub fn benchmark_roaring_vs_sorted_array() {
     // ];
 
     let mut data1 = vec![
-        0, 8, 9, 10, 31, 33, 34, 39, 40, 41, 42, 49, 60, 75, 76, 78, 79, 129, 130, 131, 132,
-        133, 134, 135, 136, 137, 139, 141, 142, 144, 146, 147, 148, 151, 157, 159, 164, 165,
-        166, 167, 168, 169, 170, 172, 175, 176, 177, 178, 179, 180, 181, 182, 183, 186, 187,
-        188, 195, 196, 201, 202, 205, 207, 208, 209, 210, 211, 212, 228, 235, 236, 246, 247,
-        248
+        0, 8, 9, 10, 31, 33, 34, 39, 40, 41, 42, 49, 60, 75, 76, 78, 79, 129, 130, 131, 132, 133,
+        134, 135, 136, 137, 139, 141, 142, 144, 146, 147, 148, 151, 157, 159, 164, 165, 166, 167,
+        168, 169, 170, 172, 175, 176, 177, 178, 179, 180, 181, 182, 183, 186, 187, 188, 195, 196,
+        201, 202, 205, 207, 208, 209, 210, 211, 212, 228, 235, 236, 246, 247, 248,
     ];
 
     // Replicate 5x with offsets
     let original_len = data1.len() as u32;
-    
+
     for i in 1..100 {
         let offset = i * 300;
         for i in 0..original_len {
@@ -171,7 +170,7 @@ pub fn benchmark_roaring_vs_sorted_array() {
     println!(
         "Sorted array1 size: {} bytes",
         data1.len() * std::mem::size_of::<u32>()
-);
+    );
 
     println!("=== INTERSECTION ===");
     // Roaring intersection
@@ -200,7 +199,10 @@ pub fn benchmark_roaring_vs_sorted_array() {
         array_time,
         array_result.len()
     );
-    println!("Roaring is {:.2}x faster", array_time.as_secs_f64() / roaring_time.as_secs_f64());
+    println!(
+        "Roaring is {:.2}x faster",
+        array_time.as_secs_f64() / roaring_time.as_secs_f64()
+    );
     println!();
 
     println!("=== UNION ===");
@@ -230,7 +232,10 @@ pub fn benchmark_roaring_vs_sorted_array() {
         array_time,
         array_result.len()
     );
-    println!("Roaring is {:.2}x faster", array_time.as_secs_f64() / roaring_time.as_secs_f64());
+    println!(
+        "Roaring is {:.2}x faster",
+        array_time.as_secs_f64() / roaring_time.as_secs_f64()
+    );
     println!();
 
     println!("=== DIFFERENCE ===");
@@ -260,7 +265,10 @@ pub fn benchmark_roaring_vs_sorted_array() {
         array_time,
         array_result.len()
     );
-    println!("Roaring is {:.2}x faster", array_time.as_secs_f64() / roaring_time.as_secs_f64());
+    println!(
+        "Roaring is {:.2}x faster",
+        array_time.as_secs_f64() / roaring_time.as_secs_f64()
+    );
     println!();
 
     println!("=== SYMMETRIC DIFFERENCE ===");
@@ -290,7 +298,10 @@ pub fn benchmark_roaring_vs_sorted_array() {
         array_time,
         array_result.len()
     );
-    println!("Roaring is {:.2}x faster", array_time.as_secs_f64() / roaring_time.as_secs_f64());
+    println!(
+        "Roaring is {:.2}x faster",
+        array_time.as_secs_f64() / roaring_time.as_secs_f64()
+    );
     println!();
 
     println!("=== MEMORY ===");

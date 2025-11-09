@@ -1,8 +1,12 @@
-use std::str::FromStr;
+pub mod integers;
+pub mod ops;
+use integers::IntegerCoordinates;
 
-use tiny_vec::TinyVec;
+use std::{default, mem, str::FromStr};
+
 use smallbitvec::SmallBitVec;
 use tiny_str::TinyString;
+use tiny_vec::TinyVec;
 
 // TODO: check for duplicates. Sets may be better than vecs.
 
@@ -14,40 +18,17 @@ pub enum Coordinates {
     Integers(IntegerCoordinates),
     Floats(FloatCoordinates),
     Strings(StringCoordinates),
-
-    // For mixed coordinates
-    Mixed((IntegerCoordinates, FloatCoordinates, StringCoordinates)),
-
+    Mixed(Box<MixedCoordinates>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum IntegerCoordinates {
-    Empty,
-    Single(i32),
-    List(TinyVec<i32, 4>),
-    Range(IntegerRange),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum FloatCoordinates {
-    Empty,
-    Single(f64),
+pub enum FloatCoordinates {
     List(TinyVec<f64, 4>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum StringCoordinates {
-    Empty,
-    Single(TinyString<8>),
+pub enum StringCoordinates {
     List(TinyVec<TinyString<4>, 2>),
-}
-
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct IntegerRange {
-    start: i32,
-    end: i32,
-    step: i32,
 }
 
 pub enum CoordinateTypes {
@@ -56,71 +37,46 @@ pub enum CoordinateTypes {
     String(TinyString<8>),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct MixedCoordinates {
+    integers: integers::IntegerCoordinates,
+    floats: FloatCoordinates,
+    strings: StringCoordinates,
+}
 
 impl Coordinates {
-
     pub fn new() -> Self {
         Coordinates::Empty
     }
-    pub fn from_integer(value: i32) -> Self {
-        Coordinates::Integers(IntegerCoordinates::Single(value))
-    }
-    pub fn from_float(value: f64) -> Self {
-        Coordinates::Floats(FloatCoordinates::Single(value))
-    }
-    pub fn from_string(value: &str) -> Self {
-        Coordinates::Strings(StringCoordinates::Single(TinyString::from_str(&value).unwrap())) // TODO: unwrap
+
+    pub fn from_string(s: &str) -> Self {
+        if s.is_empty() {
+            return Coordinates::Empty;
+        }
+        let _coords = Coordinates::Empty;
+        let _split: Vec<&str> = s.split('|').collect();
+        todo!(); // should defer to individual types to serde
+        // for part in split {
+        //     if let Ok(int_val) = part.parse::<i32>() {
+        //         coords.extend(&Coordinates::from_integer(int_val));
+        //     } else if let Ok(float_val) = part.parse::<f64>() {
+        //         coords.extend(&Coordinates::from_float(float_val));
+        //     } else {
+        //         coords.extend(&Coordinates::from_string(part));
+        //     }
+        // }
+        // coords
     }
 
-    pub fn append(&mut self, new_coords: &Coordinates) {
-        match new_coords {
-            Coordinates::Integers(new_ints) => {
-                match self {
-                    Coordinates::Integers(ints) => { ints.append(new_ints); },
-                    Coordinates::Mixed((ints, _, _)) => { ints.append(new_ints); },
-                    Coordinates::Empty => { std::mem::replace(self, new_coords.clone()); },
-                    _ => {
-                        self.convert_to_mixed().append(new_coords);
-                    }
-                }
-            },
-            Coordinates::Floats(new_floats) => {
-                match self {
-                    Coordinates::Floats(floats) => { floats.append(new_floats); },
-                    Coordinates::Mixed((_, floats, _)) => { floats.append(new_floats); },
-                    Coordinates::Empty => { std::mem::replace(self, new_coords.clone()); },
-                    _ => {
-                        self.convert_to_mixed().append(new_coords);
-                    }
-                }
-            },
-            Coordinates::Strings(new_strings) => {
-                match self {
-                    Coordinates::Strings(strings) => { strings.append(new_strings); },
-                    Coordinates::Mixed((_, _, strings)) => { strings.append(new_strings); },
-                    Coordinates::Empty => { std::mem::replace(self, new_coords.clone()); },
-                    _ => {
-                        self.convert_to_mixed().append(new_coords);
-                    }
-                }
-            },
-            Coordinates::Empty => {
-                
-            },
-            Coordinates::Mixed((ints, floats, strings)) => {
-                match self {
-                    Coordinates::Mixed((self_ints, self_floats, self_strings)) => {
-                        self_ints.append(ints);
-                        self_floats.append(floats);
-                        self_strings.append(strings);
-                    },
-                    _ => {
-                        self.convert_to_mixed().append(new_coords);
-                    }
-                }
-
-            },
-            
+    pub fn to_string(&self) -> String {
+        match self {
+            Coordinates::Empty => "".to_string(),
+            Coordinates::Integers(ints) => ints.to_string(),
+            Coordinates::Floats(floats) => floats.to_string(),
+            Coordinates::Strings(strings) => strings.to_string(),
+            Coordinates::Mixed(mixed) => {
+                todo!()
+            }
         }
     }
 
@@ -130,80 +86,125 @@ impl Coordinates {
             Coordinates::Integers(ints) => ints.len(),
             Coordinates::Floats(floats) => floats.len(),
             Coordinates::Strings(strings) => strings.len(),
-            Coordinates::Mixed((ints, floats, strings)) => ints.len() + floats.len() + strings.len(),
+            Coordinates::Mixed(mixed) => {
+                mixed.integers.len() + mixed.floats.len() + mixed.strings.len()
+            }
         }
     }
 
     fn convert_to_mixed(&mut self) -> &mut Self {
-        let old_self = std::mem::replace(self, Coordinates::Mixed((
-            IntegerCoordinates::Empty,
-            FloatCoordinates::Empty,
-            StringCoordinates::Empty,
-        )));
-
-        if let Coordinates::Mixed((ints, floats, strings)) = self {
-            match old_self {
-                Coordinates::Integers(old_ints) => {
-                    *ints = old_ints;
-                },
-                Coordinates::Floats(old_floats) => {
-                    *floats = old_floats;
-                },
-                Coordinates::Strings(old_strings) => {
-                    *strings = old_strings;
-                },
-                _ => {}
+        let mixed = match self {
+            Coordinates::Integers(ints) => Box::new(MixedCoordinates {
+                integers: ints.to_owned(),
+                ..Default::default()
+            }),
+            Coordinates::Floats(floats) => Box::new(MixedCoordinates {
+                floats: floats.to_owned(),
+                ..Default::default()
+            }),
+            Coordinates::Strings(strings) => Box::new(MixedCoordinates {
+                strings: strings.to_owned(),
+                ..Default::default()
+            }),
+            Coordinates::Empty => Box::new(MixedCoordinates::default()),
+            Coordinates::Mixed(_) => {
+                return self;
             }
-        } else {
-            unreachable!("self is supposed to be a Mixed type now");
-        }
+        };
+        *self = Coordinates::Mixed(mixed);
         self
-        
-    }
-}
-
-impl IntegerCoordinates {
-    fn append(&mut self, new_coords: &IntegerCoordinates) {
-        todo!()
-    }
-
-    fn len(&self) -> usize {
-        match self {
-            IntegerCoordinates::Empty => 0,
-            IntegerCoordinates::Single(_) => 1,
-            IntegerCoordinates::List(list) => list.len(),
-            IntegerCoordinates::Range(range) => ((range.end - range.start) / range.step) as usize,
-        }
     }
 }
 
 impl FloatCoordinates {
-    fn append(&mut self, new_coords: &FloatCoordinates) {
+    fn extend(&mut self, new_coords: &FloatCoordinates) {
+        todo!()
+    }
+    fn append(&mut self, new_coord: f64) {
         todo!()
     }
 
     fn len(&self) -> usize {
         match self {
-            FloatCoordinates::Empty => 0,
-            FloatCoordinates::Single(_) => 1,
             FloatCoordinates::List(list) => list.len(),
         }
+    }
+    pub(crate) fn to_string(&self) -> String {
+        match self {
+            FloatCoordinates::List(list) => list
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<String>>()
+                .join("/"),
+        }
+    }
+}
+
+impl Default for FloatCoordinates {
+    fn default() -> Self {
+        FloatCoordinates::List(TinyVec::new())
     }
 }
 
 impl StringCoordinates {
-    fn append(&mut self, new_coords: &StringCoordinates) {
+    fn extend(&mut self, new_coords: &StringCoordinates) {
+        todo!()
+    }
+    fn append(&mut self, new_coord: TinyString<8>) {
         todo!()
     }
 
     fn len(&self) -> usize {
         match self {
-            StringCoordinates::Empty => 0,
-            StringCoordinates::Single(_) => 1,
             StringCoordinates::List(list) => list.len(),
         }
     }
+    pub(crate) fn to_string(&self) -> String {
+        match self {
+            StringCoordinates::List(list) => list
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<String>>()
+                .join("/"),
+        }
+    }
 }
+
+impl Default for StringCoordinates {
+    fn default() -> Self {
+        StringCoordinates::List(TinyVec::new())
+    }
+}
+
+impl Default for MixedCoordinates {
+    fn default() -> Self {
+        MixedCoordinates {
+            integers: IntegerCoordinates::default(),
+            floats: FloatCoordinates::default(),
+            strings: StringCoordinates::default(),
+        }
+    }
+}
+
+impl From<f64> for Coordinates {
+    fn from(value: f64) -> Self {
+        let mut vec = TinyVec::new();
+        vec.push(value);
+        Coordinates::Floats(FloatCoordinates::List(vec))
+    }
+}
+
+// impl Default for FloatCoordinates {
+//     fn default() -> Self {
+//         FloatCoordinates::Empty
+//     }
+// }
+
+// impl Default for StringCoordinates {
+//     fn default() -> Self {
+//         StringCoordinates::Empty
+//     }
+// }
 
 // --------------- Iteration ----------------------
 
@@ -227,7 +228,7 @@ impl StringCoordinates {
 
 // impl<'a> Iterator for QubeNodeValuesIter<'a> {
 //     type Item = QubeNodeValuesIteratorItem<'a>;
-    
+
 //     fn next(&mut self) -> Option<Self::Item> {
 //         match self {
 //             Self::Empty => None,
