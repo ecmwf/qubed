@@ -20,13 +20,13 @@ impl Qube {
         &self,
         selection: &std::collections::HashMap<Dimension, Coordinates>,
         id: QubeNodeId,
-        view: &mut QubeView,
+        _view: &mut QubeView,
     ) -> Result<(), String> {
         let node = self
             .get_node(id)
             .ok_or(format!("Node {:?} not found", id))?;
 
-        for (child_key, children) in node.children.iter() {
+        for (child_key, _children) in node.children.iter() {
             if selection.contains_key(child_key) {
                 // Compute the union of values between child.values and selection[child_key]
                 // Going to be easier to introduce a proper QubeNodeValuesMask enum and implement a function to generate it from two QubeNodeValues
@@ -36,9 +36,5 @@ impl Qube {
         }
 
         Ok(())
-    }
-
-    fn foo(&self) {
-        // Helper function
     }
 }

@@ -1,6 +1,5 @@
 use qubed::Qube;
 
-
 #[test]
 fn view() {}
 

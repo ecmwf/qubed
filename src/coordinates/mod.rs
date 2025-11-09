@@ -2,14 +2,13 @@ pub mod integers;
 pub mod ops;
 use integers::IntegerCoordinates;
 
-
-use smallbitvec::SmallBitVec;
+// use smallbitvec::SmallBitVec;
 use tiny_str::TinyString;
 use tiny_vec::TinyVec;
 
 // TODO: check for duplicates. Sets may be better than vecs.
 
-pub struct QubeNodeValuesMask(SmallBitVec);
+// pub struct QubeNodeValuesMask(SmallBitVec);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Coordinates {
@@ -73,7 +72,7 @@ impl Coordinates {
             Coordinates::Integers(ints) => ints.to_string(),
             Coordinates::Floats(floats) => floats.to_string(),
             Coordinates::Strings(strings) => strings.to_string(),
-            Coordinates::Mixed(mixed) => {
+            Coordinates::Mixed(_) => {
                 todo!()
             }
         }
@@ -116,10 +115,10 @@ impl Coordinates {
 }
 
 impl FloatCoordinates {
-    fn extend(&mut self, new_coords: &FloatCoordinates) {
+    fn extend(&mut self, _new_coords: &FloatCoordinates) {
         todo!()
     }
-    fn append(&mut self, new_coord: f64) {
+    fn append(&mut self, _new_coord: f64) {
         todo!()
     }
 
@@ -146,10 +145,10 @@ impl Default for FloatCoordinates {
 }
 
 impl StringCoordinates {
-    fn extend(&mut self, new_coords: &StringCoordinates) {
+    fn extend(&mut self, _new_coords: &StringCoordinates) {
         todo!()
     }
-    fn append(&mut self, new_coord: TinyString<8>) {
+    fn append(&mut self, _new_coord: TinyString<8>) {
         todo!()
     }
 

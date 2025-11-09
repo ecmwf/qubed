@@ -1,5 +1,5 @@
-use crate::coordinates::CoordinateTypes;
 use crate::Coordinates;
+use crate::coordinates::CoordinateTypes;
 use tiny_str::TinyString;
 
 impl Coordinates {

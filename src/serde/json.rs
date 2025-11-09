@@ -137,7 +137,7 @@ mod json_tests {
 
         let qube = Qube::from_json(original.clone()).unwrap();
         let serialized = qube.to_json();
-        let re_parsed = Qube::from_json(serialized.clone()).unwrap();
+        let _re_parsed = Qube::from_json(serialized.clone()).unwrap();
 
         assert_eq!(original, serialized);
 

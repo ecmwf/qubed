@@ -15,10 +15,6 @@ pub struct IntegerRange {
 }
 
 impl IntegerCoordinates {
-    pub(crate) fn new() -> Self {
-        IntegerCoordinates::List(TinyVec::new())
-    }
-
     pub(crate) fn extend(&mut self, new_coords: &IntegerCoordinates) {
         match new_coords {
             IntegerCoordinates::List(list) => {
@@ -46,7 +42,7 @@ impl IntegerCoordinates {
     pub(crate) fn len(&self) -> usize {
         match self {
             IntegerCoordinates::List(list) => list.len(),
-            IntegerCoordinates::RangeList(range) => {
+            IntegerCoordinates::RangeList(_) => {
                 unimplemented!("Integer Range compression not currently supported")
             }
         }

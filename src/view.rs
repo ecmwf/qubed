@@ -16,9 +16,8 @@ pub struct QubeView<'a> {
 
 struct QubeNodeMask {
     /// The ID of the node in the original Qube
-    node_id: QubeNodeId,
-
-    values_mask: SmallBitVec,
+    _node_id: QubeNodeId,
+    _values_mask: SmallBitVec,
     children_mask: SmallBitVec,
 }
 
@@ -38,8 +37,8 @@ impl QubeView<'_> {
     pub fn add_to_view(
         &mut self,
         node_id: QubeNodeId,
-        values_mask: SmallBitVec,
-        children_mask: SmallBitVec,
+        _values_mask: SmallBitVec,
+        _children_mask: SmallBitVec,
     ) -> Result<(), String> {
         let mask = self.create_mask(node_id)?;
 
@@ -71,8 +70,8 @@ impl QubeView<'_> {
         let num_children = node.children_count();
 
         let mask = QubeNodeMask {
-            node_id,
-            values_mask: SmallBitVec::from_elem(num_values, false),
+            _node_id: node_id,
+            _values_mask: SmallBitVec::from_elem(num_values, false),
             children_mask: SmallBitVec::from_elem(num_children, false),
         };
         Ok(mask)

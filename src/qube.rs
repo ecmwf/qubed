@@ -10,7 +10,7 @@ new_key_type! {
     pub struct QubeNodeId;
 }
 
-pub struct QubeString(MiniSpur);
+pub struct _QubeString(MiniSpur);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Dimension(MiniSpur);
