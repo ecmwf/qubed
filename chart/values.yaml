@@ -101,7 +101,7 @@ scanJobs:
         - "http://stac-server:80/api/v2"
       env: []
 
-    # # Climate dt gen 2 Weekly on Sunday at 2am, takes 45min
+    # # Climate dt gen 2 Weekly on Sunday at 2am, takes 5-6h
     climate-dt-gen2-weekly:
       schedule: "0 2 * * 0"
       # init_run: true
