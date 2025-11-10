@@ -36,7 +36,7 @@ levtype:
     - type: ssd
 
 class:
-  description: Top-level grouping of data
+  description: Main category of dataset
   category: data
   default: od
   flatten: false
