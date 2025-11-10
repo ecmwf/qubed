@@ -668,7 +668,7 @@ offsettime:
 
   values: {}
 step:
-  description: Forecast time in hours past the date/time
+  description: Forecast lead time (e.g., 6h, 12h, 24h)
   category: data
   multiple: true
   by: 12
