@@ -58,39 +58,72 @@ type:
   type: enum
   multiple: true
   values:
-    # - [3g, 3d variational gradients]
-    # - [3v, 3d variational analysis]
-    # - [4g, 4d variational gradients]
-    # - [4i, 4d variational increments]
-    # - [4v, 4d variational analysis]
-    # - [ab, analysis bias]
-    # - [af, analysis feedback]
-    # - [ai, analysis input]
-    # - [an, analysis]
-    # - [as, adjoint singular vector]
-    # - [bf, bias-corrected forecast]
-    # - [cd, climate distribution]
-    # - [cf, control forecast]
-    # - [ci, clustering information]
-    # - [cl, climatology]
-    # - [cm, cluster means]
-    # - [cr, cluster representative]
-    # - [cs, cluster std deviations]
-    # - [cv, calibration validation forecast]
-    # - [ea, errors in analysis]
-    # - [ed, empirical distribution]
-    # - [ef, errors in first guess]
-    # - [efi, extreme forecast index]
-    # - [efic, extreme forecast index control]
-    # - [em, ensemble mean]
-    # - [eme, ensemble data assimilation model errors]
-    # - [emtm, ensemble mean of temporal mean]
-    # - [ep, event probability]
-    # - [es, ensemble standard deviation]
-    # - [est, ensemble statistics]
-    # - [estdtm, ensemble standard deviation of temporal mean]
-    # - [fa, forecast accumulation]
-    # - [fb, feedback]
+    3g:
+      name: "3D variational gradients"
+    3v:
+      name: "3D variational analysis"
+    4g:
+      name: "4D variational gradients"
+    4i:
+      name: "4D variational increments"
+    4v:
+      name: "4D variational analysis"
+    ab:
+      name: "Analysis bias"
+    ai:
+      name: "Analysis input"
+    af:
+      name: "Analysis feedback"
+    an:
+      name: "Analysis"
+    as:
+      name: "Adjoint singular vector"
+    bf:
+      name: "Bias-corrected forecast"
+    cd:
+      name: "Climate distribution"
+    cf:
+      name: "Control forecast"
+    ci:
+      name: "Clustering information"
+    cl:
+      name: "Climatology"
+    cm:
+      name: "Cluster means"
+    cr:
+      name: "Cluster representative"
+    cs:
+      name: "Cluster standard deviations"
+    cv:
+      name: "Calibration validation forecast"
+    ea:
+      name: "Errors in analysis"
+    ed:
+      name: "Empirical distribution"
+    ef:
+      name: "Errors in first guess"
+    efi:
+      name: "Extreme forecast index"
+    efic:
+      name: "Extreme forecast index control"
+    em:
+      name: "Ensemble mean"
+    eme:
+      name: "Ensemble data assimilation model errors"
+    emtm:
+      name: "Ensemble mean of temporal mean"
+    ep:
+      name: "Event probability"
+    es:
+      name: "Ensemble standard deviation"
+    est:
+      name: "Ensemble statistics"
+    estdtm:
+      name: "Ensemble standard deviation of temporal mean"
+    fa:
+      name: "Forecast accumulation"
+    fb:
+      name: "Feedback"
     fc:
       name: "Forecast"
     pf:
