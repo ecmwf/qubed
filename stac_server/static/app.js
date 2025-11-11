@@ -300,6 +300,49 @@ function renderRequestBreakdown(request, descriptions) {
   container.innerHTML = html;
 }
 
+function renderMARSRequest(request, descriptions) {
+  const container = document.getElementById("final_req");
+  const format_value = (key, value) => {
+    return `<span class="value" title="${descriptions[key]["value_descriptions"][value]}">"${value}"</span>`;
+  };
+
+  const format_values = (key, values) => {
+    if (values.length === 1) {
+      return format_value(key, values[0]);
+    }
+    return `[${values.map((v) => format_value(key, v)).join(", ")}]`;
+  };
+
+  // let html =
+  //   `{\n` +
+  //   request
+  //     .map(
+  //       ([key, values]) =>
+  //         `    <span class="key" title="${descriptions[key]["description"]
+  //         }">"${key}"</span>: ${format_values(key, values)},`
+  //     )
+  //     .join("\n") +
+  //   `\n}`;
+  let html =
+  `[\n` +
+  request
+    .map(
+      obj =>
+        `  {\n` +
+        Object.entries(obj)
+          .map(
+            ([key, values]) =>
+              `    <span class="key" title="${descriptions[key]?.description || ""
+              }">"${key}"</span>: ${format_values(key, values)},`
+          )
+          .join("\n") +
+        `\n  }`
+    )
+    .join(",\n") +
+  `\n]`;
+  container.innerHTML = html;
+}
+
 function renderRawSTACResponse(catalog) {
   const itemDetails = document.getElementById("raw-stac");
   // create new object without debug key
@@ -322,6 +365,7 @@ async function fetchCatalog(request, stacUrl) {
 
     // Render the request breakdown in the sidebar
     renderRequestBreakdown(request, catalog.debug.descriptions);
+    renderMARSRequest(catalog.final_object, catalog.debug.descriptions);
 
     // Show the raw STAC in the sidebar
     renderRawSTACResponse(catalog);

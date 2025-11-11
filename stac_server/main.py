@@ -315,6 +315,26 @@ async def get_STAC(
 
     q, axes = follow_query(request, qube)
 
+    end_of_traversal = not any(a["on_frontier"] for a in axes)
+
+    final_object = []
+    if end_of_traversal:
+        print("HERE NOW")
+        print(q)
+        print(list(q.datacubes()))
+        # Example: build your final MARS Selection structure
+        # final_object = {
+        #     "type": "MARSSelection",
+        #     # "request": request,
+        #     "request": list(q.datacubes()),
+        #     "metadata": {
+        #         # "dimensions": list(q.axes_info().keys()),
+        #         # "npoints": q.size,
+        #         "description": "Final resolved MARS selection at end of traversal"
+        #     },
+        # }
+        final_object = list(q.datacubes())
+
     kvs = [
         f"{k}={','.join(v)}" if isinstance(v, list) else f"{k}={v}"
         for k, v in request.items()
@@ -340,6 +360,7 @@ async def get_STAC(
         "id": "root" if not request else "/stac?" + request_params,
         "description": "STAC collection representing potential children of this request",
         "links": [make_link(a, request_params) for a in axes],
+        "final_object": final_object,
         "debug": {
             "descriptions": descriptions,
             "qube": node_tree_to_html(
