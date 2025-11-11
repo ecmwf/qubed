@@ -128,6 +128,17 @@ impl Qube {
         self.get_node_mut(id).map(|node| &mut node.coords)
     }
 
+
+    // TODO: better naming of these functions?
+    pub fn get_dimension(&self, dim_str: &str) -> Option<Dimension> {
+        let dim = self.key_store.get(dim_str);
+        dim.map(Dimension)
+    }
+    
+    pub fn get_dimension_str(&self, dim: &Dimension) -> Option<&str> {
+        self.key_store.try_resolve(&dim.0)
+    }
+
     // Not sure we really need this...
     // pub fn walk(&self, id: QubeNodeId) -> Result<(impl Iterator<Item = &QubeNodeId> + '_, impl Iterator<Item = &QubeNodeId> + '_), String> {
 

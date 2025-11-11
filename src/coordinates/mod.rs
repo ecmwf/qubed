@@ -7,6 +7,8 @@ use tiny_str::TinyString;
 use tiny_vec::TinyVec;
 
 // TODO: check for duplicates. Sets may be better than vecs.
+// TODO: Change MixedCoordinates to a HashMap (especially if we allow more types later)
+// TODO: Consider adding a catchall generic type
 
 // pub struct QubeNodeValuesMask(SmallBitVec);
 
@@ -32,14 +34,21 @@ pub enum StringCoordinates {
 pub enum CoordinateTypes {
     Integer(i32),
     Float(f64),
-    String(TinyString<8>),
+    String(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct MixedCoordinates {
     integers: integers::IntegerCoordinates,
     floats: FloatCoordinates,
     strings: StringCoordinates,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IntersectionResult<T> {
+    pub intersection: T,
+    pub only_a: T,
+    pub only_b: T,
 }
 
 impl Coordinates {
@@ -48,22 +57,23 @@ impl Coordinates {
     }
 
     pub fn from_string(s: &str) -> Self {
+
         if s.is_empty() {
             return Coordinates::Empty;
         }
-        let _coords = Coordinates::Empty;
-        let _split: Vec<&str> = s.split('|').collect();
-        todo!(); // should defer to individual types to serde
-        // for part in split {
-        //     if let Ok(int_val) = part.parse::<i32>() {
-        //         coords.extend(&Coordinates::from_integer(int_val));
-        //     } else if let Ok(float_val) = part.parse::<f64>() {
-        //         coords.extend(&Coordinates::from_float(float_val));
-        //     } else {
-        //         coords.extend(&Coordinates::from_string(part));
-        //     }
-        // }
-        // coords
+        let mut coords = Coordinates::Empty;
+        let split: Vec<&str> = s.split('|').collect();
+        
+        for part in split {
+            if let Ok(int_val) = part.parse::<i32>() {
+                coords.append(int_val);
+            } else if let Ok(float_val) = part.parse::<f64>() {
+                coords.append(float_val);
+            } else {
+                coords.append(part.to_string());
+            }
+        }
+        coords
     }
 
     pub fn to_string(&self) -> String {
@@ -90,6 +100,10 @@ impl Coordinates {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     fn convert_to_mixed(&mut self) -> &mut Self {
         let mixed = match self {
             Coordinates::Integers(ints) => Box::new(MixedCoordinates {
@@ -111,6 +125,28 @@ impl Coordinates {
         };
         *self = Coordinates::Mixed(mixed);
         self
+    }
+
+    pub fn intersect(&self, _other: &Coordinates) -> IntersectionResult<Coordinates> {
+        match (self, _other) {
+            (Coordinates::Integers(ints_a), Coordinates::Integers(ints_b)) => {
+                let result = ints_a.intersect(ints_b);
+                IntersectionResult {
+                    intersection: Coordinates::Integers(result.intersection),
+                    only_a: Coordinates::Integers(result.only_a),
+                    only_b: Coordinates::Integers(result.only_b),
+                }
+            }
+            _ => {
+                unimplemented!("Intersection not implemented for these coordinate types");
+            }
+        }
+    }
+}
+
+impl Default for Coordinates {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -148,7 +184,7 @@ impl StringCoordinates {
     fn extend(&mut self, _new_coords: &StringCoordinates) {
         todo!()
     }
-    fn append(&mut self, _new_coord: TinyString<8>) {
+    fn append(&mut self, _new_coord: String) {
         todo!()
     }
 
@@ -174,16 +210,6 @@ impl Default for StringCoordinates {
     }
 }
 
-impl Default for MixedCoordinates {
-    fn default() -> Self {
-        MixedCoordinates {
-            integers: IntegerCoordinates::default(),
-            floats: FloatCoordinates::default(),
-            strings: StringCoordinates::default(),
-        }
-    }
-}
-
 impl From<f64> for Coordinates {
     fn from(value: f64) -> Self {
         let mut vec = TinyVec::new();
@@ -191,6 +217,32 @@ impl From<f64> for Coordinates {
         Coordinates::Floats(FloatCoordinates::List(vec))
     }
 }
+
+impl From<String> for Coordinates {
+    fn from(value: String) -> Self {
+        let mut vec = TinyVec::new();
+        vec.push(TinyString::from(value));
+        Coordinates::Strings(StringCoordinates::List(vec))
+    }
+}
+
+impl From<&str> for Coordinates {
+    fn from(value: &str) -> Self {
+        let mut vec = TinyVec::new();
+        vec.push(TinyString::from(value));
+        Coordinates::Strings(StringCoordinates::List(vec))
+    }
+}
+
+
+
+// impl From<i32> for Coordinates {
+//     fn from(value: i32) -> Self {
+//         let mut set = TinyOrderedSet::new();
+//         set.insert(value);
+//         Coordinates::Integers(IntegerCoordinates::Set(set))
+//     }
+// }
 
 // impl Default for FloatCoordinates {
 //     fn default() -> Self {

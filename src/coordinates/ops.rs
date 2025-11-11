@@ -1,6 +1,5 @@
 use crate::Coordinates;
 use crate::coordinates::CoordinateTypes;
-use tiny_str::TinyString;
 
 impl Coordinates {
     pub fn extend(&mut self, new_coords: &Coordinates) {
@@ -75,6 +74,9 @@ impl Coordinates {
     {
         let coord_type = CoordinateTypes::from(value);
 
+        
+
+
         match coord_type {
             CoordinateTypes::Integer(val) => {
                 self.append_integer(val);
@@ -88,7 +90,7 @@ impl Coordinates {
         }
     }
 
-    fn append_string(&mut self, value: TinyString<8>) {
+    fn append_string(&mut self, value: String) {
         match self {
             Coordinates::Strings(strings) => {
                 strings.append(value);
@@ -97,7 +99,7 @@ impl Coordinates {
                 mixed.strings.append(value);
             }
             Coordinates::Empty => {
-                *self = Coordinates::from_string(&value);
+                *self = Coordinates::from(value);
             }
             _ => {
                 self.convert_to_mixed();
@@ -163,8 +165,8 @@ impl FromIterator<f64> for Coordinates {
     }
 }
 
-impl FromIterator<TinyString<8>> for Coordinates {
-    fn from_iter<T: IntoIterator<Item = TinyString<8>>>(iter: T) -> Self {
+impl FromIterator<String> for Coordinates {
+    fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
         let mut coords = Coordinates::Empty;
         for val in iter {
             coords.append_string(val);
@@ -185,8 +187,8 @@ impl From<f64> for CoordinateTypes {
     }
 }
 
-impl From<TinyString<8>> for CoordinateTypes {
-    fn from(val: TinyString<8>) -> Self {
+impl From<String> for CoordinateTypes {
+    fn from(val: String) -> Self {
         CoordinateTypes::String(val)
     }
 }

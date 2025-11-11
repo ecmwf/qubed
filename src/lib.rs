@@ -2,6 +2,7 @@ mod coordinates;
 mod qube;
 mod select;
 pub mod serde;
+mod utils;
 mod view;
 pub use coordinates::Coordinates;
 pub use coordinates::integers::IntegerCoordinates;

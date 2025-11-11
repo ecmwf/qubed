@@ -69,15 +69,18 @@ fn parse_children(
             ));
         }
 
-        // We are a child
+        // Add this node
         let (key, values) = content.split_once("=").ok_or(format!(
             "Invalid node format: '{}', expected 'key=value'",
             content
         ))?;
-        let values = Coordinates::from_string(values);
-        let child = qube.create_child(key, parent, Some(values))?;
 
-        // Consume the line
+        let coordinates = Coordinates::from_string(values);
+        
+        
+        let child = qube.create_child(key, parent, Some(coordinates))?;
+
+        // Consume the input line, we've used it now
         lines.next();
 
         // Recurse into children
