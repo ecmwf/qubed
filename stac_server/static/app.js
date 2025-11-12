@@ -313,16 +313,6 @@ function renderMARSRequest(request, descriptions) {
     return `[${values.map((v) => format_value(key, v)).join(", ")}]`;
   };
 
-  // let html =
-  //   `{\n` +
-  //   request
-  //     .map(
-  //       ([key, values]) =>
-  //         `    <span class="key" title="${descriptions[key]["description"]
-  //         }">"${key}"</span>: ${format_values(key, values)},`
-  //     )
-  //     .join("\n") +
-  //   `\n}`;
   let html =
   `[\n` +
   request
