@@ -27,3 +27,4 @@ test_scripts/data
 tests/example_qubes
 **/*venv*
 *.txt
+.conda/

@@ -32,6 +32,7 @@ from .serialisation import (
     from_datacube,
     from_dict,
     from_json,
+    from_mars_list,
     from_tree,
     load,
     save,
@@ -180,6 +181,7 @@ class Qube:
     to_protobuf = to_protobuf
 
     from_tree = classmethod(from_tree)
+    from_mars_list = classmethod(from_mars_list)
 
     # Print out an info dump about the qube
     info = info

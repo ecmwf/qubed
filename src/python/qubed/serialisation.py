@@ -393,6 +393,50 @@ def from_tree(cls: type[Qube], tree_str: str):
     return cls.from_dict(root)
 
 
+def from_mars_list(
+    cls: type[Qube], mars_list: str,
+) -> Qube:
+    """
+    Construct a qube from the output of a MARS list.
+    The mars list output may be uncompressed and/or contain duplicates,
+    hence we iterate of from_tree for each first order branch
+    of our mars.list Tree
+    """
+    lines = mars_list.splitlines()
+    initial_indent = None
+    these_lines = []
+    total_tree = cls.empty()
+
+    for line in lines:
+        # Ignore empty lines
+        if not line.strip():
+            continue
+
+        # Remove tree characters and measure indent level
+        stripped = line.lstrip(" │├└─")
+        indent = (len(line) - len(stripped)) // 4
+        if initial_indent is None:
+            initial_indent = indent
+            these_lines.append(line)
+            continue
+        
+        if indent > initial_indent:
+            # Continuing the current first order branch
+            these_lines.append(line)
+            continue
+
+        # New first order branch, process the previous one
+        if these_lines:
+            subtree_str = "\n".join(these_lines)
+            print(subtree_str)
+            subtree = from_tree(cls, subtree_str)
+            total_tree = total_tree | subtree
+        
+        # Start a new first order branch
+        these_lines = [line]
+
+    return total_tree
+
 def from_api(
     cls: type[Qube],
     selection: Mapping[str, str | list[str]],
