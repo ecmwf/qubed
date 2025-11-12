@@ -319,20 +319,6 @@ async def get_STAC(
 
     final_object = []
     if end_of_traversal:
-        print("HERE NOW")
-        print(q)
-        print(list(q.datacubes()))
-        # Example: build your final MARS Selection structure
-        # final_object = {
-        #     "type": "MARSSelection",
-        #     # "request": request,
-        #     "request": list(q.datacubes()),
-        #     "metadata": {
-        #         # "dimensions": list(q.axes_info().keys()),
-        #         # "npoints": q.size,
-        #         "description": "Final resolved MARS selection at end of traversal"
-        #     },
-        # }
         final_object = list(q.datacubes())
 
     kvs = [
