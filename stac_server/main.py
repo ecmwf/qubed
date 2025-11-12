@@ -303,25 +303,19 @@ def make_link(axis, request_params):
 async def get_STAC(
     request: dict[str, str | list[str]] = Depends(parse_request),
 ):
-    # TODO: need to prevent branching requests
-    # TODO: can order next axis in any pre-defined order we want
-
-    # TODO: still, need to somehow update qube used in follow_query to the recursive sub-qube q so that this becomes faster
-    # if not hasattr(request, "q"):
-    #     request.q = qube  # first time: root
-    # # q, axes = follow_query(request, qube)
-    # q, axes = follow_query(request, request.q)
-    # # request.q = q
-
     q, axes = follow_query(request, qube)
+
+    end_of_traversal = not any(a["on_frontier"] for a in axes)
+
+    final_object = []
+    if end_of_traversal:
+        final_object = list(q.datacubes())
 
     kvs = [
         f"{k}={','.join(v)}" if isinstance(v, list) else f"{k}={v}"
         for k, v in request.items()
     ]
     request_params = "&".join(kvs)
-
-    # print(request_params)
 
     descriptions = {
         key: {
@@ -340,6 +334,7 @@ async def get_STAC(
         "id": "root" if not request else "/stac?" + request_params,
         "description": "STAC collection representing potential children of this request",
         "links": [make_link(a, request_params) for a in axes],
+        "final_object": final_object,
         "debug": {
             "descriptions": descriptions,
             "qube": node_tree_to_html(
