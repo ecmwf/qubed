@@ -3,7 +3,7 @@ use std::str::Lines;
 
 use crate::{
     Coordinates,
-    qube::{Qube, QubeNodeId},
+    qube::{Qube, NodeIdx},
 };
 
 // ---------------- ASCII Deserialization ----------------
@@ -51,7 +51,7 @@ fn parse_root(lines: &mut Peekable<Lines>) -> Result<(), String> {
 fn parse_children(
     qube: &mut Qube,
     lines: &mut Peekable<Lines>,
-    parent: QubeNodeId,
+    parent: NodeIdx,
     parent_indent: usize,
 ) -> Result<(), String> {
     while let Some(line) = lines.peek() {
@@ -123,8 +123,8 @@ impl Qube {
     }
 }
 
-fn serialize_children(qube: &Qube, parent_id: QubeNodeId, prefix: &str, output: &mut String) {
-    let children_ids: Vec<QubeNodeId> = match qube.get_all_children_of(parent_id) {
+fn serialize_children(qube: &Qube, parent_id: NodeIdx, prefix: &str, output: &mut String) {
+    let children_ids: Vec<NodeIdx> = match qube.get_all_children_of(parent_id) {
         Ok(iter) => iter.cloned().collect(),
         Err(_) => return,
     };

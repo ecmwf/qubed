@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     Dimension,
-    qube::{Qube, QubeNodeId},
+    qube::{Qube, NodeIdx},
 };
 
 use smallbitvec::SmallBitVec;
@@ -11,12 +11,12 @@ pub struct QubeView<'a> {
     qube: &'a Qube,
 
     /// Mapping from QubeNodeId to QubeViewNode
-    masks: HashMap<QubeNodeId, QubeNodeMask>,
+    masks: HashMap<NodeIdx, QubeNodeMask>,
 }
 
 struct QubeNodeMask {
     /// The ID of the node in the original Qube
-    _node_id: QubeNodeId,
+    _node_id: NodeIdx,
     _values_mask: SmallBitVec,
     children_mask: SmallBitVec,
 }
@@ -36,7 +36,7 @@ impl QubeView<'_> {
 
     pub fn add_to_view(
         &mut self,
-        node_id: QubeNodeId,
+        node_id: NodeIdx,
         _values_mask: SmallBitVec,
         _children_mask: SmallBitVec,
     ) -> Result<(), String> {
@@ -61,7 +61,7 @@ impl QubeView<'_> {
         Ok(())
     }
 
-    fn create_mask(&mut self, node_id: QubeNodeId) -> Result<QubeNodeMask, String> {
+    fn create_mask(&mut self, node_id: NodeIdx) -> Result<QubeNodeMask, String> {
         let node = self
             .qube
             .get_node(node_id)
@@ -77,13 +77,13 @@ impl QubeView<'_> {
         Ok(mask)
     }
 
-    fn get_mask(&self, node_id: QubeNodeId) -> Result<&QubeNodeMask, String> {
+    fn get_mask(&self, node_id: NodeIdx) -> Result<&QubeNodeMask, String> {
         self.masks
             .get(&node_id)
             .ok_or(format!("No mask found for node id {:?}", node_id))
     }
 
-    fn get_node(&self, node_id: QubeNodeId) -> Result<&crate::qubenode::QubeNode, String> {
+    fn get_node(&self, node_id: NodeIdx) -> Result<&crate::node::Node, String> {
         self.qube
             .get_node(node_id)
             .ok_or(format!("No node found for id {:?}", node_id))
@@ -91,8 +91,8 @@ impl QubeView<'_> {
 
     pub fn get_all_children_of(
         &self,
-        node_id: QubeNodeId,
-    ) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
+        node_id: NodeIdx,
+    ) -> Result<impl Iterator<Item = &NodeIdx> + '_, String> {
         let mask = self.get_mask(node_id)?;
         let node = self.get_node(node_id)?;
         let mut filtered_children = Vec::new();
@@ -112,9 +112,9 @@ impl QubeView<'_> {
 
     pub fn get_children_of(
         &self,
-        node_id: QubeNodeId,
+        node_id: NodeIdx,
         key: Dimension,
-    ) -> Result<impl Iterator<Item = &QubeNodeId> + '_, String> {
+    ) -> Result<impl Iterator<Item = &NodeIdx> + '_, String> {
         let mask = self.get_mask(node_id)?;
         let node = self.get_node(node_id)?;
         let mut filtered_children = Vec::new();

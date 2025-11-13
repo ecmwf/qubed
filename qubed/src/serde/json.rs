@@ -1,4 +1,4 @@
-use crate::{Coordinates, Qube, QubeNodeId};
+use crate::{Coordinates, Qube, NodeIdx};
 use serde_json::{Map, Value};
 
 // ---------------- JSON Deserialization ----------------
@@ -20,7 +20,7 @@ impl Qube {
 
 fn parse_json_object(
     qube: &mut Qube,
-    parent: QubeNodeId,
+    parent: NodeIdx,
     map: &Map<String, Value>,
 ) -> Result<(), String> {
     for (key_value, child_value) in map {
@@ -48,8 +48,8 @@ impl Qube {
     }
 }
 
-fn serialize_children_json(qube: &Qube, parent_id: QubeNodeId, output: &mut Map<String, Value>) {
-    let children_ids: Vec<QubeNodeId> = match qube.get_all_children_of(parent_id) {
+fn serialize_children_json(qube: &Qube, parent_id: NodeIdx, output: &mut Map<String, Value>) {
+    let children_ids: Vec<NodeIdx> = match qube.get_all_children_of(parent_id) {
         Ok(iter) => iter.cloned().collect(),
         Err(_) => return,
     };

@@ -7,7 +7,6 @@ use integers::IntegerCoordinates;
 use strings::StringCoordinates;
 
 // use smallbitvec::SmallBitVec;
-use tiny_str::TinyString;
 use tiny_vec::TinyVec;
 
 use crate::utils::tiny_ordered_set::TinyOrderedSet;
@@ -131,7 +130,15 @@ impl Coordinates {
                     only_a: Coordinates::Integers(result.only_a),
                     only_b: Coordinates::Integers(result.only_b),
                 }
-            }
+            },
+            (Coordinates::Strings(strs_a), Coordinates::Strings(strs_b)) => {
+                let result = strs_a.intersect(strs_b);
+                IntersectionResult {
+                    intersection: Coordinates::Strings(result.intersection),
+                    only_a: Coordinates::Strings(result.only_a),
+                    only_b: Coordinates::Strings(result.only_b),
+                }
+            },
             _ => {
                 unimplemented!("Intersection not implemented for these coordinate types");
             }

@@ -1,28 +1,29 @@
 use std::collections::BTreeMap;
 use tiny_vec::TinyVec;
+use crate::Qube;
 use crate::coordinates::Coordinates;
 use crate::qube::Dimension;
-use crate::qube::QubeNodeId;
+use crate::qube::NodeIdx;
 
 
 #[derive(Debug)]
-pub(crate) struct QubeNode {
+pub(crate) struct Node {
     dim: Dimension,
-    structural_hash: Option<u64>,
+    pub(super) structural_hash: Option<u64>,
     coords: Coordinates,
-    parent: Option<QubeNodeId>,
-    children: BTreeMap<Dimension, TinyVec<QubeNodeId, 4>>, // maintains order so we can use a mask on it
+    pub(super) parent: Option<NodeIdx>,
+    children: BTreeMap<Dimension, TinyVec<NodeIdx, 4>>, // maintains order so we can use a mask on it
 }
 
 
-impl QubeNode {
+impl Node {
 
     pub fn new(
         dim: Dimension,
         coords: Coordinates,
-        parent: Option<QubeNodeId>,
+        parent: Option<NodeIdx>,
     ) -> Self {
-        QubeNode {
+        Node {
             dim,
             structural_hash: None,
             coords,
@@ -42,16 +43,12 @@ impl QubeNode {
         &mut self.coords
     }
 
-    pub fn children(&self) -> &BTreeMap<Dimension, TinyVec<QubeNodeId, 4>> {
+    pub fn children(&self) -> &BTreeMap<Dimension, TinyVec<NodeIdx, 4>> {
         &self.children
     }
 
-    pub fn set_parent(&mut self, parent: Option<QubeNodeId>) {
-        self.parent = parent;
-        self.structural_hash = None; // Invalidate structural hash
-    }
 
-    pub fn add_child(&mut self, dim: Dimension, child_id: QubeNodeId) {
+    pub fn add_child(&mut self, dim: Dimension, child_id: NodeIdx) {
         self.children
             .entry(dim)
             .or_insert_with(TinyVec::new)
@@ -59,7 +56,7 @@ impl QubeNode {
         self.structural_hash = None; // Invalidate structural hash
     }
 
-    pub fn parent(&self) -> Option<QubeNodeId> {
+    pub fn parent(&self) -> Option<NodeIdx> {
         self.parent
     }
 
@@ -69,4 +66,5 @@ impl QubeNode {
     pub(crate) fn set_structural_hash(&mut self, hash: u64) {
         self.structural_hash = Some(hash);
     }
+
 }

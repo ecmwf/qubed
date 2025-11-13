@@ -1,10 +1,10 @@
-use crate::{Coordinates, Qube, QubeNodeId};
+use crate::{Coordinates, Qube, NodeIdx};
 
 // TODO: select should return a QubeView, but this is an optimization
 
 pub(crate) struct WalkPair {
-    pub(crate) left: QubeNodeId,
-    pub(crate) right: QubeNodeId,
+    pub(crate) left: NodeIdx,
+    pub(crate) right: NodeIdx,
 }
 
 // TODO: Improve this concept. Different modes should be different functions, their result is very different
