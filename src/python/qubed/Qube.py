@@ -512,6 +512,28 @@ class Qube:
 
         return hash_node(self)
 
+    def remove_branch(self, b: Qube) -> Qube:
+        b_key = b.children[0].key
+
+        new_children = []
+        for c in self.children:
+            if c.key == b_key:
+                update_c = type(self).make_root(children=(c,), update_depth=False)
+                new_c = set_operations.set_operation(
+                    update_c,
+                    b,
+                    set_operations.SetOperation.DIFFERENCE,
+                    type(self),
+                    check_depth=False,
+                )
+                if len(new_c.children) != 0:
+                    new_children.extend(new_c.children)
+            else:
+                c = c.remove_branch(b)
+                if len(c.children) != 0:
+                    new_children.append(c)
+        return self.replace(children=tuple(sorted(new_children)))
+
     def compress(self) -> Qube:
         """
         This method is quite computationally heavy because of trees like this:
@@ -559,7 +581,7 @@ class Qube:
             return False
         for k in self.metadata.keys():
             if k not in B.metadata:
-                print(f"'{k}' not in  {B.metadata.keys() = }")
+                print(f"'{k}' not in  {B.metadata.keys()=}")
                 return False
             if not np.array_equal(self.metadata[k], B.metadata[k]):
                 print(f"self.metadata[{k}] != B.metadata.[{k}]")
