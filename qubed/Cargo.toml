@@ -1,0 +1,15 @@
+[package]
+name = "qubed"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+arrayvec = "0.7.6"
+itertools = "0.14.0"
+lasso = "0.7.3"
+serde_json = "1.0.145"
+serde_yaml = "0.9.34"
+slotmap = "1.0.7"
+smallbitvec = "2.6.0"
+tiny-str = "0.10.0"
+tiny-vec = "0.10.0"
