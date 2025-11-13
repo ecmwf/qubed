@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use tiny_str::TinyString;
 
 use crate::utils::tiny_ordered_set::TinyOrderedSet;
@@ -52,6 +54,16 @@ impl StringCoordinates {
                     intersection: StringCoordinates::Set(result.intersection),
                     only_a: StringCoordinates::Set(result.only_a),
                     only_b: StringCoordinates::Set(result.only_b),
+                }
+            }
+        }
+    }
+    pub(crate) fn hash(&self, hasher: &mut impl std::hash::Hasher) {
+        "strings".hash(hasher);
+        match self {
+            StringCoordinates::Set(list) => {
+                for val in list.iter() {
+                    val.hash(hasher);
                 }
             }
         }

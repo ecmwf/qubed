@@ -1,7 +1,8 @@
 [workspace]
+resolver = "3"
+
 members = [
     "qubed",
     "qubed-meteo",
 ]
 
-resolver = "3"

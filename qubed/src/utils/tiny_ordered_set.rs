@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TinyOrderedSet<T, const CAP: usize> {
     Vec(arrayvec::ArrayVec<T, CAP>),
@@ -59,6 +61,26 @@ impl<T, const CAP: usize> TinyOrderedSet<T, CAP> {
         match self {
             TinyOrderedSet::Vec(vec) => vec.len(),
             TinyOrderedSet::BTreeSet(set) => set.len(),
+        }
+    }
+
+    pub(crate) fn hash(&self, hasher: &mut impl std::hash::Hasher)
+    where
+        T: std::hash::Hash,
+    {
+        match self {
+            TinyOrderedSet::Vec(vec) => {
+                "vec".hash(hasher);
+                for item in vec.iter() {
+                    item.hash(hasher);
+                }
+            }
+            TinyOrderedSet::BTreeSet(set) => {
+                "btreeset".hash(hasher);
+                for item in set.iter() {
+                    item.hash(hasher);
+                }
+            }
         }
     }
 }

@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use crate::coordinates::{Coordinates, IntersectionResult};
 use crate::utils::tiny_ordered_set::TinyOrderedSet;
 use tiny_vec::TinyVec;
@@ -82,6 +84,25 @@ impl IntegerCoordinates {
             }
         }
     }
+
+    pub(crate) fn hash(&self, hasher: &mut impl std::hash::Hasher) {
+        "integer_coordinates".hash(hasher);
+        match self {
+            IntegerCoordinates::Set(set) => {
+                "set".hash(hasher);
+                set.hash(hasher);
+            }
+            IntegerCoordinates::RangeSet(ranges) => {
+                "range_set".hash(hasher);
+                for range in ranges.iter() {
+                    range.start.hash(hasher);
+                    range.end.hash(hasher);
+                    range.step.hash(hasher);
+                }
+            }
+        }
+    }
+
 }
 
 impl From<IntegerCoordinates> for Coordinates {

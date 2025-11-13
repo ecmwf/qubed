@@ -2,9 +2,16 @@ use crate::{Coordinates, Qube, QubeNodeId};
 
 // TODO: select should return a QubeView, but this is an optimization
 
-struct WalkPair {
-    source: QubeNodeId,
-    result: QubeNodeId,
+pub(crate) struct WalkPair {
+    pub(crate) left: QubeNodeId,
+    pub(crate) right: QubeNodeId,
+}
+
+// TODO: Improve this concept. Different modes should be different functions, their result is very different
+#[derive(Debug, PartialEq, Eq)]
+enum SelectMode {
+    Exact,
+    Filter
 }
 
 impl Qube {
@@ -20,11 +27,29 @@ impl Qube {
 
         // The walkpair helps us make sure we are at the same position in both Qubes
         let parents = WalkPair {
-            source: root,
-            result: result.root(),
+            left: root,
+            right: result.root(),
         };
 
-        self.select_recurse(selection, &mut result, parents)?;
+        self.select_recurse(selection, &mut result, parents, &SelectMode::Filter)?;
+
+        Ok(result)
+
+    }
+
+    pub fn find_node_by_path(&self,
+        selection: &std::collections::HashMap<String, Coordinates>,
+    ) -> Result<Qube, String> {
+        let root = self.root();
+        let mut result = Qube::new();
+
+        // The walkpair helps us make sure we are at the same position in both Qubes
+        let parents = WalkPair {
+            left: root,
+            right: result.root(),
+        };
+
+        self.select_recurse(selection, &mut result, parents, &SelectMode::Exact)?;
 
         Ok(result)
 
@@ -35,17 +60,18 @@ impl Qube {
         selection: &std::collections::HashMap<String, Coordinates>,
         result: &mut Qube,
         parents: WalkPair,
+        mode: &SelectMode,
     ) -> Result<(), String> {
 
         let source_node = self
-            .get_node(parents.source)
-            .ok_or(format!("Node {:?} not found", parents.source))?;
+            .get_node(parents.left)
+            .ok_or(format!("Node {:?} not found", parents.left))?;
 
 
         // For each child in the source Qube, find the values which overlap and create a child in the result Qube
         // We ignore values only_in_a and only_in_b, we only want the intersection
 
-        for (dimension, source_children) in source_node.children.iter() {
+        for (dimension, source_children) in source_node.children().iter() {
 
             let dimension_str = self.get_dimension_str(&dimension);
             let dimension_str = match dimension_str {
@@ -65,7 +91,7 @@ impl Qube {
                 for child in source_children {
                     let coordinates = self.get_coordinates_of(*child).ok_or(format!(
                         "No coordinates for child {:?} of node {:?}",
-                        child, parents.source
+                        child, parents.left
                     ))?;
                     let intersection_result = coordinates.intersect(selection_coordinates);
                     let intersection = intersection_result.intersection;
@@ -74,33 +100,33 @@ impl Qube {
                         continue;
                     }
                     
-                    let new_child = result.create_child(dimension_str, parents.result, Some(intersection))?;
+                    let new_child = result.create_child(dimension_str, parents.right, Some(intersection))?;
 
                     let parents = WalkPair {
-                        source: *child,
-                        result: new_child,
+                        left: *child,
+                        right: new_child,
                     };
 
-                    self.select_recurse(selection, result, parents)?;
+                    self.select_recurse(selection, result, parents, mode)?;
                 }
                 
-            } else {
+            } else if mode == &SelectMode::Filter {
                 // Dimension not in selection, so we take all children
 
                 for child in source_children {
                     let coordinates = self.get_coordinates_of(*child).ok_or(format!(
                         "No coordinates for child {:?} of node {:?}",
-                        child, parents.source
+                        child, parents.left
                     ))?;
 
-                    let new_child = result.create_child(dimension_str, parents.result, Some(coordinates.to_owned()))?;
+                    let new_child = result.create_child(dimension_str, parents.right, Some(coordinates.to_owned()))?;
 
                     let parents = WalkPair {
-                        source: *child,
-                        result: new_child,
+                        left: *child,
+                        right: new_child,
                     };
 
-                    self.select_recurse(selection, result, parents)?;
+                    self.select_recurse(selection, result, parents, mode)?;
                 }
 
             }

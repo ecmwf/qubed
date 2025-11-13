@@ -1,6 +1,8 @@
 pub mod integers;
 pub mod strings;
 pub mod ops;
+use std::hash::Hash;
+
 use integers::IntegerCoordinates;
 use strings::StringCoordinates;
 
@@ -135,6 +137,30 @@ impl Coordinates {
             }
         }
     }
+
+    pub fn hash(&self, hasher: &mut std::collections::hash_map::DefaultHasher) {
+        match self {
+            Coordinates::Empty => {
+                0.hash(hasher);
+            }
+            Coordinates::Integers(ints) => {
+                ints.hash(hasher);
+            }
+            Coordinates::Floats(floats) => {
+                floats.hash(hasher);
+            }
+            Coordinates::Strings(strings) => {
+                strings.hash(hasher);
+            }
+            Coordinates::Mixed(mixed) => {
+                "mixed".hash(hasher);
+                mixed.integers.hash(hasher);
+                mixed.floats.hash(hasher);
+                mixed.strings.hash(hasher);
+            }
+        }
+    }
+
 }
 
 impl Default for Coordinates {
@@ -163,6 +189,17 @@ impl FloatCoordinates {
                 .map(|v| v.to_string())
                 .collect::<Vec<String>>()
                 .join("/"),
+        }
+    }
+
+    pub(crate) fn hash(&self, hasher: &mut std::collections::hash_map::DefaultHasher) {
+        "floats".hash(hasher);
+        match self {
+            FloatCoordinates::List(list) => {
+                for val in list.iter() {
+                    val.to_bits().hash(hasher);
+                }
+            }
         }
     }
 }

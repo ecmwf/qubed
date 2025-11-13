@@ -44,7 +44,7 @@ impl QubeView<'_> {
 
         // Check the parent has already been added. We don't allow floating nodes.
         if let Some(node) = self.qube.get_node(node_id) {
-            if let Some(parent_id) = node._parent {
+            if let Some(parent_id) = node.parent() {
                 if !self.masks.contains_key(&parent_id) && parent_id != self.qube.root() {
                     return Err(format!(
                         "Parent node {:?} has not been added to the view yet",
@@ -83,7 +83,7 @@ impl QubeView<'_> {
             .ok_or(format!("No mask found for node id {:?}", node_id))
     }
 
-    fn get_node(&self, node_id: QubeNodeId) -> Result<&crate::qube::QubeNode, String> {
+    fn get_node(&self, node_id: QubeNodeId) -> Result<&crate::qubenode::QubeNode, String> {
         self.qube
             .get_node(node_id)
             .ok_or(format!("No node found for id {:?}", node_id))
@@ -99,7 +99,7 @@ impl QubeView<'_> {
 
         // the mask covers the entire BTreeMap<MiniSpur, TinyVec<QubeNodeId, 4>> so we need to iterate over it
         let mut i = 0;
-        for (_child_key, children) in node.children.iter() {
+        for (_child_key, children) in node.children().iter() {
             for child_id in children.iter() {
                 i += 1;
                 if mask.children_mask.get(i).unwrap_or(false) {
@@ -121,9 +121,9 @@ impl QubeView<'_> {
 
         // the mask covers the entire BTreeMap<MiniSpur, TinyVec<QubeNodeId, 4>> so we need to iterate over it
         let mut i = 0;
-        for (child_key, children) in node.children.iter() {
+        for (child_key, children) in node.children().iter() {
             if key != *child_key {
-                i += node.children[child_key].len();
+                i += node.children()[child_key].len();
                 continue;
             }
             for child_id in children.iter() {
