@@ -1,4 +1,6 @@
-from qubed import Qube
+import time
+
+from qubed import Qube, set_operations
 
 
 def parse_indented_lines(filename):
@@ -21,7 +23,8 @@ def parse_indented_lines(filename):
     return root
 
 
-mars_list_file = "mars_trunc.list"
+# mars_list_file = "mars_trunc.list"
+mars_list_file = "mars.list"
 
 
 def get_all_paths(tree, current_path=None, final_qube=None):
@@ -42,18 +45,117 @@ def get_all_paths(tree, current_path=None, final_qube=None):
             datacube_path = ",".join(new_path)
             paths.append(datacube_path)
 
-            datacube = {
-                k: v.split("/")
-                for k, v in (pair.split("=") for pair in datacube_path.split(","))
-            }
+            # datacube = {
+            #     k: v.split("/")
+            #     for k, v in (pair.split("=") for pair in datacube_path.split(","))
+            # }
 
-            subqube = Qube.from_datacube(datacube)
-            final_qube = final_qube | subqube
+            # subqube = Qube.from_datacube(datacube)
+            # final_qube = final_qube | subqube
 
     return paths, final_qube
 
 
+# time1 = time.time()
+
+# # parse_obj = parse_indented_lines(mars_list_file)
+# final_qube = Qube.empty()
+# paths, final_qube = get_all_paths(
+#     parse_indented_lines(mars_list_file), final_qube=final_qube
+# )
+
+
+# print("TIME TAKEN")
+# print(time.time() - time1)
+
+# print(paths)
+
+# print(parse_obj)
+# final_qube = Qube.empty()
+# paths, final_qube = get_all_paths(
+#     parse_indented_lines(mars_list_file), final_qube=final_qube
+# )
+
+# print(final_qube.compress())
+
+
+# def from_mars_tree_list() -> Qube:
+#     """
+#     Create a qube from a python object loaded in with json.
+#     """
+
+#     def from_json(json: dict, depth=0) -> Qube:
+#         children = tuple(from_json(c, depth + 1) for c in json["children"])
+
+#         return cls.make_node(
+#             key=json["key"],
+#             values=values_from_json(json["values"]),
+#             metadata={},
+#             children=children,
+#         )
+
+#     # Trigger the code in make_root that calculates node depths and other global properties
+#     return Qube.make_root(children=from_json(json).children)
+
+
+def balanced_compress(qube) -> Qube:
+    """Efficient compression of child Qubes."""
+
+    new_children = [balanced_compress(c) for c in qube.children]
+
+    if len(new_children) > 1:
+
+        def union(a: Qube, b: Qube) -> Qube:
+            return set_operations.set_operation(
+                a, b, set_operations.SetOperation.UNION, type(qube)
+            )
+
+        def balanced_union(qubes):
+            # sub-divide unions for faster compression
+            if not qubes:
+                return Qube.empty()
+            if len(qubes) == 1:
+                return qubes[0]
+            mid = len(qubes) // 2
+            left = balanced_union(qubes[:mid])
+            right = balanced_union(qubes[mid:])
+            return union(left, right)
+
+        merged = balanced_union(new_children)
+        new_children = list(merged.children)
+
+    return qube.replace(children=tuple(sorted(new_children)))
+
+
+def flat_list_to_dict(flat_list_str):
+    datacube = {
+        k: v.split("/")
+        for k, v in (pair.split("=") for pair in flat_list_str.split(","))
+    }
+    return datacube
+
+
+def qube_from_flat_lists(list_flat_list):
+    end_children = []
+    for c in list_flat_list:
+        # c is now a flat list
+        c_dict = flat_list_to_dict(c)
+        c_qube = Qube.from_datacube(c_dict).children[0]
+        end_children.append(c_qube)
+    return balanced_compress(Qube.make_root(children=end_children))
+
+
+time1 = time.time()
+
+# parse_obj = parse_indented_lines(mars_list_file)
 final_qube = Qube.empty()
 paths, final_qube = get_all_paths(
     parse_indented_lines(mars_list_file), final_qube=final_qube
 )
+final_qube = qube_from_flat_lists(paths)
+
+
+print("TIME TAKEN")
+print(time.time() - time1)
+
+# print(final_qube)
