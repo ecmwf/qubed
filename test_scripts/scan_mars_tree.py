@@ -1,4 +1,5 @@
 import time
+import functools
 
 from qubed import Qube, set_operations
 
@@ -24,7 +25,7 @@ def parse_indented_lines(filename):
 
 
 # mars_list_file = "mars_trunc.list"
-mars_list_file = "mars.list"
+mars_list_file = "largest_mars.list"
 
 
 def get_all_paths(tree, current_path=None, final_qube=None):
@@ -98,6 +99,12 @@ def get_all_paths(tree, current_path=None, final_qube=None):
 #     return Qube.make_root(children=from_json(json).children)
 
 
+def union(a: Qube, b: Qube) -> Qube:
+    return set_operations.set_operation(
+        a, b, set_operations.SetOperation.UNION, type(a)
+    )
+
+
 def balanced_compress(qube) -> Qube:
     """Efficient compression of child Qubes."""
 
@@ -105,24 +112,21 @@ def balanced_compress(qube) -> Qube:
 
     if len(new_children) > 1:
 
-        def union(a: Qube, b: Qube) -> Qube:
-            return set_operations.set_operation(
-                a, b, set_operations.SetOperation.UNION, type(qube)
-            )
-
-        def balanced_union(qubes):
-            # sub-divide unions for faster compression
+        def balanced_union(qubes, k=4):
             if not qubes:
                 return Qube.empty()
             if len(qubes) == 1:
                 return qubes[0]
-            mid = len(qubes) // 2
-            left = balanced_union(qubes[:mid])
-            right = balanced_union(qubes[mid:])
-            return union(left, right)
+
+            size = (len(qubes) + k - 1) // k
+            parts = [
+                balanced_union(qubes[i : i + size], k)
+                for i in range(0, len(qubes), size)
+            ]
+            return functools.reduce(union, parts)
 
         merged = balanced_union(new_children)
-        new_children = list(merged.children)
+        new_children = merged.children
 
     return qube.replace(children=tuple(sorted(new_children)))
 
@@ -137,11 +141,15 @@ def flat_list_to_dict(flat_list_str):
 
 def qube_from_flat_lists(list_flat_list):
     end_children = []
+    time1 = time.time()
     for c in list_flat_list:
         # c is now a flat list
         c_dict = flat_list_to_dict(c)
         c_qube = Qube.from_datacube(c_dict).children[0]
         end_children.append(c_qube)
+    print("TIME HERE WITHOUT COMPRESSIOn")
+    print(time.time() - time1)
+    # return parallel_balanced_compress(Qube.make_root(children=end_children))
     return balanced_compress(Qube.make_root(children=end_children))
 
 
@@ -152,10 +160,15 @@ final_qube = Qube.empty()
 paths, final_qube = get_all_paths(
     parse_indented_lines(mars_list_file), final_qube=final_qube
 )
+time2 = time.time()
+
+# print(parse_indented_lines(mars_list_file))
+# print(Qube.from_json(parse_indented_lines(mars_list_file)))
 final_qube = qube_from_flat_lists(paths)
 
 
 print("TIME TAKEN")
+print(time2 - time1)
 print(time.time() - time1)
 
 # print(final_qube)
