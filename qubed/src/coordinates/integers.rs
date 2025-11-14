@@ -119,6 +119,26 @@ impl From<i32> for Coordinates {
     }
 }
 
+impl From<&[i32]> for Coordinates {
+    fn from(value: &[i32]) -> Self {
+        let mut set = TinyOrderedSet::new();
+        for &v in value {
+            set.insert(v);
+        }
+        Coordinates::Integers(IntegerCoordinates::Set(set))
+    }
+}
+
+impl<const N: usize> From<&[i32; N]> for Coordinates {
+    fn from(value: &[i32; N]) -> Self {
+        let mut set = TinyOrderedSet::new();
+        for &v in value {
+            set.insert(v);
+        }
+        Coordinates::Integers(IntegerCoordinates::Set(set))
+    }
+}
+
 impl Default for IntegerCoordinates {
     fn default() -> Self {
         IntegerCoordinates::Set(TinyOrderedSet::new())

@@ -44,7 +44,7 @@ impl Qube {
 
         // Create remaining dimensions
         for (dim, coords) in datacube.coordinates.iter() {
-            if qube.get_dimension(&dim).is_some() {
+            if qube.dimension(&dim).is_some() {
                 continue;
             }
             parent = qube.create_child(&dim, parent, Some(coords.clone())).expect("Failed to create dimension");

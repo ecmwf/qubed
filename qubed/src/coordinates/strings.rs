@@ -92,6 +92,26 @@ impl From<&str> for Coordinates {
     }
 }
 
+impl From<&[&str]> for Coordinates {
+    fn from(value: &[&str]) -> Self {
+        let mut set = TinyOrderedSet::new();
+        for &v in value {
+            set.insert(TinyString::from(v));
+        }
+        Coordinates::Strings(StringCoordinates::Set(set))
+    }
+}
+
+impl<const N: usize> From<&[&str; N]> for Coordinates {
+    fn from(value: &[&str; N]) -> Self {
+        let mut set = TinyOrderedSet::new();
+        for &v in value {
+            set.insert(TinyString::from(v));
+        }
+        Coordinates::Strings(StringCoordinates::Set(set))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

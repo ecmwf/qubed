@@ -49,17 +49,21 @@ impl Qube {
 }
 
 fn serialize_children_json(qube: &Qube, parent_id: NodeIdx, output: &mut Map<String, Value>) {
-    let children_ids: Vec<NodeIdx> = match qube.get_all_children_of(parent_id) {
-        Ok(iter) => iter.cloned().collect(),
-        Err(_) => return,
+    let parent_node = match qube.node(parent_id) {
+        Some(node) => node,
+        None => return,
     };
 
-    for child_id in children_ids.iter() {
-        let key = qube.get_dimension_of(*child_id).unwrap_or("unknown");
-        let values = qube
-            .get_coordinates_of(*child_id)
-            .unwrap_or(&Coordinates::Empty);
+    let children_ids: Vec<NodeIdx> = parent_node.all_children().collect();
 
+    for child_id in children_ids.iter() {
+        let child_node = match qube.node(*child_id) {
+            Some(node) => node,
+            None => continue,
+        };
+
+        let key = child_node.dimension().unwrap_or("unknown");
+        let values = child_node.coordinates();
         let values_str = values.to_string();
 
         let key_value = format!("{}={}", key, values_str);
@@ -99,7 +103,8 @@ mod json_tests {
         .unwrap();
 
         // Verify structure
-        let root_children: Vec<_> = qube.get_all_children_of(qube.root()).unwrap().collect();
+        let root_node = qube.node(qube.root()).unwrap();
+        let root_children: Vec<_> = root_node.all_children().collect();
         assert_eq!(root_children.len(), 2);
     }
 

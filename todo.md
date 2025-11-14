@@ -14,3 +14,7 @@
 [ ] Implement stac_server changes to new API
 [ ] Check with FIAB and PPROC to see if we broke anything
 [ ] Documentation
+
+# Improvements
+
+[ ] Make a macro to make expressing selections easier

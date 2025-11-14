@@ -76,8 +76,7 @@ fn parse_children(
         ))?;
 
         let coordinates = Coordinates::from_string(values);
-        
-        
+
         let child = qube.create_child(key, parent, Some(coordinates))?;
 
         // Consume the input line, we've used it now
@@ -124,19 +123,24 @@ impl Qube {
 }
 
 fn serialize_children(qube: &Qube, parent_id: NodeIdx, prefix: &str, output: &mut String) {
-    let children_ids: Vec<NodeIdx> = match qube.get_all_children_of(parent_id) {
-        Ok(iter) => iter.cloned().collect(),
-        Err(_) => return,
+    let parent_node = match qube.node(parent_id) {
+        Some(node) => node,
+        None => return,
     };
+
+    let children_ids: Vec<_> = parent_node.all_children().collect();
 
     for (i, child_id) in children_ids.iter().enumerate() {
         let is_last = i == children_ids.len() - 1;
         let branch = if is_last { "└──" } else { "├──" };
 
-        let key = qube.get_dimension_of(*child_id).unwrap_or("unknown");
-        let values = qube
-            .get_coordinates_of(*child_id)
-            .unwrap_or(&Coordinates::Empty);
+        let child_node = match qube.node(*child_id) {
+            Some(node) => node,
+            None => continue,
+        };
+
+        let key = child_node.dimension().unwrap_or("unknown");
+        let values = child_node.coordinates();
         let values_str = values.to_string();
 
         output.push_str(prefix);

@@ -286,6 +286,20 @@ where
 }
 
 
+// impl<const N: usize> From<&[CoordinateTypes; N]> for Coordinates {
+//     fn from(value: &[CoordinateTypes; N]) -> Self {
+//         let mut coords = Coordinates::new();
+//         for v in value {
+//             match v {
+//                 CoordinateTypes::Integer(i) => coords.append(*i),
+//                 CoordinateTypes::Float(f) => coords.append(*f),
+//                 CoordinateTypes::String(s) => coords.append(s.clone()),
+//             }
+//         }
+//         coords
+//     }
+// }
+
 
 // impl From<i32> for Coordinates {
 //     fn from(value: i32) -> Self {

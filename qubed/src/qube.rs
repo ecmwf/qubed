@@ -1,20 +1,36 @@
+use std::collections::{BTreeMap, HashSet};
 use std::hash::{Hash, Hasher};
-
+use std::sync::atomic::{AtomicU64, Ordering};
 use lasso::{MiniSpur, Rodeo};
 use slotmap::{SlotMap, new_key_type};
+use tiny_vec::TinyVec;
 
 use crate::coordinates::Coordinates;
-use crate::node::Node;
 
 new_key_type! {
     pub struct NodeIdx;
 }
 
-// pub struct _QubeString(MiniSpur);
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Dimension(MiniSpur);
 
+
+// -------------------------
+//  Internal Node Structure
+// -------------------------
+
+// The node needs careful state management to ensure the structural hash is properly invalidated
+// It is fully private and only modified via Qube and NodeRef methods in this module
+
+
+#[derive(Debug)]
+struct Node {
+    dim: Dimension,
+    structural_hash: AtomicU64,  // 0 = not computed
+    coords: Coordinates,
+    parent: Option<NodeIdx>,
+    children: BTreeMap<Dimension, TinyVec<NodeIdx, 4>>,
+}
 
 #[derive(Debug)]
 pub struct Qube {
@@ -23,26 +39,44 @@ pub struct Qube {
     key_store: Rodeo<MiniSpur>,
 }
 
-impl Qube {
+/// Read-only reference to a node
+pub struct NodeRef<'a> {
+    qube: &'a Qube,
+    node: &'a Node,
+    id: NodeIdx,
+}
 
+impl Qube {
     pub fn new() -> Self {
-        let mut string_store = Rodeo::<MiniSpur>::new();
+        let mut key_store = Rodeo::<MiniSpur>::new();
         let mut nodes = SlotMap::with_key();
-        let root_id = nodes.insert(Node::new(
-            Dimension(string_store.get_or_intern("root")),
-            Coordinates::Empty,
-            None,
-        ));
+        let root_id = nodes.insert(Node {
+            dim: Dimension(key_store.get_or_intern("root")),
+            structural_hash: AtomicU64::new(0),
+            coords: Coordinates::Empty,
+            parent: None,
+            children: BTreeMap::new(),
+        });
 
         Qube {
             nodes,
             root_id,
-            key_store: string_store,
+            key_store,
         }
     }
 
     pub fn root(&self) -> NodeIdx {
         self.root_id
+    }
+
+    /// Get a read-only reference to a node
+    pub fn node(&self, id: NodeIdx) -> Option<NodeRef> {
+        let node = self.nodes.get(id)?;
+        Some(NodeRef {
+            qube: self,
+            node,
+            id,
+        })
     }
 
     pub fn create_child(
@@ -55,179 +89,179 @@ impl Qube {
             return Err(format!("Parent node {:?} not found", parent_id));
         }
 
-        let key = Dimension(self.key_store.get_or_intern(key));
+        let dim = Dimension(self.key_store.get_or_intern(key));
 
-        let node_id = self.nodes.insert(Node::new(
-            key,
-            coordinates.unwrap_or(Coordinates::Empty),
-            Some(parent_id),
-        ));
+        let node_id = self.nodes.insert(Node {
+            dim,
+            structural_hash: AtomicU64::new(0),
+            coords: coordinates.unwrap_or(Coordinates::Empty),
+            parent: Some(parent_id),
+            children: BTreeMap::new(),
+        });
 
-        let parent = self.get_node_mut(parent_id);
-        if let Some(parent) = parent {
-            parent.add_child(key, node_id);
+        // Add to parent's children
+        if let Some(parent) = self.nodes.get_mut(parent_id) {
+            parent.children
+                .entry(dim)
+                .or_insert_with(TinyVec::new)
+                .push(node_id);
+            parent.structural_hash.store(0, Ordering::Release);
         }
+
+        // Invalidate ancestor hashes
+        self.invalidate_ancestors(parent_id);
 
         Ok(node_id)
     }
 
-    pub fn get_span_of(&self, id: NodeIdx) -> Option<impl Iterator<Item = &Dimension> + '_> {
-        self.nodes.get(id).map(|node| node.children().keys())
+    pub fn remove_node(&mut self, id: NodeIdx) -> Result<(), String> {
+        
+        let node = self.nodes.remove(id).ok_or_else(|| format!("Node {:?} not found", id))?;
+
+        // Recursively remove all children
+        for child_ids in node.children.values() {
+            for &child_id in child_ids.iter() {
+                self.remove_node(child_id)?;
+            }
+        }
+
+        // Remove from parent's children
+        if let Some(parent_id) = node.parent {
+            if let Some(parent) = self.nodes.get_mut(parent_id) {
+                if let Some(children) = parent.children.get_mut(&node.dim) {
+                    children.retain(|&child_id| child_id != id);
+                    if children.is_empty() {
+                        parent.children.remove(&node.dim);
+                    }
+                }
+                parent.structural_hash.store(0, Ordering::Release);
+            }
+            self.invalidate_ancestors(parent_id);
+        }
+
+        // TODO: Remove dimension from key_store if no longer used
+
+        Ok(())
     }
 
-    pub fn get_children_of(
-        &self,
-        id: NodeIdx,
-        key: Dimension,
-    ) -> Result<impl Iterator<Item = &NodeIdx> + '_, String> {
-        let node = self
-            .nodes
-            .get(id)
-            .ok_or(format!("Node {:?} not found", id))?;
-        Ok(node
-            .children()
-            .get(&key)
-            .ok_or(format!("No children with key {:?}", key))?
-            .iter())
+    pub fn dimension(&self, dim_str: &str) -> Option<Dimension> {
+        self.key_store.get(dim_str).map(Dimension)
     }
 
-    pub fn get_all_children_of(
-        &self,
-        id: NodeIdx,
-    ) -> Result<impl Iterator<Item = &NodeIdx> + '_, String> {
-        let node = self
-            .nodes
-            .get(id)
-            .ok_or(format!("Node {:?} not found", id))?;
-        let all_children = node.children().values().flatten();
-        Ok(all_children)
-    }
-
-    pub fn get_dimension_of(&self, id: NodeIdx) -> Option<&str> {
-        self.nodes
-            .get(id)
-            .and_then(|node| self.key_store.try_resolve(&node.dim().0))
-    }
-
-    pub fn get_coordinates_of(&self, id: NodeIdx) -> Option<&Coordinates> {
-        self.nodes.get(id).map(|node| node.coords())
-    }
-    pub fn get_coordinates_of_mut(&mut self, id: NodeIdx) -> Option<&mut Coordinates> {
-        self.get_node_mut(id).map(|node| node.coords_mut())
-    }
-
-
-    // TODO: better naming of these functions?
-    pub fn get_dimension(&self, dim_str: &str) -> Option<Dimension> {
-        let dim = self.key_store.get(dim_str);
-        dim.map(Dimension)
-    }
-    
-    pub fn get_dimension_str(&self, dim: &Dimension) -> Option<&str> {
+    pub fn dimension_str(&self, dim: &Dimension) -> Option<&str> {
         self.key_store.try_resolve(&dim.0)
     }
 
-    pub fn get_ancestors_of(&self, id: NodeIdx) -> Result<impl Iterator<Item = NodeIdx> + '_, String> {
-        let node = self.get_node(id)
-            .ok_or_else(|| format!("Node {:?} not found", id))?;
-        
-        let first_parent = node.parent();
-        
-        Ok(std::iter::successors(first_parent, move |&current_id| {
-            self.get_node(current_id)
-                .and_then(|node| node.parent())
-        }))
+    fn invalidate_ancestors(&self, id: NodeIdx) {
+        if let Some(node) = self.nodes.get(id) {
+            node.structural_hash.store(0, Ordering::Release);
+            if let Some(parent_id) = node.parent {
+                self.invalidate_ancestors(parent_id);
+            }
+        }
+    }
+}
+
+impl<'a> NodeRef<'a> {
+    pub fn id(&self) -> NodeIdx {
+        self.id
     }
 
-    // Not sure we really need this...
-    // pub fn walk(&self, id: QubeNodeId) -> Result<(impl Iterator<Item = &QubeNodeId> + '_, impl Iterator<Item = &QubeNodeId> + '_), String> {
-
-    //     let node = self.nodes.get(id).ok_or(format!("Node {:?} not found", id))?;
-
-    //     let all_children = node.children.values().flatten();
-    //     let branches = all_children.filter(move |&id| {
-    //         self.get_node(*id).map_or(false, |n| !n.children.is_empty())
-    //     });
-
-    //     let all_children = node.children.values().flatten();
-    //     let leaves = all_children.filter(move |&id| {
-    //         self.get_node(*id).map_or(false, |n| n.children.is_empty())
-    //     });
-
-    //     Ok((branches, leaves))
-    // }
-
-    // These functions might be a trap. You can't really do anything directly on a node, because almost everything is terned or arena'd inside the Qube.
-    // They might have value if you are doing multiple things and want to avoid the repeated lookup
-    // We could return a QubeNodeHandle that has a reference to the Qube and the Node, but we don't want to end up duplicating the whole Qube API there.
-    // Keeping them private for now
-    pub(crate) fn get_node(&self, id: NodeIdx) -> Option<&Node> {
-        self.nodes.get(id)
-    }
-    fn get_node_mut(&mut self, id: NodeIdx) -> Option<&mut Node> {
-        self.nodes.get_mut(id)
+    pub fn dimension(&self) -> Option<&str> {
+        self.qube.key_store.try_resolve(&self.node.dim.0)
     }
 
+    pub fn coordinates(&self) -> &Coordinates {
+        &self.node.coords
+    }
 
-    pub fn get_structural_hash_of(&self, id: NodeIdx) -> Option<u64> {
+    pub fn child_dimensions(&self) -> impl Iterator<Item = &'a Dimension> {
+        self.node.children.keys()
+    }
+
+    pub fn span(&self) -> HashSet<Dimension> {
+        // Recursively get all dimensions in subtree, only once.
+        let mut dims = HashSet::new();
+        fn collect_dims(node_ref: &NodeRef, dims: &mut HashSet<Dimension>) {
+            for dim in node_ref.child_dimensions() {
+                dims.insert(dim.clone());
+            }
+            for child_id in node_ref.all_children() {
+                if let Some(child_ref) = node_ref.qube.node(child_id) {
+                    collect_dims(&child_ref, dims);
+                }
+            }
+        }
+        collect_dims(self, &mut dims);
+        dims
+    }
+
+    pub fn children(&self, key: Dimension) -> Option<impl Iterator<Item = NodeIdx> + 'a> {
+        self.node.children
+            .get(&key)
+            .map(|vec| vec.iter().copied())
+    }
+
+    pub fn all_children(&self) -> impl Iterator<Item = NodeIdx> + 'a {
+        self.node.children.values().flatten().copied()
+    }
+
+    pub fn ancestors(&self) -> impl Iterator<Item = NodeIdx> + 'a {
+        let first_parent = self.node.parent;
+        let qube = self.qube;
         
-        let node = self.get_node(id)?;
+        std::iter::successors(first_parent, move |&current_id| {
+            qube.nodes.get(current_id).and_then(|node| node.parent)
+        })
+    }
 
-        if let Some(hash) = node.structural_hash() {
-            return Some(hash);
+    pub fn parent(&self) -> Option<NodeIdx> {
+        self.node.parent
+    }
+
+    pub fn parent_node(&self) -> Option<NodeRef<'a>> {
+        let parent_id = self.parent()?;
+        self.qube.node(parent_id)
+    }
+
+    pub fn structural_hash(&self) -> Option<u64> {
+        // Check cache
+        let cached = self.node.structural_hash.load(Ordering::Acquire);
+        if cached != 0 {
+            return Some(cached);
         }
 
-        // Compute a hash of the node dimension and coordinates
-        // It must be deterministic between different Qubes
-
+        // Compute hash
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        let version = 1;
-        let dimension_string = self.get_dimension_str(&node.dim())?;
+        let version = 1u64;
+        let dimension_string = self.dimension()?;
 
         version.hash(&mut hasher);
         dimension_string.hash(&mut hasher);
-        node.coords().hash(&mut hasher);
-        for (_, child_ids) in node.children().iter() {
-            for child_id in child_ids.iter() {
-                let child_hash = self.get_structural_hash_of(*child_id)?;
+        self.node.coords.hash(&mut hasher);
+
+        for (_, child_ids) in self.node.children.iter() {
+            for &child_id in child_ids.iter() {
+                let child_ref = self.qube.node(child_id)?;
+                let child_hash = child_ref.structural_hash()?;
                 child_hash.hash(&mut hasher);
             }
         }
+
         let hash = hasher.finish();
-        // node.set_structural_hash(hash);
-        // self.
+        
+        // Cache it (thread-safe via AtomicU64)
+        self.node.structural_hash.store(hash, Ordering::Release);
+        
         Some(hash)
     }
 
-    fn reset_structural_hash_of_ancestors_of(&mut self, id: NodeIdx) {
-        // if let Ok(ancestors) = self.get_ancestors_of(id) {
-        //     for ancestor_id in ancestors {
-        //         if let Some(ancestor_node) = self.get_node_mut(ancestor_id) {
-        //             ancestor_node.structural_hash = None;
-        //         }
-        //     }
-        // }
-    }
-
-
-}
-
-impl Node {
-
-    // Private function because mutability of parents should only be handled by Qube itself
-    fn set_parent(&mut self, qube: &mut Qube, parent: NodeIdx) {
-        qube.reset_structural_hash_of_ancestors_of(parent);
-        qube.reset_structural_hash_of_ancestors_of(parent);
-        self.parent = Some(parent);
-        
-    }
-
-
     pub fn children_count(&self) -> usize {
-        self.children().values().map(|v| v.len()).sum()
+        self.node.children.values().map(|v| v.len()).sum()
     }
-    pub fn values_count(&self) -> usize {
-        self.coords().len()
+
+    pub fn coordinates_count(&self) -> usize {
+        self.node.coords.len()
     }
 }
 
@@ -237,7 +271,6 @@ mod tests {
     
     #[test]
     fn test_hash() {
-        // TODO: need much more tests
         let mut qube = Qube::new();
         let root = qube.root();
 
@@ -248,12 +281,24 @@ mod tests {
             .create_child("dim2", root, Some(2.into()))
             .unwrap();
 
-        let hash_root = qube.get_structural_hash_of(root).unwrap();
-        let hash_child1 = qube.get_structural_hash_of(child1).unwrap();
-        let hash_child2 = qube.get_structural_hash_of(child2).unwrap();
+        let hash_root = qube.node(root).unwrap().structural_hash().unwrap();
+        let hash_child1 = qube.node(child1).unwrap().structural_hash().unwrap();
+        let hash_child2 = qube.node(child2).unwrap().structural_hash().unwrap();
 
         assert_ne!(hash_root, hash_child1);
         assert_ne!(hash_root, hash_child2);
         assert_ne!(hash_child1, hash_child2);
+    }
+
+    #[test]
+    fn test_node_ref() {
+        let mut qube = Qube::new();
+        let root = qube.root();
+        let child = qube.create_child("test", root, Some(42.into())).unwrap();
+
+        let node = qube.node(child).unwrap();
+        assert_eq!(node.dimension(), Some("test"));
+        assert_eq!(node.coordinates().len(), 1);
+        assert_eq!(node.parent(), Some(root));
     }
 }
