@@ -260,6 +260,7 @@ while current_span[1] >= start_date:
             "datetime",
             "levtype",
             "georef",
+            "number",
             "levelist",
             "step",
             "param",
