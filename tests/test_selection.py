@@ -1,4 +1,5 @@
 from qubed import Qube
+from datetime import datetime
 
 q = Qube.from_tree("""
 root
@@ -54,3 +55,21 @@ def test_function_input_to_select():
             "threshold": float,
         }
     )
+
+
+def test_selection_on_date_type():
+    q = Qube.from_tree("""
+    root, frequency=6:00:00
+    ├── levtype=pl, date=20250927
+    └── levtype=sfc, date=20250926
+    """).convert_dtypes(
+        {
+            "date": lambda s: datetime.strptime(s, "%Y%m%d").date(),
+        }
+    )
+
+    date_span = q.span("date")
+
+    r = q.select({"date": date_span})
+
+    assert q == r

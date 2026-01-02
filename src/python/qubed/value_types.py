@@ -106,8 +106,8 @@ _dtype_try_convert = {
     "str": str,
     "int64": int,
     "float64": float,
-    "date": lambda s: datetime.fromisoformat(s).date(),
-    "datetime": datetime.fromisoformat,
+    "date": lambda s: s if isinstance(s, date) else datetime.fromisoformat(s).date(),
+    "datetime": lambda s: s if isinstance(s, datetime) else datetime.fromisoformat(s),
 }
 
 #  A list of functions to (de)serialise dtypes to/from the json representation
