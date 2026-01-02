@@ -44,10 +44,14 @@ on_demands_dt_keys = [
     "georef",
     "levtype",
     "step",
+    "number",
     "levelist",
     "param",
     "frequency",
     "direction",
+    "ident",
+    "instrument",
+    "channel",
 ]
 
 default_keys = [
