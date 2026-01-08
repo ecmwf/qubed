@@ -238,11 +238,24 @@ impl<'a> NodeRef<'a> {
 
         version.hash(&mut hasher);
         dimension_string.hash(&mut hasher);
-        self.node.coords.hash(&mut hasher);
+
+        if self.node.children.is_empty() {
+            // no children
+            self.node.coords.hash(&mut hasher);
+        }
+
+        // for (_, child_ids) in self.node.children.iter() {
+        //     for &child_id in child_ids.iter() {
+        //         let child_ref = self.qube.node(child_id)?;
+        //         let child_hash = child_ref.structural_hash()?;
+        //         child_hash.hash(&mut hasher);
+        //     }
+        // }
 
         for (_, child_ids) in self.node.children.iter() {
             for &child_id in child_ids.iter() {
                 let child_ref = self.qube.node(child_id)?;
+                child_ref.node.coords.hash(&mut hasher);
                 let child_hash = child_ref.structural_hash()?;
                 child_hash.hash(&mut hasher);
             }
