@@ -98,6 +98,21 @@ impl Coordinates {
         self.len() == 0
     }
 
+    pub fn contains<T>(&self, value: T) -> bool
+    where
+        T: Into<CoordinateTypes>,
+    {
+        let coord_type = value.into();
+        match (self, coord_type) {
+            (Coordinates::Empty, _) => false,
+            (Coordinates::Integers(ints), CoordinateTypes::Integer(val)) => ints.contains(val),
+            (Coordinates::Floats(_), _) => unimplemented!(),
+            (Coordinates::Strings(_), _) => unimplemented!(),
+            (Coordinates::Mixed(_), _) => unimplemented!(),
+            _ => unimplemented!(),
+        }
+    }
+
     fn convert_to_mixed(&mut self) -> &mut Self {
         let mixed = match self {
             Coordinates::Integers(ints) => Box::new(MixedCoordinates {
@@ -148,6 +163,7 @@ impl Coordinates {
     pub fn hash(&self, hasher: &mut std::collections::hash_map::DefaultHasher) {
         match self {
             Coordinates::Empty => {
+                "empty".hash(hasher);
                 0.hash(hasher);
             }
             Coordinates::Integers(ints) => {

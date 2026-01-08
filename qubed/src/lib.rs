@@ -1,6 +1,6 @@
 mod coordinates;
 mod qube;
-mod select;
+pub mod select;
 pub mod serde;
 mod utils;
 mod view;

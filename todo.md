@@ -1,6 +1,8 @@
 # TODO: Feature Parity with Python
 
+[x] Selection
 [ ] Implement merge/union
+[ ] Compression
 [ ] Implement serializers and deserializers for different format
 [ ] Implement more benchmarks and compare with Python implementation
 

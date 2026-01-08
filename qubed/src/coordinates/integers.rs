@@ -145,6 +145,15 @@ impl Default for IntegerCoordinates {
     }
 }
 
+impl IntegerCoordinates {
+    pub fn contains(&self, value: i32) -> bool {
+        match self {
+            IntegerCoordinates::Set(set) => set.contains(&value),
+            IntegerCoordinates::RangeSet(_) => unimplemented!("RangeSet contains not implemented"),
+        }
+    }
+}
+
 
 
 #[cfg(test)]
