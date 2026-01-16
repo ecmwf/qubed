@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use crate::{Qube, NodeIdx, Dimension};
+use std::sync::atomic::Ordering;
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,21 +39,44 @@ impl Qube {
         self.node_union(other, self_root_id, other_root_id);
     }
 
-    pub fn node_union(&mut self, other:Qube, id: NodeIdx, other_id: NodeIdx) {
+    pub fn node_union(&mut self, other:Qube, id: NodeIdx, other_id: NodeIdx) -> Option<i64> {
         // Get nodes on both trees
+        let this_node = self.get_nodes().get(id)?;
+        let that_node = other.get_nodes().get(other_id)?;
         // Get their children and loop through their children
-        // For each combinations of children:
-            // Look to see if they have the same hash or not
-            // If they don't:
-                // If child of other_id doesn't exist in self, add it as a child to id
-                // If child of id just doesn't have the same hash, then leave it in self as is
-            // If the nodes have the same hash now:
-                // If the children nodes here have children:
-                    // Recurse on them as idxs and apply node_union to the two indexes of each of the trees
-                // Else:
-                    // Do normal set operation here on the nodes' values and
-                    // replace the child idx node with a new node,
-                    // in which the values are the combined values of child idx and child other_idx
+        for (dim, children) in this_node.children() {
+            for (other_dim, other_children) in that_node.children() {
+                if dim == other_dim {
+                    // For each combinations of children:
+                    for child in children {
+                        for other_child in other_children {
+                            let child_node = self.get_nodes().get(*child)?;
+                            let other_child_node = other.get_nodes().get(*other_child)?;
+                            // Look to see if they have the same hash or not
+                            if child_node.structural_hash().load(Ordering::SeqCst) == other_child_node.structural_hash().load(Ordering::SeqCst) {
+                                // If the nodes have the same hash now:
+                                    // If the children nodes here have children:
+                                        // Recurse on them as idxs and apply node_union to the two indexes of each of the trees
+                                    // Else:
+                                        // Do normal set operation here on the nodes' values and
+                                        // replace the child idx node with a new node,
+                                        // in which the values are the combined values of child idx and child other_idx
+                            }
+                            else {
+                                // If they don't:
+                                    // If child of other_id doesn't exist in self, add it as a child to id
+                                    // If child of id just doesn't have the same hash, then leave it in self as is
+                            }
+                        }
+                    }
+                }
+                else {
+                    // WHAT HAPPENS IF THE CHILDREN DID NOT HAVE THE SAME DIMENSION?
+                    // If the dimension in other does not exist, append the nodes to self
+                }
+            }
+        }
+        Some(0)
     }
 }
 
