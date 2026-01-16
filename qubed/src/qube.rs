@@ -24,7 +24,7 @@ pub struct Dimension(MiniSpur);
 
 
 #[derive(Debug)]
-struct Node {
+pub(crate) struct Node {
     dim: Dimension,
     structural_hash: AtomicU64,  // 0 = not computed
     coords: Coordinates,
@@ -46,6 +46,27 @@ pub struct NodeRef<'a> {
     id: NodeIdx,
 }
 
+impl Node {
+    pub(crate) fn children(
+        &self,
+    ) -> &BTreeMap<Dimension, TinyVec<NodeIdx, 4>> {
+        &self.children
+    }
+
+    pub(crate) fn children_for(
+        &self,
+        dim: Dimension,
+    ) -> Option<&TinyVec<NodeIdx, 4>> {
+        self.children.get(&dim)
+    }
+
+    pub(crate) fn structural_hash(
+        &self,
+    ) -> &AtomicU64 {
+        &self.structural_hash
+    }
+}
+
 impl Qube {
     pub fn new() -> Self {
         let mut key_store = Rodeo::<MiniSpur>::new();
@@ -63,6 +84,10 @@ impl Qube {
             root_id,
             key_store,
         }
+    }
+
+    pub fn get_nodes(&self) -> &SlotMap<NodeIdx, Node> {
+        &self.nodes
     }
 
     pub fn root(&self) -> NodeIdx {
