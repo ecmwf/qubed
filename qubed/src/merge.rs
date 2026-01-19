@@ -2,6 +2,7 @@
 use crate::{Qube, NodeIdx};
 use std::sync::atomic::Ordering;
 use crate::Coordinates;
+use std::collections::HashMap;
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -205,86 +206,72 @@ impl Qube {
     ) -> Option<i64> {
         let mut added = 0;
 
-        // We only borrow `other` immutably for the whole function
         let other_node = other.get_nodes().get(other_id)?;
 
         for (dim, other_children) in other_node.children() {
-            // ---- snapshot self's children for THIS dimension only ----
-            let this_children: Option<Vec<NodeIdx>> = {
+            // ---- snapshot self children for this dimension ----
+            let this_children: Vec<NodeIdx> = {
                 let this_node = self.get_nodes().get(id)?;
                 this_node
                     .children_for(*dim)
                     .map(|v| v.iter().copied().collect())
-            }; // 👈 immutable borrow of self ENDS HERE
+                    .unwrap_or_default()
+            };
 
-            match this_children {
-                None => {
-                    // Dimension missing → clone all
-                    for &other_child in other_children {
+            // ---- canonical map: structural_hash -> NodeIdx ----
+            use std::collections::HashMap;
+            let mut canonical: HashMap<u64, NodeIdx> = HashMap::new();
+
+            for &child in &this_children {
+                let hash = self.compute_structural_hash(child);
+                println!("HASH here: {}", hash);
+                canonical.entry(hash).or_insert(child);
+            }
+
+            // ---- process children from `other` ----
+            for &other_child in other_children {
+                let other_hash = other.compute_structural_hash(other_child);
+
+                if let Some(&canon_child) = canonical.get(&other_hash) {
+                    // ---- same structure found ----
+                    let is_leaf_pair = {
+                        let a = self.get_nodes().get(canon_child)?;
+                        let b = other.get_nodes().get(other_child)?;
+                        a.children().is_empty() && b.children().is_empty()
+                    };
+
+                    if is_leaf_pair {
+                        // ---- merge coordinates ----
+                        let intersection = self
+                            .get_nodes()
+                            .get(canon_child)?
+                            .coords()
+                            .intersect(
+                                other.get_nodes().get(other_child)?.coords(),
+                            );
+
+                        let merged =
+                            Coordinates::from_intersection(intersection);
+
+                        let canon_mut = self.node_mut(canon_child)?;
+                        canon_mut.set_coords(merged);
+                        canon_mut.invalidate_hash();
+                    } else {
+                        // ---- recurse ----
+                        added += self.node_union(
+                            other,
+                            canon_child,
+                            other_child,
+                        )?;
+                    }
+                } else {
+                    // ---- new structure → clone once ----
+                    let new_child =
                         self.clone_subtree(other, other_child, id);
-                        added += 1;
-                    }
-                }
 
-                Some(this_children) => {
-                    for &other_child in other_children {
-                        let other_child_node =
-                            other.get_nodes().get(other_child)?;
-
-                        let mut matched = false;
-
-                        for this_child in &this_children {
-                            // ---- short immutable borrows ----
-                            let (this_hash, other_hash, is_leaf_pair) = {
-                                let this_child_node =
-                                    self.get_nodes().get(*this_child)?;
-                                (
-                                    this_child_node
-                                        .structural_hash()
-                                        .load(Ordering::SeqCst),
-                                    other_child_node
-                                        .structural_hash()
-                                        .load(Ordering::SeqCst),
-                                    this_child_node.children().is_empty()
-                                        && other_child_node.children().is_empty(),
-                                )
-                            }; // 👈 borrows END
-
-                            if this_hash == other_hash {
-                                matched = true;
-
-                                if is_leaf_pair {
-                                    // ---- mutate safely ----
-                                    let intersection =
-                                        self.get_nodes()
-                                            .get(*this_child)?
-                                            .coords()
-                                            .intersect(other_child_node.coords());
-
-                                    let merged =
-                                        Coordinates::from_intersection(intersection);
-
-                                    let this_child_mut =
-                                        self.node_mut(*this_child).unwrap();
-                                    this_child_mut.set_coords(merged);
-                                    this_child_mut.invalidate_hash();
-                                } else {
-                                    added += self.node_union(
-                                        other,
-                                        *this_child,
-                                        other_child,
-                                    )?;
-                                }
-
-                                break;
-                            }
-                        }
-
-                        if !matched {
-                            self.clone_subtree(other, other_child, id);
-                            added += 1;
-                        }
-                    }
+                    let new_hash = self.compute_structural_hash(new_child);
+                    canonical.insert(new_hash, new_child);
+                    added += 1;
                 }
             }
         }
@@ -292,6 +279,280 @@ impl Qube {
         self.invalidate_ancestors(id);
         Some(added)
     }
+
+
+    // pub fn node_union(
+    //     &mut self,
+    //     other: &Qube,
+    //     id: NodeIdx,
+    //     other_id: NodeIdx,
+    // ) -> Option<i64> {
+    //     let mut added = 0;
+
+    //     let other_node = other.get_nodes().get(other_id)?;
+
+    //     for (dim, other_children) in other_node.children() {
+    //         // ---- snapshot self children for this dimension ----
+    //         let this_children: Vec<NodeIdx> = {
+    //             let this_node = self.get_nodes().get(id)?;
+    //             this_node
+    //                 .children_for(*dim)
+    //                 .map(|v| v.iter().copied().collect())
+    //                 .unwrap_or_default()
+    //         }; // immutable borrow of self ENDS
+
+    //         // ---- build canonical map: hash -> NodeIdx ----
+    //         use std::collections::HashMap;
+    //         let mut canonical: HashMap<u64, NodeIdx> = HashMap::new();
+
+    //         for child in &this_children {
+    //             let hash = self
+    //                 .get_nodes()
+    //                 .get(*child)?
+    //                 .structural_hash()
+    //                 .load(Ordering::SeqCst);
+    //             println!("HASH here: {}", hash);
+    //             canonical.entry(hash).or_insert(*child);
+    //         }
+
+    //         // ---- process other children ----
+    //         for &other_child in other_children {
+    //             let other_child_node = other.get_nodes().get(other_child)?;
+    //             let other_hash = other_child_node
+    //                 .structural_hash()
+    //                 .load(Ordering::SeqCst);
+
+    //             if let Some(&canon_child) = canonical.get(&other_hash) {
+    //                 // ---- merge into canonical ----
+    //                 let is_leaf_pair = {
+    //                     let canon_node = self.get_nodes().get(canon_child)?;
+    //                     canon_node.children().is_empty()
+    //                         && other_child_node.children().is_empty()
+    //                 };
+
+    //                 if is_leaf_pair {
+    //                     let intersection = self
+    //                         .get_nodes()
+    //                         .get(canon_child)?
+    //                         .coords()
+    //                         .intersect(other_child_node.coords());
+
+    //                     let merged =
+    //                         Coordinates::from_intersection(intersection);
+
+    //                     let canon_mut = self.node_mut(canon_child)?;
+    //                     canon_mut.set_coords(merged);
+    //                     canon_mut.invalidate_hash();
+    //                 } else {
+    //                     added += self.node_union(
+    //                         other,
+    //                         canon_child,
+    //                         other_child,
+    //                     )?;
+    //                 }
+    //             } else {
+    //                 // ---- no equivalent subtree → clone once ----
+    //                 let new_child =
+    //                     self.clone_subtree(other, other_child, id);
+
+    //                 let new_hash = self
+    //                     .get_nodes()
+    //                     .get(new_child)?
+    //                     .structural_hash()
+    //                     .load(Ordering::SeqCst);
+
+    //                 println!("{}", new_hash);
+
+    //                 canonical.insert(new_hash, new_child);
+    //                 added += 1;
+    //             }
+    //         }
+    //     }
+
+    //     self.invalidate_ancestors(id);
+    //     Some(added)
+    // }
+
+
+    // pub fn node_union(
+    //     &mut self,
+    //     other: &Qube,
+    //     id: NodeIdx,
+    //     other_id: NodeIdx,
+    // ) -> Option<i64> {
+    //     let mut added = 0;
+
+    //     let other_node = other.get_nodes().get(other_id)?;
+
+    //     for (dim, other_children) in other_node.children() {
+    //         // ---- snapshot self children under this dimension ----
+    //         let mut canon: HashMap<u64, NodeIdx> = {
+    //             let this_node = self.get_nodes().get(id)?;
+    //             match this_node.children_for(*dim) {
+    //                 Some(children) => children
+    //                     .iter()
+    //                     .filter_map(|&c| {
+    //                         let h = self.get_nodes().get(c)?
+    //                             .structural_hash()
+    //                             .load(Ordering::Acquire);
+    //                         if h != 0 { Some((h, c)) } else { None }
+    //                     })
+    //                     .collect(),
+    //                 None => HashMap::new(),
+    //             }
+    //         };
+
+    //         for &other_child in other_children {
+    //             let other_child_node = other.get_nodes().get(other_child)?;
+    //             let other_hash = other_child_node
+    //                 .structural_hash()
+    //                 .load(Ordering::Acquire);
+
+    //             if let Some(&this_child) = canon.get(&other_hash) {
+    //                 // ---- canonical match found ----
+    //                 let is_leaf_pair = {
+    //                     let this_child_node =
+    //                         self.get_nodes().get(this_child)?;
+    //                     this_child_node.children().is_empty()
+    //                         && other_child_node.children().is_empty()
+    //                 };
+
+    //                 if is_leaf_pair {
+    //                     let intersection =
+    //                         self.get_nodes()
+    //                             .get(this_child)?
+    //                             .coords()
+    //                             .intersect(other_child_node.coords());
+
+    //                     let merged =
+    //                         Coordinates::from_intersection(intersection);
+
+    //                     let this_child_mut =
+    //                         self.node_mut(this_child)?;
+    //                     this_child_mut.set_coords(merged);
+    //                     this_child_mut.invalidate_hash();
+    //                 } else {
+    //                     added += self.node_union(
+    //                         other,
+    //                         this_child,
+    //                         other_child,
+    //                     )?;
+    //                 }
+    //             } else {
+    //                 // ---- new canonical subtree ----
+    //                 let new_child =
+    //                     self.clone_subtree(other, other_child, id);
+
+    //                 let new_hash = self.get_nodes()
+    //                     .get(new_child)?
+    //                     .structural_hash()
+    //                     .load(Ordering::Acquire);
+
+    //                 canon.insert(new_hash, new_child);
+    //                 added += 1;
+    //             }
+    //         }
+    //     }
+
+    //     self.invalidate_ancestors(id);
+    //     Some(added)
+    // }
+
+    // pub fn node_union(
+    //     &mut self,
+    //     other: &Qube,
+    //     id: NodeIdx,
+    //     other_id: NodeIdx,
+    // ) -> Option<i64> {
+    //     let mut added = 0;
+
+    //     // We only borrow `other` immutably for the whole function
+    //     let other_node = other.get_nodes().get(other_id)?;
+
+    //     for (dim, other_children) in other_node.children() {
+    //         // ---- snapshot self's children for THIS dimension only ----
+    //         let this_children: Option<Vec<NodeIdx>> = {
+    //             let this_node = self.get_nodes().get(id)?;
+    //             this_node
+    //                 .children_for(*dim)
+    //                 .map(|v| v.iter().copied().collect())
+    //         }; // 👈 immutable borrow of self ENDS HERE
+
+    //         match this_children {
+    //             None => {
+    //                 // Dimension missing → clone all
+    //                 for &other_child in other_children {
+    //                     self.clone_subtree(other, other_child, id);
+    //                     added += 1;
+    //                 }
+    //             }
+
+    //             Some(this_children) => {
+    //                 for &other_child in other_children {
+    //                     let other_child_node =
+    //                         other.get_nodes().get(other_child)?;
+
+    //                     let mut matched = false;
+
+    //                     for this_child in &this_children {
+    //                         // ---- short immutable borrows ----
+    //                         let (this_hash, other_hash, is_leaf_pair) = {
+    //                             let this_child_node =
+    //                                 self.get_nodes().get(*this_child)?;
+    //                             (
+    //                                 this_child_node
+    //                                     .structural_hash()
+    //                                     .load(Ordering::SeqCst),
+    //                                 other_child_node
+    //                                     .structural_hash()
+    //                                     .load(Ordering::SeqCst),
+    //                                 this_child_node.children().is_empty()
+    //                                     && other_child_node.children().is_empty(),
+    //                             )
+    //                         }; // 👈 borrows END
+
+    //                         if this_hash == other_hash {
+    //                             matched = true;
+
+    //                             if is_leaf_pair {
+    //                                 // ---- mutate safely ----
+    //                                 let intersection =
+    //                                     self.get_nodes()
+    //                                         .get(*this_child)?
+    //                                         .coords()
+    //                                         .intersect(other_child_node.coords());
+
+    //                                 let merged =
+    //                                     Coordinates::from_intersection(intersection);
+
+    //                                 let this_child_mut =
+    //                                     self.node_mut(*this_child).unwrap();
+    //                                 this_child_mut.set_coords(merged);
+    //                                 this_child_mut.invalidate_hash();
+    //                             } else {
+    //                                 added += self.node_union(
+    //                                     other,
+    //                                     *this_child,
+    //                                     other_child,
+    //                                 )?;
+    //                             }
+
+    //                             break;
+    //                         }
+    //                     }
+
+    //                     if !matched {
+    //                         self.clone_subtree(other, other_child, id);
+    //                         added += 1;
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     self.invalidate_ancestors(id);
+    //     Some(added)
+    // }
 
 
     pub fn union(&mut self, other: Qube) {
