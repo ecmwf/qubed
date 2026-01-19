@@ -301,6 +301,49 @@ where
     }
 }
 
+impl Coordinates {
+    // pub fn merge_from_intersection(
+    //     &self,
+    //     other: &Coordinates,
+    // ) -> Coordinates {
+    //     let result = self.intersect(other);
+
+    //     match result {
+    //         IntersectionResult {
+    //             intersection,
+    //             only_a,
+    //             only_b,
+    //         } => intersection
+    //             .extend(&only_a)
+    //             .extend(&only_b),
+    //     }
+    // }
+    // pub fn extend_from_intersection(
+    //     &mut self,
+    //     other: &Coordinates,
+    // ) {
+    //     let result = self.intersect(other);
+
+    //     self.extend(&result.intersection);
+    //     self.extend(&result.only_b);
+    //     // only_a already present
+    // }
+
+    pub fn from_intersection(
+        result: IntersectionResult<Coordinates>,
+    ) -> Coordinates {
+        let mut coords = result.intersection;
+        coords.extend(&result.only_a);
+        coords.extend(&result.only_b);
+        coords
+    }
+
+    pub fn merge_coords(&mut self, other_coords: &Coordinates) -> Coordinates {
+        let intersection_result = self.intersect(other_coords);
+        Coordinates::from_intersection(intersection_result)
+    }
+}
+
 
 // impl<const N: usize> From<&[CoordinateTypes; N]> for Coordinates {
 //     fn from(value: &[CoordinateTypes; N]) -> Self {

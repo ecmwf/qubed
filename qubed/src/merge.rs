@@ -1,6 +1,7 @@
-use std::collections::HashMap;
-use crate::{Qube, NodeIdx, Dimension};
+
+use crate::{Qube, NodeIdx};
 use std::sync::atomic::Ordering;
+use crate::Coordinates;
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,54 +31,317 @@ impl SetOperation {
 // In the recursion, we do the set operation and then this indicates if there are children we need to append or not to these nodes, otherwise we just append the whole node to the tree if it didn't exist
 // To quickly determine if we can put two nodes together, we use the structural hash of the node
 
-impl Qube {
-    pub fn union(&mut self, other: Qube) {
-        // These two Qubes are now arenas and we access the individual nodes with idx
-        // We start at the root of both ie idx=0
-        let self_root_id = self.root();
-        let other_root_id = other.root();
-        self.node_union(other, self_root_id, other_root_id);
-    }
+// impl Qube {
+//     // pub fn clone_subtree(
+//     //     &mut self,
+//     //     other: &Qube,
+//     //     other_id: NodeIdx,
+//     //     new_parent: NodeIdx,
+//     // ) -> NodeIdx {
+//     //     let other_node = other.get_nodes().get(other_id).expect("valid node");
 
-    pub fn node_union(&mut self, other:Qube, id: NodeIdx, other_id: NodeIdx) -> Option<i64> {
-        // Get nodes on both trees
-        let this_node = self.get_nodes().get(id)?;
-        let that_node = other.get_nodes().get(other_id)?;
-        // Get their children and loop through their children
-        for (dim, children) in this_node.children() {
-            for (other_dim, other_children) in that_node.children() {
-                if dim == other_dim {
-                    // For each combinations of children:
-                    for child in children {
-                        for other_child in other_children {
-                            let child_node = self.get_nodes().get(*child)?;
-                            let other_child_node = other.get_nodes().get(*other_child)?;
-                            // Look to see if they have the same hash or not
-                            if child_node.structural_hash().load(Ordering::SeqCst) == other_child_node.structural_hash().load(Ordering::SeqCst) {
-                                // If the nodes have the same hash now:
-                                    // If the children nodes here have children:
-                                        // Recurse on them as idxs and apply node_union to the two indexes of each of the trees
-                                    // Else:
-                                        // Do normal set operation here on the nodes' values and
-                                        // replace the child idx node with a new node,
-                                        // in which the values are the combined values of child idx and child other_idx
+//     //     let new_id = self.get_nodes().insert(Node {
+//     //         dim: *other_node.dim(),
+//     //         structural_hash: AtomicU64::new(
+//     //             other_node.structural_hash().load(Ordering::Relaxed),
+//     //         ),
+//     //         coords: other_node.coords().clone(),
+//     //         parent: Some(new_parent),
+//     //         children: BTreeMap::new(),
+//     //     });
+
+//     //     if let Some(parent) = self.get_nodes().get_mut(new_parent) {
+//     //         parent.children()
+//     //             .entry(*other_node.dim())
+//     //             .or_insert_with(TinyVec::new)
+//     //             .push(new_id);
+//     //         parent.structural_hash().store(0, Ordering::Release);
+//     //     }
+
+//     //     for child_ids in other_node.children().values() {
+//     //         for &child in child_ids {
+//     //             self.clone_subtree(other, child, new_id);
+//     //         }
+//     //     }
+
+//     //     new_id
+//     // }
+
+//     pub fn clone_subtree(
+//         &mut self,
+//         other: &Qube,
+//         other_id: NodeIdx,
+//         new_parent: NodeIdx,
+//     ) -> NodeIdx {
+//         let other_node = other.node(other_id).expect("valid node");
+
+//         let new_id = self.insert_node(Node {
+//             dim: *other_node.dim(),
+//             structural_hash: AtomicU64::new(
+//                 other_node.structural_hash().load(Ordering::Relaxed),
+//             ),
+//             coords: other_node.coords().clone(),
+//             parent: Some(new_parent),
+//             children: BTreeMap::new(),
+//         });
+
+//         let parent = self.node_mut(new_parent).unwrap();
+//         parent
+//             .children_mut()
+//             .entry(*other_node.dim())
+//             .or_insert_with(TinyVec::new)
+//             .push(new_id);
+//         parent.invalidate_hash();
+
+//         for child_ids in other_node.children().values() {
+//             for &child in child_ids {
+//                 self.clone_subtree(other, child, new_id);
+//             }
+//         }
+
+//         new_id
+//     }
+
+
+// }
+
+
+impl Qube {
+
+    // pub fn node_union(
+    //     &mut self,
+    //     other: &Qube,
+    //     id: NodeIdx,
+    //     other_id: NodeIdx,
+    // ) -> Option<i64> {
+    //     let mut added = 0;
+
+    //     let this_node = self.get_nodes().get(id)?;
+    //     let that_node = other.get_nodes().get(other_id)?;
+
+    //     for (dim, other_children) in that_node.children() {
+    //         match this_node.children_for(*dim) {
+    //             None => {
+    //                 // Dimension missing in self → clone all
+    //                 for &other_child in other_children {
+    //                     self.clone_subtree(&other, other_child, id);
+    //                     added += 1;
+    //                 }
+    //             }
+
+    //             Some(this_children) => {
+    //                 for &other_child in other_children {
+    //                     let other_child_node =
+    //                         other.get_nodes().get(other_child)?;
+
+    //                     let mut matched = false;
+
+    //                     for &this_child in this_children.iter() {
+    //                         let this_child_node =
+    //                             self.get_nodes().get(this_child)?;
+
+    //                         let this_hash = this_child_node
+    //                             .structural_hash()
+    //                             .load(Ordering::SeqCst);
+    //                         let other_hash = other_child_node
+    //                             .structural_hash()
+    //                             .load(Ordering::SeqCst);
+
+    //                         if this_hash == other_hash {
+    //                             matched = true;
+
+    //                             // Leaf nodes → union coordinates
+    //                             if this_child_node.children().is_empty()
+    //                                 && other_child_node.children().is_empty()
+    //                             {
+    //                                 let this_child_mut =
+    //                                     self.get_nodes().get_mut(this_child).unwrap();
+                                    
+    //                                 // let mod_coords = this_child_mut
+    //                                 //         .coords()
+    //                                 //         .extend_from_intersection(&other_child_node.coords());
+                                    
+    //                                 // this_child_mut.set_coords(mod_coords);
+    //                                 let mod_coords = this_child_mut.coords().merge_coords(other_child_node.coords());
+    //                                 this_child_mut.set_coords(mod_coords);
+
+    //                                 this_child_mut
+    //                                     .structural_hash()
+    //                                     .store(0, Ordering::Release);
+    //                             } else {
+    //                                 // Recurse
+    //                                 added += self.node_union(
+    //                                     other,
+    //                                     this_child,
+    //                                     other_child,
+    //                                 )?;
+    //                             }
+
+    //                             break;
+    //                         }
+    //                     }
+
+    //                     // No matching hash → add other node at this level
+    //                     if !matched {
+    //                         self.clone_subtree(&other, other_child, id);
+    //                         added += 1;
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     // Invalidate upward hashes
+    //     self.invalidate_ancestors(id);
+
+    //     Some(added)
+    // }
+
+    pub fn node_union(
+        &mut self,
+        other: &Qube,
+        id: NodeIdx,
+        other_id: NodeIdx,
+    ) -> Option<i64> {
+        let mut added = 0;
+
+        // We only borrow `other` immutably for the whole function
+        let other_node = other.get_nodes().get(other_id)?;
+
+        for (dim, other_children) in other_node.children() {
+            // ---- snapshot self's children for THIS dimension only ----
+            let this_children: Option<Vec<NodeIdx>> = {
+                let this_node = self.get_nodes().get(id)?;
+                this_node
+                    .children_for(*dim)
+                    .map(|v| v.iter().copied().collect())
+            }; // 👈 immutable borrow of self ENDS HERE
+
+            match this_children {
+                None => {
+                    // Dimension missing → clone all
+                    for &other_child in other_children {
+                        self.clone_subtree(other, other_child, id);
+                        added += 1;
+                    }
+                }
+
+                Some(this_children) => {
+                    for &other_child in other_children {
+                        let other_child_node =
+                            other.get_nodes().get(other_child)?;
+
+                        let mut matched = false;
+
+                        for this_child in &this_children {
+                            // ---- short immutable borrows ----
+                            let (this_hash, other_hash, is_leaf_pair) = {
+                                let this_child_node =
+                                    self.get_nodes().get(*this_child)?;
+                                (
+                                    this_child_node
+                                        .structural_hash()
+                                        .load(Ordering::SeqCst),
+                                    other_child_node
+                                        .structural_hash()
+                                        .load(Ordering::SeqCst),
+                                    this_child_node.children().is_empty()
+                                        && other_child_node.children().is_empty(),
+                                )
+                            }; // 👈 borrows END
+
+                            if this_hash == other_hash {
+                                matched = true;
+
+                                if is_leaf_pair {
+                                    // ---- mutate safely ----
+                                    let intersection =
+                                        self.get_nodes()
+                                            .get(*this_child)?
+                                            .coords()
+                                            .intersect(other_child_node.coords());
+
+                                    let merged =
+                                        Coordinates::from_intersection(intersection);
+
+                                    let this_child_mut =
+                                        self.node_mut(*this_child).unwrap();
+                                    this_child_mut.set_coords(merged);
+                                    this_child_mut.invalidate_hash();
+                                } else {
+                                    added += self.node_union(
+                                        other,
+                                        *this_child,
+                                        other_child,
+                                    )?;
+                                }
+
+                                break;
                             }
-                            else {
-                                // If they don't:
-                                    // If child of other_id doesn't exist in self, add it as a child to id
-                                    // If child of id just doesn't have the same hash, then leave it in self as is
-                            }
+                        }
+
+                        if !matched {
+                            self.clone_subtree(other, other_child, id);
+                            added += 1;
                         }
                     }
                 }
-                else {
-                    // WHAT HAPPENS IF THE CHILDREN DID NOT HAVE THE SAME DIMENSION?
-                    // If the dimension in other does not exist, append the nodes to self
-                }
             }
         }
-        Some(0)
+
+        self.invalidate_ancestors(id);
+        Some(added)
     }
+
+
+    // pub fn union(&mut self, other: Qube) {
+    //     // These two Qubes are now arenas and we access the individual nodes with idx
+    //     // We start at the root of both ie idx=0
+    //     let self_root_id = self.root();
+    //     let other_root_id = other.root();
+    //     self.node_union(other, self_root_id, other_root_id);
+    // }
+
+    // pub fn node_union(&mut self, other:Qube, id: NodeIdx, other_id: NodeIdx) -> Option<i64> {
+    //     // Get nodes on both trees
+    //     let this_node = self.get_nodes().get(id)?;
+    //     let that_node = other.get_nodes().get(other_id)?;
+    //     // Get their children and loop through their children
+    //     for (dim, children) in this_node.children() {
+    //         for (other_dim, other_children) in that_node.children() {
+    //             if dim == other_dim {
+    //                 // For each combinations of children:
+    //                 for child in children {
+    //                     for other_child in other_children {
+    //                         let child_node = self.get_nodes().get(*child)?;
+    //                         let other_child_node = other.get_nodes().get(*other_child)?;
+    //                         // Look to see if they have the same hash or not
+    //                         if child_node.structural_hash().load(Ordering::SeqCst) == other_child_node.structural_hash().load(Ordering::SeqCst) {
+    //                             // If the nodes have the same hash now:
+    //                             // if child_node
+    //                                 // If the children nodes here have children:
+    //                                     // Recurse on them as idxs and apply node_union to the two indexes of each of the trees
+    //                                 // Else:
+    //                                     // Do normal set operation here on the nodes' values and
+    //                                     // replace the child idx node with a new node,
+    //                                     // in which the values are the combined values of child idx and child other_idx
+    //                         }
+    //                         else {
+    //                             // If they don't:
+    //                                 // If child of other_id doesn't exist in self, add it as a child to id
+    //                                 // If child of id just doesn't have the same hash, then leave it in self as is
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //             else {
+    //                 // WHAT HAPPENS IF THE CHILDREN DID NOT HAVE THE SAME DIMENSION?
+    //                 // If the dimension in other does not exist, append the nodes to self
+    //             }
+    //         }
+    //     }
+    //     Some(0)
+    // }
 }
 
 
