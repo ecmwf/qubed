@@ -70,7 +70,7 @@ fn tdd_select_demo() -> Result<(), String> {
 
     let class_node = selected_qube.node(class_children[0]).ok_or("Class node not found")?;
     assert_eq!(class_node.coordinates().len(), 1);
-    assert!(class_node.coordinates().contains(&1));
+    assert!(class_node.coordinates().contains(1));
 
     // Under class=1, check expver children
     let expver_dims: Vec<_> = class_node.child_dimensions().collect();
@@ -92,7 +92,7 @@ fn tdd_select_demo() -> Result<(), String> {
 
         let param_node = selected_qube.node(param_children[0]).ok_or("Param node not found")?;
         assert_eq!(param_node.coordinates().len(), 1);
-        assert!(param_node.coordinates().contains(&2));
+        assert!(param_node.coordinates().contains(2));
     }
 
     Ok(())
