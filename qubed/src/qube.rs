@@ -270,6 +270,45 @@ impl Qube {
             }
         }
     }
+
+
+    pub(crate) fn compute_structural_hash(&self, id: NodeIdx) -> u64 {
+        let node = self.nodes.get(id).expect("valid node");
+
+        let cached = node.structural_hash.load(Ordering::Acquire);
+        if cached != 0 {
+            return cached;
+        }
+
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+
+        node.dim.hash(&mut hasher);
+
+        if node.children.is_empty() {
+            node.coords.hash(&mut hasher);
+        } else {
+            let mut child_hashes: Vec<u64> = Vec::new();
+
+            for children in node.children.values() {
+                for &child in children {
+                    child_hashes.push(self.compute_structural_hash(child));
+                }
+            }
+
+            child_hashes.sort_unstable();
+            child_hashes.hash(&mut hasher);
+        }
+
+        let hash = hasher.finish().max(1); // 0 reserved for "invalid"
+
+        node.structural_hash.store(hash, Ordering::Release);
+        hash
+    }
+
+
 }
 
 impl<'a> NodeRef<'a> {
@@ -387,6 +426,8 @@ impl<'a> NodeRef<'a> {
         self.node.coords.len()
     }
 }
+
+
 
 #[cfg(test)]
 mod tests {
