@@ -65,9 +65,94 @@ impl Node {
     ) -> &AtomicU64 {
         &self.structural_hash
     }
+
+    pub(crate) fn dim(
+        &self,
+    ) -> &Dimension {
+        &self.dim
+    }
+
+    pub(crate) fn coords(
+        &self,
+    ) -> &Coordinates {
+        &self.coords
+    }
+
+    pub(crate) fn children_mut(
+        &mut self,
+    ) -> &mut BTreeMap<Dimension, TinyVec<NodeIdx, 4>> {
+        &mut self.children
+    }
+
+    pub(crate) fn set_parent(&mut self, parent: Option<NodeIdx>) {
+        self.parent = parent;
+    }
+
+    pub(crate) fn set_coords(&mut self, coords: Coordinates) {
+        self.coords = coords;
+    }
+
+    pub(crate) fn invalidate_hash(&self) {
+        self.structural_hash.store(0, Ordering::Release);
+    }
+
 }
 
 impl Qube {
+    pub(crate) fn clone_subtree(
+        &mut self,
+        other: &Qube,
+        other_id: NodeIdx,
+        new_parent: NodeIdx,
+    ) -> NodeIdx {
+        let other_node = other.nodes.get(other_id).expect("valid node");
+
+        let new_id = self.nodes.insert(Node {
+            dim: other_node.dim,
+            structural_hash: AtomicU64::new(
+                other_node.structural_hash.load(Ordering::Relaxed),
+            ),
+            coords: other_node.coords.clone(),
+            parent: Some(new_parent),
+            children: BTreeMap::new(),
+        });
+
+        if let Some(parent) = self.nodes.get_mut(new_parent) {
+            parent.children
+                .entry(other_node.dim)
+                .or_insert_with(TinyVec::new)
+                .push(new_id);
+            parent.structural_hash.store(0, Ordering::Release);
+        }
+
+        for child_ids in other_node.children.values() {
+            for &child in child_ids {
+                self.clone_subtree(other, child, new_id);
+            }
+        }
+
+        new_id
+    }
+}
+
+
+impl Qube {
+
+    pub(crate) fn node_mut(
+        &mut self,
+        id: NodeIdx,
+    ) -> Option<&mut Node> {
+        self.nodes.get_mut(id)
+    }
+
+    pub(crate) fn insert_node(&mut self, node: Node) -> NodeIdx {
+        self.nodes.insert(node)
+    }
+
+    pub(crate) fn node_ref(&self, id: NodeIdx) -> Option<&Node> {
+        self.nodes.get(id)
+    }
+
     pub fn new() -> Self {
         let mut key_store = Rodeo::<MiniSpur>::new();
         let mut nodes = SlotMap::with_key();
@@ -177,7 +262,7 @@ impl Qube {
         self.key_store.try_resolve(&dim.0)
     }
 
-    fn invalidate_ancestors(&self, id: NodeIdx) {
+    pub(crate) fn invalidate_ancestors(&self, id: NodeIdx) {
         if let Some(node) = self.nodes.get(id) {
             node.structural_hash.store(0, Ordering::Release);
             if let Some(parent_id) = node.parent {
