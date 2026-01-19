@@ -294,13 +294,13 @@ impl Qube {
     }
 
 
-    // pub fn union(&mut self, other: Qube) {
-    //     // These two Qubes are now arenas and we access the individual nodes with idx
-    //     // We start at the root of both ie idx=0
-    //     let self_root_id = self.root();
-    //     let other_root_id = other.root();
-    //     self.node_union(other, self_root_id, other_root_id);
-    // }
+    pub fn union(&mut self, other: Qube) {
+        // These two Qubes are now arenas and we access the individual nodes with idx
+        // We start at the root of both ie idx=0
+        let self_root_id = self.root();
+        let other_root_id = other.root();
+        self.node_union(&other, self_root_id, other_root_id);
+    }
 
     // pub fn node_union(&mut self, other:Qube, id: NodeIdx, other_id: NodeIdx) -> Option<i64> {
     //     // Get nodes on both trees
