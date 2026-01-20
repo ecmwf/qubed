@@ -28,6 +28,60 @@ fn structural_hash_root_equal_for_identical_qubes() {
     assert_eq!(hash_a, hash_b, "identical trees must have equal hashes");
 }
 
+
+#[test]
+fn structural_hash_root_equal_for_semi_identical_qubes() {
+    let input = r#"root
+├── class=1
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+    let input2 = r#"root
+├── class=3
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+    let qube_a = Qube::from_ascii(input).unwrap();
+    let qube_b = Qube::from_ascii(input2).unwrap();
+
+    // Find hash of the first child somehow
+
+    let qube_a_ref = qube_a.node(qube_a.root()).unwrap();
+
+    let qube_b_ref = qube_b.node(qube_b.root()).unwrap();
+
+    let qube_a_children_dims: Vec<_> =
+        qube_a_ref.child_dimensions().copied().collect();
+
+    let qube_b_children_dims: Vec<_> =
+        qube_b_ref.child_dimensions().copied().collect();
+
+    for dim_a in &qube_a_children_dims {
+        let children_a = qube_a_ref.children(*dim_a).unwrap();
+
+        for child_a in children_a {
+            let hash_a = qube_a.node(child_a).unwrap().structural_hash();
+
+            for dim_b in &qube_b_children_dims {
+                let children_b = qube_b_ref.children(*dim_b).unwrap();
+
+                for child_b in children_b {
+                    let hash_b = qube_b.node(child_b).unwrap().structural_hash();
+                    assert_eq!(hash_a, hash_b, "semi identical trees must have equal hashes");
+                }
+            }
+        }
+    }
+}
+
 // #[test]
 // fn structural_hash_equal_for_identical_subtrees_in_different_qubes() {
 //     // Qube A: base tree
