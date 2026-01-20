@@ -294,7 +294,11 @@ impl Qube {
 
             for children in node.children.values() {
                 for &child in children {
-                    child_hashes.push(self.compute_structural_hash(child));
+                    let mut child_hasher = DefaultHasher::new();
+                    self.node_ref(child).unwrap().coords.hash(&mut hasher);
+                    let child_hash = self.compute_structural_hash(child);
+                    child_hash.hash(&mut hasher);
+                    child_hashes.push(child_hash);
                 }
             }
 
