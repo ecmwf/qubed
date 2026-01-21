@@ -78,6 +78,12 @@ impl Node {
         &self.coords
     }
 
+    pub(crate) fn coords_mut(
+        &mut self,
+    ) -> &mut Coordinates {
+        &mut self.coords
+    }
+
     pub(crate) fn children_mut(
         &mut self,
     ) -> &mut BTreeMap<Dimension, TinyVec<NodeIdx, 4>> {
@@ -271,6 +277,21 @@ impl Qube {
         }
     }
 
+    pub(crate) fn add_child(
+        &mut self,
+        parent: NodeIdx,
+        dim: Dimension,
+        child: NodeIdx,
+    ) {
+        let parent_node = self.node_mut(parent).unwrap();
+
+        parent_node
+            .children
+            .entry(dim)
+            .or_insert_with(TinyVec::new)
+            .push(child);
+    }
+
 
     pub(crate) fn compute_structural_hash(&self, id: NodeIdx) -> u64 {
         let node = self.nodes.get(id).expect("valid node");
@@ -295,10 +316,10 @@ impl Qube {
             for children in node.children.values() {
                 for &child in children {
                     let mut child_hasher = DefaultHasher::new();
-                    self.node_ref(child).unwrap().coords.hash(&mut hasher);
+                    self.node_ref(child).unwrap().coords.hash(&mut child_hasher);
                     let child_hash = self.compute_structural_hash(child);
-                    child_hash.hash(&mut hasher);
-                    child_hashes.push(child_hash);
+                    child_hash.hash(&mut child_hasher);
+                    child_hashes.push(child_hasher.finish());
                 }
             }
 
