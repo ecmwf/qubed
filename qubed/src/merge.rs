@@ -168,6 +168,63 @@ impl Qube {
         self_id
     }
 
+    pub fn node_union_2(
+        &mut self,
+        other: &Qube,
+        self_id: NodeIdx,
+        other_id: NodeIdx,
+    ) -> NodeIdx {
+        // group the children of both nodes into groups according to their associated dimensions
+        let self_children = {
+            let node = self.node_ref(self_id).unwrap();
+            node.children().clone() // HashMap<Dimension, TinyVec<NodeIdx>>
+        };
+
+        let other_children = {
+            let node = other.node_ref(other_id).unwrap();
+            node.children().clone()
+        };
+
+        // create a map of dim, (self_children, other_children)
+        let mut dim_child_map: HashMap<Dimension, (Vec<NodeIdx>, Vec<NodeIdx>)> = HashMap::new();
+
+        for (dim, self_kids) in self_children {
+            dim_child_map.entry(dim).or_default().0.extend(self_kids);
+        }
+        for (dim, other_kids) in other_children {
+            dim_child_map.entry(dim).or_default().1.extend(other_kids);
+        }
+
+        // per dimension, perform internal_set_operation on the groups and look at what new children we get from this
+
+        let dims: Vec<_> = dim_child_map.keys().copied().collect();
+
+        for dim in dims {
+            let (these_kids, those_kids) = {
+                let entry = dim_child_map.entry(dim).or_default();
+                (&entry.0, &entry.1)
+            };
+
+            let new_children = self.internal_set_operation(other, these_kids, those_kids);
+        };
+
+        // if we have no new children, and A or B have children, then if A was the root, make it just a root tree, else return None
+        // else, replace the children in the A tree by the new children
+
+        return self.root()
+    }
+
+    pub fn internal_set_operation(&mut self, other: &Qube, self_ids: &Vec<NodeIdx>, other_ids: &Vec<NodeIdx>) -> Option<Vec<NodeIdx>>{
+        // for node in self_ids
+            // for node in other_ids
+                // perform the shallow operation to get the set of values only in self, those only in other, and those in the intersection
+                // if the intersection set is non-empty, then do node_union_2 on the new node_a and node_b, who only have the intersection values as values and yield the result
+        // if we keep the values only in A, then for each node that we found in only_a, take that node in self and change the coordinates to be those in only_a and yield that node
+        // if we keep the values only in B, then for each node that we found in only_b, take that node in other and change the coordinates to be those in only_b and yield that node
+
+        return Some(vec![self.root()]);
+    }
+
     fn merge_coordinates(
         &mut self,
         self_id: NodeIdx,
