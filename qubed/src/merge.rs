@@ -206,19 +206,52 @@ impl Qube {
             };
 
             let new_children = self.internal_set_operation(other, these_kids, those_kids);
-        };
+            
+            if let Some(kids) = new_children {
+                // if we have new children, replace the children in the A tree by the new children
+                self.replace_children(self_id, kids);
+            } else {
+                // if we have no new children, and A or B have children, then if A was the root, make it just a root tree, else return None
+            }
 
-        // if we have no new children, and A or B have children, then if A was the root, make it just a root tree, else return None
-        // else, replace the children in the A tree by the new children
+        };
 
         return self.root()
     }
 
+    pub fn replace_children(&mut self, self_id: NodeIdx, kids: Vec<NodeIdx>) {
+        // TODO
+
+        let to_remove: Vec<NodeIdx> = {
+            let node = self.node_ref(self_id).unwrap();
+
+            node.children()
+                .values()
+                .flat_map(|ids| ids.iter().copied())
+                .collect()
+        };
+
+        for node_id in to_remove {
+            self.remove_node(node_id);
+        }
+
+        // TODO: somehow readd the kids now as children to self_id
+
+    }
+
     pub fn internal_set_operation(&mut self, other: &Qube, self_ids: &Vec<NodeIdx>, other_ids: &Vec<NodeIdx>) -> Option<Vec<NodeIdx>>{
-        // for node in self_ids
-            // for node in other_ids
+        // TODO: here it will be difficult to return NodeIdx, if we only add the nodes to the Qube later... should we add the nodes here instead of the outer function??
+
+        for node in self_ids {
+            for other_node in other_ids {
+                let self_coords = self.node_ref(*node).unwrap().coords();
+                let other_coords = other.node_ref(*other_node).unwrap().coords();
                 // perform the shallow operation to get the set of values only in self, those only in other, and those in the intersection
+                let intersection_res = self_coords.intersect(other_coords);
+                let actual_intersection = intersection_res.intersection;
                 // if the intersection set is non-empty, then do node_union_2 on the new node_a and node_b, who only have the intersection values as values and yield the result
+            }
+        }
         // if we keep the values only in A, then for each node that we found in only_a, take that node in self and change the coordinates to be those in only_a and yield that node
         // if we keep the values only in B, then for each node that we found in only_b, take that node in other and change the coordinates to be those in only_b and yield that node
 
