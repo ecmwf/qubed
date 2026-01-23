@@ -102,6 +102,10 @@ impl Node {
         self.structural_hash.store(0, Ordering::Release);
     }
 
+    pub(crate) fn parent(&self) -> &Option<NodeIdx> {
+        &self.parent
+    }
+
 }
 
 impl Qube {
