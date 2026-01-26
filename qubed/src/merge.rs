@@ -301,6 +301,8 @@ impl Qube {
 
                     // TODO: note here that actually, we have not cloned the children of the base Qube branches, so new_node_a and new_node_b do NOT have children here at the moment...
                     // TODO: this means that we do NOT have recursion at the moment...
+                    self.add_same_children(new_node_a, *node);
+                    other.add_same_children(new_node_b, *other_node);
 
                     let nested_result = self.node_union_2(other, new_node_a, new_node_b);
                     // TODO: how to yield this and keep the loop going while returning all of the results??
