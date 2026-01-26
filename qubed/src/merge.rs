@@ -174,6 +174,8 @@ impl Qube {
         self_id: NodeIdx,
         other_id: NodeIdx,
     ) -> NodeIdx {
+
+        println!("HERE FIRST IN RECURSION: {:?}", self.dimension_str(self.node_ref(self_id).unwrap().dim()));
         // group the children of both nodes into groups according to their associated dimensions
         let self_children = {
             let node = self.node_ref(self_id).unwrap();
@@ -208,10 +210,11 @@ impl Qube {
             let new_children = self.internal_set_operation(other, these_kids, those_kids);
             
             if let Some(kids) = new_children {
-                // if we have new children, replace the children in the A tree by the new children
-                self.replace_children(self_id, kids);
+                // TODO: if we have new children, replace the children in the A tree by the new children
+                // Possibly we don't need to do this, since we already replaced the children node values before and added the children branches where needed
+                // self.replace_children(self_id, kids);
             } else {
-                // if we have no new children, and A or B have children, then if A was the root, make it just a root tree, else return None
+                // TODO: if we have no new children, and A or B have children, then if A was the root, make it just a root tree, else return None
             }
 
         };
@@ -237,59 +240,22 @@ impl Qube {
 
         // TODO: somehow readd the kids now as children to self_id
 
+        for kid in kids {
+            // TODO: ARE THE KIDS ACTUALLY ALREADY ATTACHED TO THE PARENTS HERE??
+            // They should be attached at the right place already?
+        }
+
     }
 
     pub fn internal_set_operation(&mut self, other: &mut Qube, self_ids: &Vec<NodeIdx>, other_ids: &Vec<NodeIdx>) -> Option<Vec<NodeIdx>>{
-        // TODO: here it will be difficult to return NodeIdx, if we only add the nodes to the Qube later... should we add the nodes here instead of the outer function??
+
+        let mut return_vec = Vec::new();
 
         for node in self_ids {
+            println!("HERE IN THE INTERNAL RECURSION: {:?}", self.dimension_str(self.node_ref(*node).unwrap().dim()));
             for other_node in other_ids {
                 let self_coords = self.node_ref(*node).unwrap().coords();
                 let other_coords = other.node_ref(*other_node).unwrap().coords();
-
-                // let actual_node = self.node_ref(*node).unwrap();
-                // let actual_other_node = other.node_ref(*other_node).unwrap();
-
-                // // perform the shallow operation to get the set of values only in self, those only in other, and those in the intersection
-                // let intersection_res = self_coords.intersect(other_coords);
-                // let actual_intersection = intersection_res.intersection;
-
-
-                // // if the intersection set is non-empty, then do node_union_2 on the new node_a and node_b, who only have the intersection values as values and yield the result
-                // let dim_str = {
-                //     let s = self.dimension_str(actual_node.dim()).unwrap();
-                //     s.to_string()
-                // };
-
-                // let new_node_a = self.create_child(
-                //     &dim_str,
-                //     actual_node.parent().unwrap(),
-                //     Some(actual_intersection.clone()),
-                // ).unwrap();
-
-                // let other_dim_str = {
-                //     let s = other.dimension_str(actual_other_node.dim()).unwrap();
-                //     s.to_string()
-                // };
-
-                // let new_node_b = other.create_child(
-                //     &other_dim_str,
-                //     actual_other_node.parent().unwrap(),
-                //     Some(actual_intersection),
-                // ).unwrap();
-                
-                // let nested_result = self.node_union_2(other, new_node_a, new_node_b);
-                // // TODO: how to yield this and keep the loop going while returning all of the results??
-
-
-                // // NOTE: we now have two completely new nodes with only actual_intersection as values, on both self and other...
-                // // so we may need to change node and other_node now to have the remaining values, otherwise we have duplicate data?
-
-                // let only_self = intersection_res.only_a;
-                // let only_other = intersection_res.only_b;
-                
-                // *actual_node.coords_mut() = only_self;
-
 
                 let (
                     parent_a,
@@ -307,31 +273,39 @@ impl Qube {
                         actual_other_node.dim(),
                     )
                 };
-                
+
                 // perform the shallow operation to get the set of values only in self, those only in other, and those in the intersection
 
                 let intersection_res = self_coords.intersect(other_coords);
                 let actual_intersection = intersection_res.intersection;
+                println!("HERE NOW: {}", actual_intersection.to_string());
 
                 // if the intersection set is non-empty, then do node_union_2 on the new node_a and node_b, who only have the intersection values as values and yield the result
                 let dim_str = self.dimension_str(dim_a).unwrap().to_owned();
                 let other_dim_str = other.dimension_str(dim_b).unwrap().to_owned();
+                
+                println!("WHAT KIND OF CHILD DID WE CREATE ON WHICH DIM??: {:?}", dim_str);
+                if actual_intersection.len() != 0 {
+                    println!("WE WENT HERE AND ACTUALLY REALLY ITERATED??");
+                    let new_node_a = self.create_child(
+                        &dim_str,
+                        parent_a,
+                        Some(actual_intersection.clone()),
+                    ).unwrap();
 
-                let new_node_a = self.create_child(
-                    &dim_str,
-                    parent_a,
-                    Some(actual_intersection.clone()),
-                ).unwrap();
+                    let new_node_b = other.create_child(
+                        &other_dim_str,
+                        parent_b,
+                        Some(actual_intersection),
+                    ).unwrap();
 
-                let new_node_b = other.create_child(
-                    &other_dim_str,
-                    parent_b,
-                    Some(actual_intersection),
-                ).unwrap();
+                    // TODO: note here that actually, we have not cloned the children of the base Qube branches, so new_node_a and new_node_b do NOT have children here at the moment...
+                    // TODO: this means that we do NOT have recursion at the moment...
 
-                let nested_result = self.node_union_2(other, new_node_a, new_node_b);
-                // TODO: how to yield this and keep the loop going while returning all of the results??
-
+                    let nested_result = self.node_union_2(other, new_node_a, new_node_b);
+                    // TODO: how to yield this and keep the loop going while returning all of the results??
+                    return_vec.push(nested_result);
+                }
                 // NOTE: we now have two completely new nodes with only actual_intersection as values, on both self and other...
                 // so we may need to change node and other_node now to have the remaining values, otherwise we have duplicate data?
 
@@ -351,11 +325,15 @@ impl Qube {
                     *actual_other_node.coords_mut() = only_other;
                 }
 
+                return_vec.push(*node);
+                return_vec.push(*other_node);
+
 
             }
+        println!("FINISHED INTERNAL RECURSION");
         }
 
-        return Some(vec![self.root()]);
+        return Some(return_vec);
     }
 
     fn merge_coordinates(
@@ -454,12 +432,13 @@ impl Qube {
 
 
 
-    pub fn union(&mut self, other: Qube) {
+    pub fn union(&mut self, mut other: Qube) {
         // These two Qubes are now arenas and we access the individual nodes with idx
         // We start at the root of both ie idx=0
         let self_root_id = self.root();
         let other_root_id = other.root();
-        self.node_union(&other, self_root_id, other_root_id);
+        // self.node_union(&other, self_root_id, other_root_id);
+        self.node_union_2(&mut other, self_root_id, other_root_id);
     }
 
     // pub fn node_union(&mut self, other:Qube, id: NodeIdx, other_id: NodeIdx) -> Option<i64> {
