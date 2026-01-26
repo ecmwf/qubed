@@ -296,6 +296,15 @@ impl Qube {
             .push(child);
     }
 
+    pub(crate) fn add_same_children(&mut self, node: NodeIdx, other: NodeIdx) {
+        let other_children_dims = self.node_ref(other).unwrap().children.clone();
+        for (dim, other_children) in other_children_dims {
+            for other_child in other_children {
+                self.add_child(node, dim, other_child);
+            }
+        }
+    }
+
 
     pub(crate) fn compute_structural_hash(&self, id: NodeIdx) -> u64 {
         let node = self.nodes.get(id).expect("valid node");
