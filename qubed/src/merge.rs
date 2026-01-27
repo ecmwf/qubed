@@ -207,15 +207,19 @@ impl Qube {
                 (&entry.0, &entry.1)
             };
 
+            // let mut new_children = Vec::new();
+
+            // self.internal_set_operation(other, these_kids, those_kids, |node| {new_children.push(node);});
+
             let new_children = self.internal_set_operation(other, these_kids, those_kids);
             
-            if let Some(kids) = new_children {
-                // TODO: if we have new children, replace the children in the A tree by the new children
-                // Possibly we don't need to do this, since we already replaced the children node values before and added the children branches where needed
-                // self.replace_children(self_id, kids);
-            } else {
-                // TODO: if we have no new children, and A or B have children, then if A was the root, make it just a root tree, else return None
-            }
+            // if let Some(kids) = new_children {
+            //     // TODO: if we have new children, replace the children in the A tree by the new children
+            //     // Possibly we don't need to do this, since we already replaced the children node values before and added the children branches where needed
+            //     // self.replace_children(self_id, kids);
+            // } else {
+            //     // TODO: if we have no new children, and A or B have children, then if A was the root, make it just a root tree, else return None
+            // }
 
         };
 
@@ -246,6 +250,7 @@ impl Qube {
         }
 
     }
+
 
     pub fn internal_set_operation(&mut self, other: &mut Qube, self_ids: &Vec<NodeIdx>, other_ids: &Vec<NodeIdx>) -> Option<Vec<NodeIdx>>{
 
@@ -286,6 +291,7 @@ impl Qube {
                 
                 println!("WHAT KIND OF CHILD DID WE CREATE ON WHICH DIM??: {:?}", dim_str);
                 if actual_intersection.len() != 0 {
+                    println!("LOOK HERE NOW: {} !!!!!!!!!!!", actual_intersection.to_string());
                     println!("WE WENT HERE AND ACTUALLY REALLY ITERATED??");
                     let new_node_a = self.create_child(
                         &dim_str,
@@ -316,19 +322,41 @@ impl Qube {
 
                 // if we keep the values only in A, then for each node that we found in only_a, take that node in self and change the coordinates to be those in only_a and yield that node
 
-                {
+                if only_self.len() != 0 {
                     let actual_node = self.node_mut(*node).unwrap();
                     *actual_node.coords_mut() = only_self;
                 }
                 // if we keep the values only in B, then for each node that we found in only_b, take that node in other and change the coordinates to be those in only_b and yield that node
+                // TODO: no actually, we need to append the node with only_b to self...
+
+                if only_other.len() != 0 {
+                    println!("WE WENT HERE AND ACTUALLY REALLY ITERATED INSIDE OF B??");
+                    let new_node_only_b = self.create_child(
+                        &dim_str,
+                        parent_a,
+                        Some(only_other.clone()),
+                    ).unwrap();
+
+                    // TODO: note here that actually, we have not cloned the children of the base Qube branches, so new_node_a and new_node_b do NOT have children here at the moment...
+                    // TODO: this means that we do NOT have recursion at the moment...
+                    self.add_same_children(new_node_only_b, *node);
+
+                    // let nested_result = self.node_union_2(other, new_node_a, new_node_b);
+                    // TODO: how to yield this and keep the loop going while returning all of the results??
+                    // return_vec.push(nested_result);
+                }
 
                 {
                     let actual_other_node = other.node_mut(*other_node).unwrap();
                     *actual_other_node.coords_mut() = only_other;
                 }
-
+                {
+                // if only_self.len() != 0 {
                 return_vec.push(*node);
-                return_vec.push(*other_node);
+                // }
+                // if only_other.len() != 0 {
+                // return_vec.push(*other_node);
+                }
 
 
             }
