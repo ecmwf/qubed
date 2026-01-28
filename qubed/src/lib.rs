@@ -5,6 +5,7 @@ pub mod serde;
 mod utils;
 mod view;
 mod merge;
+mod compress;
 pub mod datacube;
 
 pub use coordinates::Coordinates;
