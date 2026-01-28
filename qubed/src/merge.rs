@@ -168,6 +168,87 @@ impl Qube {
         self_id
     }
 
+
+    // pub fn node_union_2(
+    //     &mut self,
+    //     other: &mut Qube,
+    //     self_id: NodeIdx,
+    //     other_id: NodeIdx,
+    // ) -> NodeIdx {
+
+    //     // 1️⃣ Collect children grouped by dimension
+    //     let self_children = self.node_ref(self_id).unwrap().children().clone();
+    //     let other_children = other.node_ref(other_id).unwrap().children().clone();
+
+    //     let mut dim_child_map: HashMap<Dimension, (Vec<NodeIdx>, Vec<NodeIdx>)> = HashMap::new();
+
+    //     for (dim, kids) in self_children {
+    //         dim_child_map.entry(dim).or_default().0.extend(kids);
+    //     }
+    //     for (dim, kids) in other_children {
+    //         dim_child_map.entry(dim).or_default().1.extend(kids);
+    //     }
+
+    //     // 2️⃣ For each dimension, split + attach
+    //     for (dim, (self_kids, other_kids)) in dim_child_map {
+
+    //         let splits = self.internal_set_operation(
+    //             &self_kids,
+    //             &other_kids,
+    //         );
+
+    //         let dim_str = self.dimension_str(dim).unwrap().to_owned();
+
+    //         for (a, b, split) in splits {
+
+    //             // ONLY SELF
+    //             if let Some(coords) = split.only_a {
+    //                 let node = self.create_child(
+    //                     &dim_str,
+    //                     self_id,
+    //                     Some(coords),
+    //                 ).unwrap();
+
+    //                 self.add_same_children(node, a);
+    //             }
+
+    //             // ONLY OTHER
+    //             if let Some(coords) = split.only_b {
+    //                 let node = self.create_child(
+    //                     &dim_str,
+    //                     self_id,
+    //                     Some(coords),
+    //                 ).unwrap();
+
+    //                 self.add_same_children(node, a);
+    //             }
+
+    //             // 🔁 INTERSECTION → recurse HERE and only here
+    //             if let Some(coords) = split.intersection {
+    //                 let new_self = self.create_child(
+    //                     &dim_str,
+    //                     self_id,
+    //                     Some(coords.clone()),
+    //                 ).unwrap();
+
+    //                 let new_other = other.create_child(
+    //                     &dim_str,
+    //                     other_id,
+    //                     Some(coords),
+    //                 ).unwrap();
+
+    //                 self.add_same_children(new_self, a);
+    //                 other.add_same_children(new_other, b);
+
+    //                 // recurse ONLY on intersection
+    //                 self.node_union_2(other, new_self, new_other);
+    //             }
+    //         }
+    //     }
+
+    //     self_id
+    // }
+
     pub fn node_union_2(
         &mut self,
         other: &mut Qube,
@@ -251,13 +332,98 @@ impl Qube {
 
     }
 
+    // pub fn internal_set_operation(
+    //     &mut self,
+    //     other: &mut Qube,
+    //     self_ids: &[NodeIdx],
+    //     other_ids: &[NodeIdx],
+    // ) -> Option<Vec<NodeIdx>> {
+    //     let mut produced = Vec::new();
+
+    //     for &a in self_ids {
+    //         for &b in other_ids {
+    //             // let a_node = self.node_ref(a).unwrap();
+    //             let b_node = other.node_ref(b).unwrap();
+
+    //             // let parent = a_node.parent().unwrap();
+    //             // let dim = a_node.dim();
+
+    //             // let res = a_node.coords().intersect(b_node.coords());
+                
+    //             let (parent, dim, a_coords) = {
+    //                 // let a_node = self.node_ref(a).unwrap();
+    //                 (
+    //                     self.node_ref(a).unwrap().parent().unwrap(),
+    //                     self.node_ref(a).unwrap().dim(),
+    //                     self.node_ref(a).unwrap().coords().clone(),
+    //                 )
+    //             }; // 👈 immutable borrow ENDS HERE
+
+    //             let res = a_coords.intersect(b_node.coords());
+
+    //             // ── ONLY A ───────────────────────────────
+    //             if res.only_a.len() != 0 {
+    //                 let n = self.create_child(
+    //                     self.dimension_str(dim).unwrap(),
+    //                     parent,
+    //                     Some(res.only_a.clone()),
+    //                 ).unwrap();
+
+    //                 self.add_same_children(n, a);
+    //                 produced.push(n);
+    //             }
+
+    //             // ── ONLY B (attached to self) ─────────────
+    //             if res.only_b.len() != 0 {
+    //                 let n = self.create_child(
+    //                     self.dimension_str(dim).unwrap(),
+    //                     parent,
+    //                     Some(res.only_b.clone()),
+    //                 ).unwrap();
+
+    //                 self.add_same_children(n, a);
+    //                 produced.push(n);
+    //             }
+
+    //             // ── INTERSECTION (recurse!) ───────────────
+    //             if res.intersection.len() != 0 {
+    //                 let new_a = self.create_child(
+    //                     self.dimension_str(dim).unwrap(),
+    //                     parent,
+    //                     Some(res.intersection.clone()),
+    //                 ).unwrap();
+
+    //                 let new_b = other.create_child(
+    //                     other.dimension_str(b_node.dim()).unwrap(),
+    //                     b_node.parent().unwrap(),
+    //                     Some(res.intersection),
+    //                 ).unwrap();
+
+    //                 self.add_same_children(new_a, a);
+    //                 other.add_same_children(new_b, b);
+
+    //                 // 🔁 recurse ONLY here
+    //                 let nested = self.node_union_2(other, new_a, new_b);
+    //                 produced.push(nested);
+    //             }
+    //         }
+    //     }
+
+    //     if produced.is_empty() {
+    //         None
+    //     } else {
+    //         Some(produced)
+    //     }
+    // }
+
+
 
     pub fn internal_set_operation(&mut self, other: &mut Qube, self_ids: &Vec<NodeIdx>, other_ids: &Vec<NodeIdx>) -> Option<Vec<NodeIdx>>{
-
+        // TODO: would this actually work if the input trees were already compressed from the start, because we are just going through pairs of nodes, and looking at their intersections
+        // TODO: but at the moment, these nodes only each have one coordinate
         let mut return_vec = Vec::new();
 
         for node in self_ids {
-            println!("HERE IN THE INTERNAL RECURSION: {:?}", self.dimension_str(self.node_ref(*node).unwrap().dim()));
             for other_node in other_ids {
                 let self_coords = self.node_ref(*node).unwrap().coords();
                 let other_coords = other.node_ref(*other_node).unwrap().coords();
@@ -283,16 +449,44 @@ impl Qube {
 
                 let intersection_res = self_coords.intersect(other_coords);
                 let actual_intersection = intersection_res.intersection;
-                println!("HERE NOW: {}", actual_intersection.to_string());
+                let only_self = intersection_res.only_a;
+                let only_other = intersection_res.only_b;
 
                 // if the intersection set is non-empty, then do node_union_2 on the new node_a and node_b, who only have the intersection values as values and yield the result
                 let dim_str = self.dimension_str(dim_a).unwrap().to_owned();
                 let other_dim_str = other.dimension_str(dim_b).unwrap().to_owned();
-                
-                println!("WHAT KIND OF CHILD DID WE CREATE ON WHICH DIM??: {:?}", dim_str);
+
+                // // only B nodes
+                // if only_other.len() != 0 {
+                //     let new_node_only_b = self.create_child(
+                //         &other_dim_str,
+                //         parent_a,
+                //         Some(only_other.clone()),
+                //     ).unwrap();
+
+                //     self.add_same_children(new_node_only_b, *other_node);
+                //     return_vec.push(new_node_only_b)
+                // }
+
+                // // only A nodes
+                // if only_self.len() != 0 {
+                //     let new_node_only_a = self.create_child(
+                //         &dim_str,
+                //         parent_a,
+                //         Some(only_self.clone()),
+                //     ).unwrap();
+
+                //     self.add_same_children(new_node_only_a, *)
+                // }
+
+
+
+
+
+
+
+
                 if actual_intersection.len() != 0 {
-                    println!("LOOK HERE NOW: {} !!!!!!!!!!!", actual_intersection.to_string());
-                    println!("WE WENT HERE AND ACTUALLY REALLY ITERATED??");
                     let new_node_a = self.create_child(
                         &dim_str,
                         parent_a,
@@ -305,20 +499,13 @@ impl Qube {
                         Some(actual_intersection),
                     ).unwrap();
 
-                    // TODO: note here that actually, we have not cloned the children of the base Qube branches, so new_node_a and new_node_b do NOT have children here at the moment...
-                    // TODO: this means that we do NOT have recursion at the moment...
                     self.add_same_children(new_node_a, *node);
                     other.add_same_children(new_node_b, *other_node);
 
                     let nested_result = self.node_union_2(other, new_node_a, new_node_b);
-                    // TODO: how to yield this and keep the loop going while returning all of the results??
-                    return_vec.push(nested_result);
                 }
                 // NOTE: we now have two completely new nodes with only actual_intersection as values, on both self and other...
                 // so we may need to change node and other_node now to have the remaining values, otherwise we have duplicate data?
-
-                let only_self = intersection_res.only_a;
-                let only_other = intersection_res.only_b;
 
                 // if we keep the values only in A, then for each node that we found in only_a, take that node in self and change the coordinates to be those in only_a and yield that node
 
@@ -330,20 +517,13 @@ impl Qube {
                 // TODO: no actually, we need to append the node with only_b to self...
 
                 if only_other.len() != 0 {
-                    println!("WE WENT HERE AND ACTUALLY REALLY ITERATED INSIDE OF B??");
                     let new_node_only_b = self.create_child(
                         &dim_str,
                         parent_a,
                         Some(only_other.clone()),
                     ).unwrap();
 
-                    // TODO: note here that actually, we have not cloned the children of the base Qube branches, so new_node_a and new_node_b do NOT have children here at the moment...
-                    // TODO: this means that we do NOT have recursion at the moment...
-                    self.add_same_children(new_node_only_b, *node);
-
-                    // let nested_result = self.node_union_2(other, new_node_a, new_node_b);
-                    // TODO: how to yield this and keep the loop going while returning all of the results??
-                    // return_vec.push(nested_result);
+                    self.add_same_children(new_node_only_b, *other_node);
                 }
 
                 {
@@ -351,16 +531,11 @@ impl Qube {
                     *actual_other_node.coords_mut() = only_other;
                 }
                 {
-                // if only_self.len() != 0 {
                 return_vec.push(*node);
-                // }
-                // if only_other.len() != 0 {
-                // return_vec.push(*other_node);
                 }
 
 
             }
-        println!("FINISHED INTERNAL RECURSION");
         }
 
         return Some(return_vec);
