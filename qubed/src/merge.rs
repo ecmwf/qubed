@@ -264,7 +264,9 @@ impl Qube {
         };
 
         let other_children = {
+            println!("HERE LOOK ARE WE HERE");
             let node = other.node_ref(other_id).unwrap();
+            println!("MANAGED TO UNWRAP NODE");
             node.children().clone()
         };
 
@@ -417,6 +419,164 @@ impl Qube {
     // }
 
 
+    fn partition_coordinates(sets: &[Coordinates]) -> Vec<Coordinates> {
+        let mut cells: Vec<Coordinates> = Vec::new();
+
+        for s in sets {
+            let mut next = Vec::new();
+
+            for cell in cells {
+                let inter = cell.intersect(s);
+                if !inter.intersection.is_empty() {
+                    let left = inter.only_a;
+                    let right = inter.only_b;
+
+                    if !left.is_empty() {
+                        next.push(left);
+                    }
+
+                    next.push(inter.intersection);
+
+                    if !right.is_empty() {
+                        next.push(right);
+                    }
+                } else {
+                    next.push(cell);
+                }
+            }
+
+            if next.is_empty() {
+                next.push(s.clone());
+            }
+
+            cells = next;
+        }
+
+        cells
+    }
+
+    fn compress_children(self, node_id: NodeIdx) {
+        
+    }
+
+
+    // pub fn internal_set_operation(
+    //     &mut self,
+    //     other: &mut Qube,
+    //     self_ids: &[NodeIdx],
+    //     other_ids: &[NodeIdx],
+    // ) -> Option<Vec<NodeIdx>> {
+    //     if self_ids.is_empty() {
+    //         return None;
+    //     }
+
+    //     // ---- 1. Snapshot input nodes (coords are cloned ONCE)
+    //     struct NodeSnap {
+    //         id: NodeIdx,
+    //         coords: Coordinates,
+    //     }
+
+    //     let self_nodes: Vec<NodeSnap> = self_ids
+    //         .iter()
+    //         .map(|&id| {
+    //             let node = self.node_ref(id).unwrap();
+    //             NodeSnap {
+    //                 id,
+    //                 coords: node.coords().clone(),
+    //             }
+    //         })
+    //         .collect();
+
+    //     let other_nodes: Vec<NodeSnap> = other_ids
+    //         .iter()
+    //         .map(|&id| {
+    //             let node = other.node_ref(id).unwrap();
+    //             NodeSnap {
+    //                 id,
+    //                 coords: node.coords().clone(),
+    //             }
+    //         })
+    //         .collect();
+
+    //     // ---- 2. Partition the full coordinate space
+    //     let mut all_coords = Vec::new();
+    //     for n in &self_nodes {
+    //         all_coords.push(n.coords.clone());
+    //     }
+    //     for n in &other_nodes {
+    //         all_coords.push(n.coords.clone());
+    //     }
+
+    //     let partitions = Self::partition_coordinates(&all_coords);
+
+    //     // ---- 3. Shared metadata
+    //     let base = self.node_ref(self_nodes[0].id).unwrap();
+    //     let parent = base.parent().unwrap();
+    //     let dim = base.dim();
+    //     let dim_str = self.dimension_str(dim).unwrap().to_owned();
+
+    //     let mut created = Vec::new();
+
+    //     // ---- 4. Rebuild per partition
+    //     for cell in partitions {
+    //         let a_contrib: Vec<_> = self_nodes
+    //             .iter()
+    //             .filter(|n| !n.coords.intersect(&cell).intersection.is_empty())
+    //             .collect();
+
+    //         let b_contrib: Vec<_> = other_nodes
+    //             .iter()
+    //             .filter(|n| !n.coords.intersect(&cell).intersection.is_empty())
+    //             .collect();
+
+    //         if a_contrib.is_empty() && b_contrib.is_empty() {
+    //             continue;
+    //         }
+
+    //         // Create node in self
+    //         let new_a = self
+    //             .create_child(&dim_str, parent, Some(cell.clone()))
+    //             .unwrap();
+
+    //         for src in &a_contrib {
+    //             self.add_same_children(new_a, src.id);
+    //         }
+
+    //         created.push(new_a);
+
+    //         // Recurse ONLY on intersection
+    //         if !a_contrib.is_empty() && !b_contrib.is_empty() {
+    //             let other_base = other.node_ref(b_contrib[0].id).unwrap();
+    //             let other_parent = other_base.parent().unwrap();
+    //             let other_dim_str = other
+    //                 .dimension_str(other_base.dim())
+    //                 .unwrap()
+    //                 .to_owned();
+
+    //             let new_b = other
+    //                 .create_child(&other_dim_str, other_parent, Some(cell))
+    //                 .unwrap();
+
+    //             for src in &b_contrib {
+    //                 other.add_same_children(new_b, src.id);
+    //             }
+
+    //             self.node_union_2(other, new_a, new_b);
+    //         }
+    //     }
+
+    //     // ---- 5. Consume originals (CRITICAL)
+    //     for &id in self_ids {
+    //         self.remove_node(id);
+    //     }
+    //     for &id in other_ids {
+    //         other.remove_node(id);
+    //     }
+
+    //     Some(created)
+    // }
+
+
 
     pub fn internal_set_operation(&mut self, other: &mut Qube, self_ids: &Vec<NodeIdx>, other_ids: &Vec<NodeIdx>) -> Option<Vec<NodeIdx>>{
         // TODO: would this actually work if the input trees were already compressed from the start, because we are just going through pairs of nodes, and looking at their intersections
@@ -425,8 +585,10 @@ impl Qube {
 
         for node in self_ids {
             for other_node in other_ids {
+                println!("IS IT HERE THAT WE STOP??");
                 let self_coords = self.node_ref(*node).unwrap().coords();
                 let other_coords = other.node_ref(*other_node).unwrap().coords();
+                println!("GOT HERE NOW AFTER THE UNMAPPING");
 
                 let (
                     parent_a,
@@ -513,6 +675,9 @@ impl Qube {
                     let actual_node = self.node_mut(*node).unwrap();
                     *actual_node.coords_mut() = only_self;
                 }
+                // else {
+                //     self.remove_node(*node);
+                // }
                 // if we keep the values only in B, then for each node that we found in only_b, take that node in other and change the coordinates to be those in only_b and yield that node
                 // TODO: no actually, we need to append the node with only_b to self...
 
@@ -524,12 +689,15 @@ impl Qube {
                     ).unwrap();
 
                     self.add_same_children(new_node_only_b, *other_node);
-                }
-
-                {
                     let actual_other_node = other.node_mut(*other_node).unwrap();
                     *actual_other_node.coords_mut() = only_other;
+                    // other.remove_node(*other_node);
                 }
+
+                // {
+                //     let actual_other_node = other.node_mut(*other_node).unwrap();
+                //     *actual_other_node.coords_mut() = only_other;
+                // }
                 {
                 return_vec.push(*node);
                 }
