@@ -325,6 +325,7 @@ impl Qube {
         let self_root_id = self.root();
         let other_root_id = other.root();
         self.node_union_2(&mut other, self_root_id, other_root_id);
+        self.compress();
     }
 }
 
