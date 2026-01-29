@@ -29,9 +29,20 @@ fn compress_uncompressed_tree() {
 
     println!("{:#?}", Qube::to_ascii(&qube_a));
 
+    let compressed_input_a = r#"root
+├── class=1
+│   └── expver=1/2
+│       └── param=1/2
+└── class=2
+    ├── expver=1
+    │   └── param=1/2/3
+    └── expver=2
+        └── param=1/2
+"#;
 
 
-    assert_ne!(
-        false, true
+
+    assert_eq!(
+        Qube::to_ascii(&qube_a), compressed_input_a, "identical compressed trees"
     );
 }
