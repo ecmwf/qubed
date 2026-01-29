@@ -57,22 +57,19 @@ impl Qube {
 
 
     fn merge_coords(&mut self, dim: Dimension, group: Vec<NodeIdx>, node_id: NodeIdx) {
-        // TODO
-
         // Need to get the key dimension
         let dim_str = self.dimension_str(&dim).unwrap().to_owned();
-
         let mut all_coords: Coordinates = self.node_ref(group[0]).unwrap().coords().clone();
-
         for &node_item in group.iter().skip(1) {
             all_coords.extend(self.node_ref(node_item).unwrap().coords());
         }
-
         // Create new node, which is a child of node_id, which has coords=union all coords in group nodes
-        self.create_child(&dim_str, node_id, Some(all_coords));
-
+        let new_node = self.create_child(&dim_str, node_id, Some(all_coords));
         // Append the children of first node in group to this new node (is fine we choose first node, since all of the nodes should have the same children here anyways)
-        for child in 
-        // Remove all of the nodes in group 
+        self.add_same_children(new_node.unwrap(), group[1]);
+        // Remove all of the nodes in group from the tree since they are no longer relevant
+        for id in group {
+            self.remove_node(id);
+        }
     }
 }
