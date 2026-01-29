@@ -46,7 +46,6 @@ impl Qube {
         other_id: NodeIdx,
     ) -> NodeIdx {
 
-        // --- Fast path: same structure, just merge coordinates ---
         let same_structure = {
             let self_hash = self.node(self_id).unwrap().structural_hash();
             let other_hash = other.node(other_id).unwrap().structural_hash();
@@ -57,11 +56,9 @@ impl Qube {
             self.merge_coordinates(self_id, other, other_id);
             return self_id;
         }
-
-        // --- Snapshot children (avoid borrow issues) ---
         let self_children = {
             let node = self.node_ref(self_id).unwrap();
-            node.children().clone() // HashMap<Dimension, TinyVec<NodeIdx>>
+            node.children().clone() 
         };
 
         let other_children = {
@@ -69,18 +66,16 @@ impl Qube {
             node.children().clone()
         };
 
-        // --- Iterate over dimensions in *other* ---
-        // (dimensions only in self require no action)
         for (dim, other_kids) in other_children {
             match self_children.get(&dim) {
                 None => {
-                    // Dimension does not exist in self → clone everything
+                    // dimension does not exist in self so clone everything
                     for other_child in other_kids {
                         self.clone_subtree(other, other_child, self_id);
                     }
                 }
                 Some(self_kids) => {
-                    // Dimension exists in both → pairwise recursion
+                    // dimension exists in both so pairwise recursion
                     for &self_child in self_kids {
                         for &other_child in &other_kids {
                             self.node_union(other, self_child, other_child);
