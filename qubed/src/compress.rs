@@ -18,10 +18,56 @@ impl Qube {
         map
     }
 
+    fn is_leaf(&self, id: NodeIdx) -> bool {
+        self.node_ref(id)
+            .expect("valid node")
+            .children()
+            .is_empty()
+    }
+
+    fn has_no_coords(&self, id: NodeIdx) -> bool {
+        matches!(self.node_ref(id).unwrap().coords(), Coordinates::Empty)
+    }
+
+    fn prune_empty_nodes_recursively(&mut self, node_id: NodeIdx) {
+        // collect children first
+        let children: Vec<NodeIdx> = {
+            let node = self.node_ref(node_id).unwrap();
+            node.children()
+                .values()
+                .flat_map(|v| v.iter().copied())
+                .collect()
+        };
+
+        // recurse first
+        for child in &children {
+            self.prune_empty_nodes_recursively(*child);
+        }
+
+        // decide which children to keep
+        let keep: std::collections::HashSet<NodeIdx> = children
+            .into_iter()
+            .filter(|&child| {
+                !matches!(
+                    self.node_ref(child).unwrap().coords(),
+                    Coordinates::Empty
+                )
+            })
+            .collect();
+
+        // mutate parent
+        let parent = self.node_mut(node_id).unwrap();
+        for kids in parent.children_mut().values_mut() {
+            kids.retain(|id| keep.contains(id));
+        }
+    }
+
+
 
     pub fn compress(&mut self) {
         let root = self.root();
         self.compress_recursively(root);
+        self.prune_empty_nodes_recursively(root);
     }
 
     fn compress_recursively(&mut self, node_id: NodeIdx) {
@@ -33,6 +79,31 @@ impl Qube {
                 .flat_map(|v| v.iter().copied())
                 .collect()
         };
+
+        if children.is_empty() {
+            return;
+        }
+
+        let all_children_are_leaves =
+            children.iter().all(|&id| self.is_leaf(id));
+
+        if all_children_are_leaves {
+            // group by dimension
+            let mut by_dim: HashMap<Dimension, Vec<NodeIdx>> = HashMap::new();
+
+            for &child in &children {
+                let dim = *self.node_ref(child).unwrap().dim();
+                by_dim.entry(dim).or_default().push(child);
+            }
+
+            for (dim, group) in by_dim {
+                if group.len() > 1 {
+                    self.merge_coords(dim, group, node_id);
+                }
+            }
+
+            return; // 🔥 do NOT fall through to hash-based logic
+        }
 
         for child in children {
             self.compress_recursively(child);
@@ -89,7 +160,6 @@ impl Qube {
     fn merge_coords(&mut self, dim: Dimension, group: Vec<NodeIdx>, node_id: NodeIdx) {
         assert!(!group.is_empty());
 
-        // 1️⃣ Collect all coords immutably
         let mut merged: Coordinates = {
             self.node_ref(group[0]).unwrap().coords().clone()
         };
@@ -99,13 +169,11 @@ impl Qube {
             merged.extend(coords);
         }
 
-        // 2️⃣ Mutate the first node
         {
             let node = self.node_mut(group[0]).unwrap();
             *node.coords_mut() = merged;
         }
 
-        // 3️⃣ Clear all other nodes
         for &id in group.iter().skip(1) {
             let node = self.node_mut(id).unwrap();
             *node.coords_mut() = Coordinates::Empty;
