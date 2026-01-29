@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use crate::qube::{Qube, NodeIdx, Dimension};
+use crate::coordinates::Coordinates;
 use std::collections::BTreeMap;
 use tiny_vec::TinyVec;
 
@@ -47,18 +48,31 @@ impl Qube {
         };
 
         for group in children_map.values() {
-            if group.len() > 1 {
-                self.merge_coords(group.clone(), node_id);
+            let group_dim = self.node_ref(group[0]).unwrap().dim();
+            if group.len() > 0 {
+                self.merge_coords(*group_dim, group.clone(), node_id);
             }
         }
     }
 
 
-    fn merge_coords(&mut self, group: Vec<NodeIdx>, node_id: NodeIdx) {
+    fn merge_coords(&mut self, dim: Dimension, group: Vec<NodeIdx>, node_id: NodeIdx) {
         // TODO
 
+        // Need to get the key dimension
+        let dim_str = self.dimension_str(&dim).unwrap().to_owned();
+
+        let mut all_coords: Coordinates = self.node_ref(group[0]).unwrap().coords().clone();
+
+        for &node_item in group.iter().skip(1) {
+            all_coords.extend(self.node_ref(node_item).unwrap().coords());
+        }
+
         // Create new node, which is a child of node_id, which has coords=union all coords in group nodes
+        self.create_child(&dim_str, node_id, Some(all_coords));
+
         // Append the children of first node in group to this new node (is fine we choose first node, since all of the nodes should have the same children here anyways)
+        for child in 
         // Remove all of the nodes in group 
     }
 }
