@@ -3,6 +3,7 @@ use crate::qube::{Qube, NodeIdx, Dimension};
 use crate::coordinates::Coordinates;
 use std::collections::BTreeMap;
 use tiny_vec::TinyVec;
+use std::sync::atomic::Ordering;
 
 impl Qube {
 
@@ -62,13 +63,70 @@ impl Qube {
         }
     }
 
+    fn invalidate_structural_hash(&mut self, id: NodeIdx) {
+        let node = self.node_mut(id).unwrap();
+        node.structural_hash().store(0, Ordering::Release);
+    }
+
+    fn dedup_children_locally(&mut self, parent: NodeIdx) {
+        let snapshot = {
+            let node = self.node_ref(parent).unwrap();
+            node.children().clone()
+        };
+
+        for (dim, kids) in snapshot {
+            let mut seen: HashMap<u64, NodeIdx> = HashMap::new();
+            let mut unique: Vec<NodeIdx> = Vec::new();
+
+            for &child in &kids {
+                let h = self.compute_structural_hash(child);
+
+                if seen.insert(h, child).is_none() {
+                    unique.push(child);
+                }
+            }
+
+            // Replace children list — NO removals
+            let parent_node = self.node_mut(parent).unwrap();
+            parent_node.children_mut().insert(dim, unique.into());
+        }
+
+        self.invalidate_structural_hash(parent);
+    }
+
+
+
+    fn dedup_recursively(&mut self, node_id: NodeIdx) {
+        let children: Vec<NodeIdx> = {
+            let node = self.node_ref(node_id).unwrap();
+            node.children()
+                .values()
+                .flat_map(|v| v.iter().copied())
+                .collect()
+        };
+
+        for child in children {
+            self.dedup_recursively(child);
+        }
+
+        self.dedup_children_locally(node_id);
+    }
+
+
+
 
 
     pub fn compress(&mut self) {
         let root = self.root();
+        // compress in place to avoid problems with hashes as we remove nodes etc, so we do not remove nodes here, just remove their coords
         self.compress_recursively(root);
+        // prune empty nodes that are left
         self.prune_empty_nodes_recursively(root);
+        // deduplicate nodes that may have become identical after compression because their hashes were different when we recursively compressed (different number of children for example)
+        self.dedup_recursively(root);
     }
+
+
 
     fn compress_recursively(&mut self, node_id: NodeIdx) {
         // First, reccurse into children to get to the leaves
@@ -102,7 +160,7 @@ impl Qube {
                 }
             }
 
-            return; // 🔥 do NOT fall through to hash-based logic
+            return;
         }
 
         for child in children {

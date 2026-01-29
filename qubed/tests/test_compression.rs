@@ -9,6 +9,9 @@ fn compress_uncompressed_tree() {
 │   ├── expver=0001
 │   │   ├── param=1
 │   │   └── param=2
+│   ├── expver=0002
+│   │   ├── param=1
+│   │   └── param=2
 │   └── expver=0002
 │       ├── param=1
 │       └── param=2
