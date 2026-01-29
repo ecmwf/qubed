@@ -30,6 +30,7 @@ pub(crate) struct Node {
     coords: Coordinates,
     parent: Option<NodeIdx>,
     children: BTreeMap<Dimension, TinyVec<NodeIdx, 4>>,
+    // merged_into: Option<NodeIdx>,
 }
 
 #[derive(Debug)]
@@ -320,6 +321,7 @@ impl Qube {
         let mut hasher = DefaultHasher::new();
 
         node.dim.hash(&mut hasher);
+        println!("START OF RECURSION LOOP");
 
         if node.children.is_empty() {
             node.coords.hash(&mut hasher);
@@ -329,7 +331,8 @@ impl Qube {
             for children in node.children.values() {
                 for &child in children {
                     let mut child_hasher = DefaultHasher::new();
-                    self.node_ref(child).unwrap().coords.hash(&mut child_hasher);
+                    println!("DID THIS START FAILING IN THE REUCRSION?");
+                    self.node_ref(child).expect("this child should still exist in the children").coords.hash(&mut child_hasher);
                     let child_hash = self.compute_structural_hash(child);
                     child_hash.hash(&mut child_hasher);
                     child_hashes.push(child_hasher.finish());
