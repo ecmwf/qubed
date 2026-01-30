@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
 use tiny_vec::TinyVec;
+use std::hash::DefaultHasher;
 
 use crate::coordinates::Coordinates;
 
@@ -313,27 +314,34 @@ impl<'a> NodeRef<'a> {
 
         // Compute hash
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        let version = 1u64;
+
         let dimension_string = self.dimension()?;
 
-        version.hash(&mut hasher);
         dimension_string.hash(&mut hasher);
 
         if self.node.children.is_empty() {
             // no children
             self.node.coords.hash(&mut hasher);
         }
+        else {
+            let mut child_hashes: Vec<u64> = Vec::new();
 
-        for (_, child_ids) in self.node.children.iter() {
-            for &child_id in child_ids.iter() {
-                let child_ref = self.qube.node(child_id)?;
-                child_ref.node.coords.hash(&mut hasher);
-                let child_hash = child_ref.structural_hash()?;
-                child_hash.hash(&mut hasher);
+            for (_, child_ids) in self.node.children.iter() {
+                for &child_id in child_ids.iter() {
+                    let mut child_hasher = DefaultHasher::new();
+
+                    let child_ref = self.qube.node(child_id)?;
+                    child_ref.node.coords.hash(&mut hasher);
+                    let child_hash = child_ref.structural_hash()?;
+                    child_hash.hash(&mut child_hasher);
+                    child_hashes.push(child_hasher.finish());
+                }
             }
+            child_hashes.sort_unstable();
+            child_hashes.hash(&mut hasher);
         }
 
-        let hash = hasher.finish();
+        let hash = hasher.finish().max(1);
 
         // Cache it (thread-safe via AtomicU64)
         self.node.structural_hash.store(hash, Ordering::Release);
