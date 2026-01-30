@@ -1,10 +1,10 @@
 use lasso::{MiniSpur, Rodeo};
 use slotmap::{SlotMap, new_key_type};
 use std::collections::{BTreeMap, HashSet};
+use std::hash::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
 use tiny_vec::TinyVec;
-use std::hash::DefaultHasher;
 
 use crate::coordinates::Coordinates;
 
@@ -322,8 +322,7 @@ impl<'a> NodeRef<'a> {
         if self.node.children.is_empty() {
             // no children
             self.node.coords.hash(&mut hasher);
-        }
-        else {
+        } else {
             let mut child_hashes: Vec<u64> = Vec::new();
 
             for (_, child_ids) in self.node.children.iter() {
