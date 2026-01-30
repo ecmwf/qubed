@@ -26,10 +26,6 @@ impl Qube {
             .is_empty()
     }
 
-    fn has_no_coords(&self, id: NodeIdx) -> bool {
-        matches!(self.node_ref(id).unwrap().coords(), Coordinates::Empty)
-    }
-
     fn prune_empty_nodes_recursively(&mut self, node_id: NodeIdx) {
         // collect children first
         let children: Vec<NodeIdx> = {
@@ -113,9 +109,6 @@ impl Qube {
     }
 
 
-
-
-
     pub fn compress(&mut self) {
         let root = self.root();
         // compress in place to avoid problems with hashes as we remove nodes etc, so we do not remove nodes here, just remove their coords
@@ -125,7 +118,6 @@ impl Qube {
         // deduplicate nodes that may have become identical after compression because their hashes were different when we recursively compressed (different number of children for example)
         self.dedup_recursively(root);
     }
-
 
 
     fn compress_recursively(&mut self, node_id: NodeIdx) {
@@ -154,9 +146,9 @@ impl Qube {
                 by_dim.entry(dim).or_default().push(child);
             }
 
-            for (dim, group) in by_dim {
+            for group in by_dim.values() {
                 if group.len() > 1 {
-                    self.merge_coords(dim, group, node_id);
+                    self.merge_coords(group.to_vec());
                 }
             }
 
@@ -181,13 +173,12 @@ impl Qube {
                 continue; // nothing to merge
             }
 
-            let group_dim = self.node_ref(group[0]).expect("Valid nodeIdx in tree").dim();
-            self.merge_coords(*group_dim, group.clone(), node_id);
+            self.merge_coords(group.clone());
         }
     }
 
 
-    fn merge_coords(&mut self, dim: Dimension, group: Vec<NodeIdx>, node_id: NodeIdx) {
+    fn merge_coords(&mut self, group: Vec<NodeIdx>) {
         assert!(!group.is_empty());
 
         let mut merged: Coordinates = {
@@ -210,12 +201,4 @@ impl Qube {
         }
     }
 
-
-    fn detach_children(&mut self, parent: NodeIdx, group: &[NodeIdx]) {
-        let parent_node = self.node_mut(parent).unwrap();
-
-        for kids in parent_node.children_mut().values_mut() {
-            kids.retain(|id| !group.contains(id));
-        }
-    }
 }

@@ -1,92 +1,9 @@
 
 use crate::{Qube, NodeIdx};
-use std::sync::atomic::Ordering;
-use crate::Coordinates;
 use std::collections::HashMap;
-use crate::qube::{Node, Dimension};
-
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SetOperation {
-    Union,
-    Intersection,
-    Difference,
-    SymmetricDifference,
-}
-
-impl SetOperation {
-    // Returns (keep_only_a, keep_intersection, keep_only_b)
-    pub fn flags(self) -> (bool, bool, bool) {
-        match self {
-            SetOperation::Union => (true, true, true),
-            SetOperation::Intersection => (false, true, false),
-            SetOperation::Difference => (true, false, false),
-            SetOperation::SymmetricDifference => (true, false, true),
-        }
-    }
-}
-
-
-
-
-// How do we perform unions? We look at the two Qubes, and we recurse through the children at each level
-// In the recursion, we do the set operation and then this indicates if there are children we need to append or not to these nodes, otherwise we just append the whole node to the tree if it didn't exist
-// To quickly determine if we can put two nodes together, we use the structural hash of the node
-
-use tiny_vec::TinyVec;
-use std::collections::{HashSet};
+use crate::qube::Dimension;
 
 impl Qube {
-
-
-    pub fn node_union(
-        &mut self,
-        other: &Qube,
-        self_id: NodeIdx,
-        other_id: NodeIdx,
-    ) -> NodeIdx {
-
-        let same_structure = {
-            let self_hash = self.node(self_id).unwrap().structural_hash();
-            let other_hash = other.node(other_id).unwrap().structural_hash();
-            self_hash == other_hash
-        };
-
-        if same_structure {
-            self.merge_coordinates(self_id, other, other_id);
-            return self_id;
-        }
-        let self_children = {
-            let node = self.node_ref(self_id).unwrap();
-            node.children().clone() 
-        };
-
-        let other_children = {
-            let node = other.node_ref(other_id).unwrap();
-            node.children().clone()
-        };
-
-        for (dim, other_kids) in other_children {
-            match self_children.get(&dim) {
-                None => {
-                    // dimension does not exist in self so clone everything
-                    for other_child in other_kids {
-                        self.clone_subtree(other, other_child, self_id);
-                    }
-                }
-                Some(self_kids) => {
-                    // dimension exists in both so pairwise recursion
-                    for &self_child in self_kids {
-                        for &other_child in &other_kids {
-                            self.node_union(other, self_child, other_child);
-                        }
-                    }
-                }
-            }
-        }
-
-        self_id
-    }
 
     pub fn node_union_2(
         &mut self,
@@ -95,17 +12,14 @@ impl Qube {
         other_id: NodeIdx,
     ) -> NodeIdx {
 
-        println!("HERE FIRST IN RECURSION: {:?}", self.dimension_str(self.node_ref(self_id).unwrap().dim()));
         // group the children of both nodes into groups according to their associated dimensions
         let self_children = {
             let node = self.node_ref(self_id).unwrap();
-            node.children().clone() // HashMap<Dimension, TinyVec<NodeIdx>>
+            node.children().clone()
         };
 
         let other_children = {
-            println!("HERE LOOK ARE WE HERE");
             let node = other.node_ref(other_id).unwrap();
-            println!("MANAGED TO UNWRAP NODE");
             node.children().clone()
         };
 
@@ -129,92 +43,20 @@ impl Qube {
                 (&entry.0, &entry.1)
             };
 
-            let new_children = self.internal_set_operation(other, these_kids, those_kids);
+            let _new_children = self.internal_set_operation(other, these_kids, those_kids);
 
         };
 
         return self.root()
     }
 
-    pub fn replace_children(&mut self, self_id: NodeIdx, kids: Vec<NodeIdx>) {
-        // TODO
-
-        let to_remove: Vec<NodeIdx> = {
-            let node = self.node_ref(self_id).unwrap();
-
-            node.children()
-                .values()
-                .flat_map(|ids| ids.iter().copied())
-                .collect()
-        };
-
-        for node_id in to_remove {
-            self.remove_node(node_id);
-        }
-
-        // TODO: somehow readd the kids now as children to self_id
-
-        for kid in kids {
-            // TODO: ARE THE KIDS ACTUALLY ALREADY ATTACHED TO THE PARENTS HERE??
-            // They should be attached at the right place already?
-        }
-
-    }
-
-
-    fn partition_coordinates(sets: &[Coordinates]) -> Vec<Coordinates> {
-        let mut cells: Vec<Coordinates> = Vec::new();
-
-        for s in sets {
-            let mut next = Vec::new();
-
-            for cell in cells {
-                let inter = cell.intersect(s);
-                if !inter.intersection.is_empty() {
-                    let left = inter.only_a;
-                    let right = inter.only_b;
-
-                    if !left.is_empty() {
-                        next.push(left);
-                    }
-
-                    next.push(inter.intersection);
-
-                    if !right.is_empty() {
-                        next.push(right);
-                    }
-                } else {
-                    next.push(cell);
-                }
-            }
-
-            if next.is_empty() {
-                next.push(s.clone());
-            }
-
-            cells = next;
-        }
-
-        cells
-    }
-
-    fn compress_children(self, node_id: NodeIdx) {
-
-    }
-
-
-
     pub fn internal_set_operation(&mut self, other: &mut Qube, self_ids: &Vec<NodeIdx>, other_ids: &Vec<NodeIdx>) -> Option<Vec<NodeIdx>>{
-        // TODO: would this actually work if the input trees were already compressed from the start, because we are just going through pairs of nodes, and looking at their intersections
-        // TODO: but at the moment, these nodes only each have one coordinate
         let mut return_vec = Vec::new();
 
         for node in self_ids {
             for other_node in other_ids {
-                println!("IS IT HERE THAT WE STOP??");
                 let self_coords = self.node_ref(*node).unwrap().coords();
                 let other_coords = other.node_ref(*other_node).unwrap().coords();
-                println!("GOT HERE NOW AFTER THE UNMAPPING");
 
                 let (
                     parent_a,
@@ -260,7 +102,7 @@ impl Qube {
                     self.add_same_children(new_node_a, *node);
                     other.add_same_children(new_node_b, *other_node);
 
-                    let nested_result = self.node_union_2(other, new_node_a, new_node_b);
+                    let _nested_result = self.node_union_2(other, new_node_a, new_node_b);
                 }
                 // NOTE: we now have two completely new nodes with only actual_intersection as values, on both self and other...
                 // so we may need to change node and other_node now to have the remaining values, otherwise we have duplicate data?
@@ -272,7 +114,6 @@ impl Qube {
                     *actual_node.coords_mut() = only_self;
                 }
                 // if we keep the values only in B, then for each node that we found in only_b, take that node in other and change the coordinates to be those in only_b and yield that node
-                // TODO: no actually, we need to append the node with only_b to self...
 
                 if only_other.len() != 0 {
                     let new_node_only_b = self.create_child(
@@ -295,23 +136,6 @@ impl Qube {
         }
 
         return Some(return_vec);
-    }
-
-    fn merge_coordinates(
-        &mut self,
-        self_id: NodeIdx,
-        other: &Qube,
-        other_id: NodeIdx,
-    ) {
-        let other_coords = {
-            let other_node = other.node(other_id).unwrap();
-            other_node.coordinates().clone()
-        };
-
-        let self_node = self.node_mut(self_id).unwrap();
-        // Need to invalidate the hash node here now?
-        self_node.coords_mut().extend(&other_coords);
-
     }
 
     pub fn union(&mut self, mut other: Qube) {

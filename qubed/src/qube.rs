@@ -30,7 +30,6 @@ pub(crate) struct Node {
     coords: Coordinates,
     parent: Option<NodeIdx>,
     children: BTreeMap<Dimension, TinyVec<NodeIdx, 4>>,
-    // merged_into: Option<NodeIdx>,
 }
 
 #[derive(Debug)]
@@ -52,13 +51,6 @@ impl Node {
         &self,
     ) -> &BTreeMap<Dimension, TinyVec<NodeIdx, 4>> {
         &self.children
-    }
-
-    pub(crate) fn children_for(
-        &self,
-        dim: Dimension,
-    ) -> Option<&TinyVec<NodeIdx, 4>> {
-        self.children.get(&dim)
     }
 
     pub(crate) fn structural_hash(
@@ -91,59 +83,10 @@ impl Node {
         &mut self.children
     }
 
-    pub(crate) fn set_parent(&mut self, parent: Option<NodeIdx>) {
-        self.parent = parent;
-    }
-
-    pub(crate) fn set_coords(&mut self, coords: Coordinates) {
-        self.coords = coords;
-    }
-
-    pub(crate) fn invalidate_hash(&self) {
-        self.structural_hash.store(0, Ordering::Release);
-    }
-
     pub(crate) fn parent(&self) -> &Option<NodeIdx> {
         &self.parent
     }
 
-}
-
-impl Qube {
-    pub(crate) fn clone_subtree(
-        &mut self,
-        other: &Qube,
-        other_id: NodeIdx,
-        new_parent: NodeIdx,
-    ) -> NodeIdx {
-        let other_node = other.nodes.get(other_id).expect("valid node");
-
-        let new_id = self.nodes.insert(Node {
-            dim: other_node.dim,
-            structural_hash: AtomicU64::new(
-                other_node.structural_hash.load(Ordering::Relaxed),
-            ),
-            coords: other_node.coords.clone(),
-            parent: Some(new_parent),
-            children: BTreeMap::new(),
-        });
-
-        if let Some(parent) = self.nodes.get_mut(new_parent) {
-            parent.children
-                .entry(other_node.dim)
-                .or_insert_with(TinyVec::new)
-                .push(new_id);
-            parent.structural_hash.store(0, Ordering::Release);
-        }
-
-        for child_ids in other_node.children.values() {
-            for &child in child_ids {
-                self.clone_subtree(other, child, new_id);
-            }
-        }
-
-        new_id
-    }
 }
 
 
@@ -154,10 +97,6 @@ impl Qube {
         id: NodeIdx,
     ) -> Option<&mut Node> {
         self.nodes.get_mut(id)
-    }
-
-    pub(crate) fn insert_node(&mut self, node: Node) -> NodeIdx {
-        self.nodes.insert(node)
     }
 
     pub(crate) fn node_ref(&self, id: NodeIdx) -> Option<&Node> {
@@ -182,16 +121,12 @@ impl Qube {
         }
     }
 
-    pub fn get_nodes(&self) -> &SlotMap<NodeIdx, Node> {
-        &self.nodes
-    }
-
     pub fn root(&self) -> NodeIdx {
         self.root_id
     }
 
     /// Get a read-only reference to a node
-    pub fn node(&self, id: NodeIdx) -> Option<NodeRef> {
+    pub fn node(&self, id: NodeIdx) -> Option<NodeRef<'_>> {
         let node = self.nodes.get(id)?;
         Some(NodeRef {
             qube: self,
@@ -321,7 +256,6 @@ impl Qube {
         let mut hasher = DefaultHasher::new();
 
         node.dim.hash(&mut hasher);
-        println!("START OF RECURSION LOOP");
 
         if node.children.is_empty() {
             node.coords.hash(&mut hasher);
@@ -331,7 +265,6 @@ impl Qube {
             for children in node.children.values() {
                 for &child in children {
                     let mut child_hasher = DefaultHasher::new();
-                    println!("DID THIS START FAILING IN THE REUCRSION?");
                     self.node_ref(child).expect("this child should still exist in the children").coords.hash(&mut child_hasher);
                     let child_hash = self.compute_structural_hash(child);
                     child_hash.hash(&mut child_hasher);
@@ -433,14 +366,6 @@ impl<'a> NodeRef<'a> {
             // no children
             self.node.coords.hash(&mut hasher);
         }
-
-        // for (_, child_ids) in self.node.children.iter() {
-        //     for &child_id in child_ids.iter() {
-        //         let child_ref = self.qube.node(child_id)?;
-        //         let child_hash = child_ref.structural_hash()?;
-        //         child_hash.hash(&mut hasher);
-        //     }
-        // }
 
         for (_, child_ids) in self.node.children.iter() {
             for &child_id in child_ids.iter() {
