@@ -23,7 +23,7 @@ node_modules/
 uv.lock
 *.log
 *.tmp
-test_scripts/data
+test_scripts
 tests/example_qubes
 **/*venv*
 
