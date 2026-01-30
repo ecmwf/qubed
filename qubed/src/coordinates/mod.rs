@@ -1,6 +1,6 @@
 pub mod integers;
-pub mod strings;
 pub mod ops;
+pub mod strings;
 use std::hash::Hash;
 
 use integers::IntegerCoordinates;
@@ -44,20 +44,18 @@ pub struct MixedCoordinates {
     strings: StringCoordinates,
 }
 
-
 impl Coordinates {
     pub fn new() -> Self {
         Coordinates::Empty
     }
 
     pub fn from_string(s: &str) -> Self {
-
         if s.is_empty() {
             return Coordinates::Empty;
         }
         let mut coords = Coordinates::Empty;
         let split: Vec<&str> = s.split('|').collect();
-        
+
         for part in split {
             if let Ok(int_val) = part.parse::<i32>() {
                 coords.append(int_val);
@@ -115,18 +113,15 @@ impl Coordinates {
 
     fn convert_to_mixed(&mut self) -> &mut Self {
         let mixed = match self {
-            Coordinates::Integers(ints) => Box::new(MixedCoordinates {
-                integers: ints.to_owned(),
-                ..Default::default()
-            }),
-            Coordinates::Floats(floats) => Box::new(MixedCoordinates {
-                floats: floats.to_owned(),
-                ..Default::default()
-            }),
-            Coordinates::Strings(strings) => Box::new(MixedCoordinates {
-                strings: strings.to_owned(),
-                ..Default::default()
-            }),
+            Coordinates::Integers(ints) => {
+                Box::new(MixedCoordinates { integers: ints.to_owned(), ..Default::default() })
+            }
+            Coordinates::Floats(floats) => {
+                Box::new(MixedCoordinates { floats: floats.to_owned(), ..Default::default() })
+            }
+            Coordinates::Strings(strings) => {
+                Box::new(MixedCoordinates { strings: strings.to_owned(), ..Default::default() })
+            }
             Coordinates::Empty => Box::new(MixedCoordinates::default()),
             Coordinates::Mixed(_) => {
                 return self;
@@ -145,7 +140,7 @@ impl Coordinates {
                     only_a: Coordinates::Integers(result.only_a),
                     only_b: Coordinates::Integers(result.only_b),
                 }
-            },
+            }
             (Coordinates::Strings(strs_a), Coordinates::Strings(strs_b)) => {
                 let result = strs_a.intersect(strs_b);
                 IntersectionResult {
@@ -153,7 +148,7 @@ impl Coordinates {
                     only_a: Coordinates::Strings(result.only_a),
                     only_b: Coordinates::Strings(result.only_b),
                 }
-            },
+            }
             _ => {
                 unimplemented!("Intersection not implemented for these coordinate types");
             }
@@ -183,7 +178,6 @@ impl Coordinates {
             }
         }
     }
-
 }
 
 impl Default for Coordinates {
@@ -207,11 +201,9 @@ impl FloatCoordinates {
     }
     pub(crate) fn to_string(&self) -> String {
         match self {
-            FloatCoordinates::List(list) => list
-                .iter()
-                .map(|v| v.to_string())
-                .collect::<Vec<String>>()
-                .join("/"),
+            FloatCoordinates::List(list) => {
+                list.iter().map(|v| v.to_string()).collect::<Vec<String>>().join("/")
+            }
         }
     }
 
@@ -241,7 +233,6 @@ impl From<f64> for Coordinates {
     }
 }
 
-
 // ------------- Intersection ------------------
 
 #[derive(Debug, Clone, PartialEq)]
@@ -251,16 +242,15 @@ pub struct IntersectionResult<T> {
     pub only_b: T,
 }
 
-impl<T, const CAP: usize> TinyOrderedSet<T, CAP> 
+impl<T, const CAP: usize> TinyOrderedSet<T, CAP>
 where
     T: Ord + Clone,
 {
     pub fn intersect(&self, other: &Self) -> IntersectionResult<Self> {
-
         let mut intersection = Self::new();
         let mut only_a = Self::new();
         let mut only_b = Self::new();
-        
+
         let mut iter_a = self.iter().peekable();
         let mut iter_b = other.iter().peekable();
 
@@ -293,11 +283,7 @@ where
             }
         }
 
-        IntersectionResult {
-            intersection,
-            only_a,
-            only_b,
-        }
+        IntersectionResult { intersection, only_a, only_b }
     }
 }
 
@@ -329,9 +315,7 @@ impl Coordinates {
     //     // only_a already present
     // }
 
-    pub fn from_intersection(
-        result: IntersectionResult<Coordinates>,
-    ) -> Coordinates {
+    pub fn from_intersection(result: IntersectionResult<Coordinates>) -> Coordinates {
         let mut coords = result.intersection;
         coords.extend(&result.only_a);
         coords.extend(&result.only_b);
@@ -343,7 +327,6 @@ impl Coordinates {
         Coordinates::from_intersection(intersection_result)
     }
 }
-
 
 // impl<const N: usize> From<&[CoordinateTypes; N]> for Coordinates {
 //     fn from(value: &[CoordinateTypes; N]) -> Self {
@@ -358,7 +341,6 @@ impl Coordinates {
 //         coords
 //     }
 // }
-
 
 // impl From<i32> for Coordinates {
 //     fn from(value: i32) -> Self {
@@ -429,5 +411,3 @@ impl Coordinates {
 //         }
 //     }
 // }
-
-

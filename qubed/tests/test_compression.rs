@@ -1,6 +1,5 @@
 use qubed::Qube;
 
-
 #[test]
 fn compress_uncompressed_tree() {
     // Base tree
@@ -43,9 +42,5 @@ fn compress_uncompressed_tree() {
         └── param=1/2
 "#;
 
-
-
-    assert_eq!(
-        Qube::to_ascii(&qube_a), compressed_input_a, "identical compressed trees"
-    );
+    assert_eq!(Qube::to_ascii(&qube_a), compressed_input_a, "identical compressed trees");
 }

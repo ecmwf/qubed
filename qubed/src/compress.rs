@@ -1,13 +1,15 @@
-use std::collections::HashMap;
-use crate::qube::{Qube, NodeIdx, Dimension};
 use crate::coordinates::Coordinates;
+use crate::qube::{Dimension, NodeIdx, Qube};
 use std::collections::BTreeMap;
-use tiny_vec::TinyVec;
+use std::collections::HashMap;
 use std::sync::atomic::Ordering;
+use tiny_vec::TinyVec;
 
 impl Qube {
-
-    fn children_hash_map(&mut self, children: &BTreeMap<Dimension, TinyVec<NodeIdx, 4>>) -> HashMap<u64, Vec<NodeIdx>> {
+    fn children_hash_map(
+        &mut self,
+        children: &BTreeMap<Dimension, TinyVec<NodeIdx, 4>>,
+    ) -> HashMap<u64, Vec<NodeIdx>> {
         let mut map: HashMap<u64, Vec<NodeIdx>> = HashMap::new();
 
         for (_dim, kids) in children.iter() {
@@ -20,20 +22,14 @@ impl Qube {
     }
 
     fn is_leaf(&self, id: NodeIdx) -> bool {
-        self.node_ref(id)
-            .expect("valid node")
-            .children()
-            .is_empty()
+        self.node_ref(id).expect("valid node").children().is_empty()
     }
 
     fn prune_empty_nodes_recursively(&mut self, node_id: NodeIdx) {
         // collect children first
         let children: Vec<NodeIdx> = {
             let node = self.node_ref(node_id).unwrap();
-            node.children()
-                .values()
-                .flat_map(|v| v.iter().copied())
-                .collect()
+            node.children().values().flat_map(|v| v.iter().copied()).collect()
         };
 
         // recurse first
@@ -44,12 +40,7 @@ impl Qube {
         // decide which children to keep
         let keep: std::collections::HashSet<NodeIdx> = children
             .into_iter()
-            .filter(|&child| {
-                !matches!(
-                    self.node_ref(child).unwrap().coords(),
-                    Coordinates::Empty
-                )
-            })
+            .filter(|&child| !matches!(self.node_ref(child).unwrap().coords(), Coordinates::Empty))
             .collect();
 
         // mutate parent
@@ -90,15 +81,10 @@ impl Qube {
         self.invalidate_structural_hash(parent);
     }
 
-
-
     fn dedup_recursively(&mut self, node_id: NodeIdx) {
         let children: Vec<NodeIdx> = {
             let node = self.node_ref(node_id).unwrap();
-            node.children()
-                .values()
-                .flat_map(|v| v.iter().copied())
-                .collect()
+            node.children().values().flat_map(|v| v.iter().copied()).collect()
         };
 
         for child in children {
@@ -107,7 +93,6 @@ impl Qube {
 
         self.dedup_children_locally(node_id);
     }
-
 
     pub fn compress(&mut self) {
         let root = self.root();
@@ -119,23 +104,18 @@ impl Qube {
         self.dedup_recursively(root);
     }
 
-
     fn compress_recursively(&mut self, node_id: NodeIdx) {
         // first, reccurse into children to get to the leaves
         let children: Vec<NodeIdx> = {
             let node = self.node_ref(node_id).expect("Valid nodeIdx in tree");
-            node.children()
-                .values()
-                .flat_map(|v| v.iter().copied())
-                .collect()
+            node.children().values().flat_map(|v| v.iter().copied()).collect()
         };
 
         if children.is_empty() {
             return;
         }
 
-        let all_children_are_leaves =
-            children.iter().all(|&id| self.is_leaf(id));
+        let all_children_are_leaves = children.iter().all(|&id| self.is_leaf(id));
 
         if all_children_are_leaves {
             // group by dimension
@@ -177,13 +157,10 @@ impl Qube {
         }
     }
 
-
     fn merge_coords(&mut self, group: Vec<NodeIdx>) {
         assert!(!group.is_empty());
 
-        let mut merged: Coordinates = {
-            self.node_ref(group[0]).unwrap().coords().clone()
-        };
+        let mut merged: Coordinates = { self.node_ref(group[0]).unwrap().coords().clone() };
 
         for &id in group.iter().skip(1) {
             let coords = self.node_ref(id).unwrap().coords();
@@ -200,5 +177,4 @@ impl Qube {
             *node.coords_mut() = Coordinates::Empty;
         }
     }
-
 }

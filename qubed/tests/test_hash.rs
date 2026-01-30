@@ -28,7 +28,6 @@ fn structural_hash_root_equal_for_identical_qubes() {
     assert_eq!(hash_a, hash_b, "identical trees must have equal hashes");
 }
 
-
 #[test]
 fn structural_hash_root_equal_for_semi_identical_qubes() {
     let input = r#"root
@@ -58,11 +57,9 @@ fn structural_hash_root_equal_for_semi_identical_qubes() {
 
     let qube_b_ref = qube_b.node(qube_b.root()).unwrap();
 
-    let qube_a_children_dims: Vec<_> =
-        qube_a_ref.child_dimensions().copied().collect();
+    let qube_a_children_dims: Vec<_> = qube_a_ref.child_dimensions().copied().collect();
 
-    let qube_b_children_dims: Vec<_> =
-        qube_b_ref.child_dimensions().copied().collect();
+    let qube_b_children_dims: Vec<_> = qube_b_ref.child_dimensions().copied().collect();
 
     for dim_a in &qube_a_children_dims {
         let children_a = qube_a_ref.children(*dim_a).unwrap();

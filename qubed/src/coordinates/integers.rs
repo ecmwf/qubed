@@ -53,11 +53,9 @@ impl IntegerCoordinates {
 
     pub(crate) fn to_string(&self) -> String {
         match self {
-            IntegerCoordinates::Set(set) => set
-                .iter()
-                .map(|v| v.to_string())
-                .collect::<Vec<String>>()
-                .join("/"),
+            IntegerCoordinates::Set(set) => {
+                set.iter().map(|v| v.to_string()).collect::<Vec<String>>().join("/")
+            }
             IntegerCoordinates::RangeSet(ranges) => ranges
                 .iter()
                 .map(|v| format!("{}:{}:{}", v.start, v.step, v.end))
@@ -102,7 +100,6 @@ impl IntegerCoordinates {
             }
         }
     }
-
 }
 
 impl From<IntegerCoordinates> for Coordinates {
@@ -154,8 +151,6 @@ impl IntegerCoordinates {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,7 +174,6 @@ mod tests {
         expected_intersection.append(2);
         expected_intersection.append(3);
 
-
         let mut expected_only_a = Coordinates::Empty;
         expected_only_a.append(1);
         expected_only_a.extend_from_iter([5, 8, 12, 20, 25, 199, -1].into_iter());
@@ -192,6 +186,5 @@ mod tests {
         assert_eq!(result.intersection, expected_intersection);
         assert_eq!(result.only_a, expected_only_a);
         assert_eq!(result.only_b, expected_only_b);
-
     }
 }

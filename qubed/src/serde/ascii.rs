@@ -3,7 +3,7 @@ use std::str::Lines;
 
 use crate::{
     Coordinates,
-    qube::{Qube, NodeIdx},
+    qube::{NodeIdx, Qube},
 };
 
 // ---------------- ASCII Deserialization ----------------
@@ -37,10 +37,7 @@ fn parse_root(lines: &mut Peekable<Lines>) -> Result<(), String> {
     let line = lines.next().ok_or("Input is empty")?;
     let (indent, content) = parse_line(line)?;
     if indent != 0 {
-        return Err(format!(
-            "Root node must have zero indentation, found {}",
-            indent
-        ));
+        return Err(format!("Root node must have zero indentation, found {}", indent));
     }
     if content != "root" {
         return Err(format!("Root node must be 'root', found '{}'", content));
@@ -70,10 +67,9 @@ fn parse_children(
         }
 
         // Add this node
-        let (key, values) = content.split_once("=").ok_or(format!(
-            "Invalid node format: '{}', expected 'key=value'",
-            content
-        ))?;
+        let (key, values) = content
+            .split_once("=")
+            .ok_or(format!("Invalid node format: '{}', expected 'key=value'", content))?;
 
         let coordinates = Coordinates::from_string(values);
 
@@ -100,10 +96,7 @@ fn parse_line(line: &str) -> Result<(usize, String), String> {
     }
 
     if i % 4 != 0 {
-        return Err(format!(
-            "Invalid indentation: {} characters is not divisible by 4",
-            i
-        ));
+        return Err(format!("Invalid indentation: {} characters is not divisible by 4", i));
     }
 
     let indentation = i / 4;
@@ -149,11 +142,8 @@ fn serialize_children(qube: &Qube, parent_id: NodeIdx, prefix: &str, output: &mu
         output.push_str(&format!("{}={}", key, values_str));
         output.push('\n');
 
-        let next_prefix = if is_last {
-            format!("{}    ", prefix)
-        } else {
-            format!("{}│   ", prefix)
-        };
+        let next_prefix =
+            if is_last { format!("{}    ", prefix) } else { format!("{}│   ", prefix) };
         serialize_children(qube, *child_id, &next_prefix, output);
     }
 }

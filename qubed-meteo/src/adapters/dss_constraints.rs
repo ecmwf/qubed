@@ -1,6 +1,5 @@
-use qubed::{Qube, Datacube};
+use qubed::{Datacube, Qube};
 use serde_json::Value;
-
 
 pub trait FromDssConstraints {
     fn from_dss_constraints(dss_constraints: &Value) -> Result<Qube, String>;
@@ -8,7 +7,6 @@ pub trait FromDssConstraints {
 
 impl FromDssConstraints for Qube {
     fn from_dss_constraints(dss_constraints: &Value) -> Result<Qube, String> {
-        
         let qube = Qube::new();
 
         let datacubes = dss_constraints.as_array().expect("DSS constraints should be a JSON array");
@@ -20,28 +18,23 @@ impl FromDssConstraints for Qube {
                 Ok(dc) => Qube::from_datacube(&dc, None),
                 Err(e) => return Err(format!("Failed to parse datacube: {}", e)),
             };
-            
+
             // add to qube
             print!("Parsed datacube: {}", qube_part.to_ascii());
-        
-
-        };
+        }
         Ok(qube)
-
-
     }
 }
 
-
 fn parse_datacube(dss_datacube: &Value) -> Result<Datacube, String> {
-
     let mut datacube = Datacube::new();
-    
-    let dimensions = dss_datacube.as_object().expect("DSS datacube should be a JSON object");
-    
-    for (dimension_name, coordinates) in dimensions {
 
-        let coord_array = coordinates.as_array().expect(format!("Datacube dimension {} should be a JSON array", dimension_name).as_str());
+    let dimensions = dss_datacube.as_object().expect("DSS datacube should be a JSON object");
+
+    for (dimension_name, coordinates) in dimensions {
+        let coord_array = coordinates.as_array().expect(
+            format!("Datacube dimension {} should be a JSON array", dimension_name).as_str(),
+        );
 
         let mut coords = qubed::Coordinates::new();
 
@@ -53,17 +46,16 @@ fn parse_datacube(dss_datacube: &Value) -> Result<Datacube, String> {
                     } else if num.is_f64() {
                         coords.append(num.as_f64().unwrap());
                     }
-                },
+                }
                 Value::String(s) => {
                     coords.append(s.clone());
-                },
+                }
                 _ => panic!("Unsupported coordinate type in dimension {}", dimension_name),
             }
         }
 
         datacube.add_coordinate(dimension_name, coords);
-
     }
-    
+
     Ok(datacube)
 }
