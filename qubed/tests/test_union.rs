@@ -28,7 +28,6 @@ use qubed::Qube;
 //     assert_eq!(hash_a, hash_b, "identical trees must have equal hashes");
 // }
 
-
 #[test]
 fn union_almost_identical_qubes() {
     // Base tree
@@ -78,8 +77,6 @@ fn union_almost_identical_qubes() {
 
     let hash_a = qube_a.node(qube_a.root()).unwrap().structural_hash();
     // let hash_b = qube_b.node(qube_b.root()).unwrap().structural_hash();
-
-
 
     assert_ne!(
         hash_a, hash_b,

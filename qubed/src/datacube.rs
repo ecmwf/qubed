@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::{Coordinates, Qube};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Datacube {
@@ -8,9 +8,7 @@ pub struct Datacube {
 
 impl Datacube {
     pub fn new() -> Self {
-        Datacube {
-            coordinates: HashMap::new(),
-        }
+        Datacube { coordinates: HashMap::new() }
     }
 
     pub fn add_coordinate(&mut self, dimension: &str, coords: Coordinates) {
@@ -26,18 +24,18 @@ impl Datacube {
     }
 }
 
-
 impl Qube {
-
-    pub fn from_datacube(datacube: &Datacube, order: Option<&[String]>  ) -> Self {
+    pub fn from_datacube(datacube: &Datacube, order: Option<&[String]>) -> Self {
         let mut qube = Qube::new();
         let mut parent = qube.root();
-        
+
         // Create dimensions in the specified order
         if let Some(order_iter) = order {
             for dim in order_iter {
                 if let Some(coords) = datacube.coordinates.get(dim) {
-                    parent = qube.create_child(&dim, parent, Some(coords.clone())).expect("Failed to create dimension");
+                    parent = qube
+                        .create_child(&dim, parent, Some(coords.clone()))
+                        .expect("Failed to create dimension");
                 }
             }
         }
@@ -47,18 +45,23 @@ impl Qube {
             if qube.dimension(&dim).is_some() {
                 continue;
             }
-            parent = qube.create_child(&dim, parent, Some(coords.clone())).expect("Failed to create dimension");
+            parent = qube
+                .create_child(&dim, parent, Some(coords.clone()))
+                .expect("Failed to create dimension");
         }
 
         qube
     }
 
-    pub fn append_datacube(&mut self, _datacube: Datacube, _order: Option<&[String]>, _accept_existing_order: bool) {
-        
+    pub fn append_datacube(
+        &mut self,
+        _datacube: Datacube,
+        _order: Option<&[String]>,
+        _accept_existing_order: bool,
+    ) {
         unimplemented!();
         // Easier to construct a Qube and then merge. Need to implement merge.
         // todo!()
-
 
         // // we consume the datacube
 
@@ -104,13 +107,5 @@ impl Qube {
         //         break; // No more dimensions to process
         //     }
         // }
-
-
     }
-
-
-
-
-
-
 }

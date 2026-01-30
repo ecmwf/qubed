@@ -85,8 +85,6 @@ impl<T, const CAP: usize> TinyOrderedSet<T, CAP> {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;

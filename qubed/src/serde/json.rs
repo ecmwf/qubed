@@ -1,4 +1,4 @@
-use crate::{Coordinates, Qube, NodeIdx};
+use crate::{Coordinates, NodeIdx, Qube};
 use serde_json::{Map, Value};
 
 // ---------------- JSON Deserialization ----------------
@@ -147,14 +147,8 @@ mod json_tests {
         assert_eq!(original, serialized);
 
         // Verify structure is preserved
-        println!(
-            "Original:\n{}",
-            serde_json::to_string_pretty(&original).unwrap()
-        );
-        println!(
-            "Serialized:\n{}",
-            serde_json::to_string_pretty(&serialized).unwrap()
-        );
+        println!("Original:\n{}", serde_json::to_string_pretty(&original).unwrap());
+        println!("Serialized:\n{}", serde_json::to_string_pretty(&serialized).unwrap());
     }
 
     #[test]

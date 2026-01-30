@@ -1,17 +1,14 @@
-
-use crate::{Qube, NodeIdx};
-use std::collections::HashMap;
 use crate::qube::Dimension;
+use crate::{NodeIdx, Qube};
+use std::collections::HashMap;
 
 impl Qube {
-
     pub fn node_union_2(
         &mut self,
         other: &mut Qube,
         self_id: NodeIdx,
         other_id: NodeIdx,
     ) -> NodeIdx {
-
         // group the children of both nodes into groups according to their associated dimensions
         let self_children = {
             let node = self.node_ref(self_id).unwrap();
@@ -44,13 +41,17 @@ impl Qube {
             };
 
             let _new_children = self.internal_set_operation(other, these_kids, those_kids);
+        }
 
-        };
-
-        return self.root()
+        return self.root();
     }
 
-    pub fn internal_set_operation(&mut self, other: &mut Qube, self_ids: &Vec<NodeIdx>, other_ids: &Vec<NodeIdx>) -> Option<Vec<NodeIdx>>{
+    pub fn internal_set_operation(
+        &mut self,
+        other: &mut Qube,
+        self_ids: &Vec<NodeIdx>,
+        other_ids: &Vec<NodeIdx>,
+    ) -> Option<Vec<NodeIdx>> {
         let mut return_vec = Vec::new();
 
         for node in self_ids {
@@ -58,12 +59,7 @@ impl Qube {
                 let self_coords = self.node_ref(*node).unwrap().coords();
                 let other_coords = other.node_ref(*other_node).unwrap().coords();
 
-                let (
-                    parent_a,
-                    dim_a,
-                    parent_b,
-                    dim_b,
-                ) = {
+                let (parent_a, dim_a, parent_b, dim_b) = {
                     let actual_node = self.node_ref(*node).unwrap();
                     let actual_other_node = other.node_ref(*other_node).unwrap();
 
@@ -87,17 +83,13 @@ impl Qube {
                 let other_dim_str = other.dimension_str(dim_b).unwrap().to_owned();
 
                 if actual_intersection.len() != 0 {
-                    let new_node_a = self.create_child(
-                        &dim_str,
-                        parent_a,
-                        Some(actual_intersection.clone()),
-                    ).unwrap();
+                    let new_node_a = self
+                        .create_child(&dim_str, parent_a, Some(actual_intersection.clone()))
+                        .unwrap();
 
-                    let new_node_b = other.create_child(
-                        &other_dim_str,
-                        parent_b,
-                        Some(actual_intersection),
-                    ).unwrap();
+                    let new_node_b = other
+                        .create_child(&other_dim_str, parent_b, Some(actual_intersection))
+                        .unwrap();
 
                     self.add_same_children(new_node_a, *node);
                     other.add_same_children(new_node_b, *other_node);
@@ -116,11 +108,8 @@ impl Qube {
                 // if we keep the values only in B, then for each node that we found in only_b, take that node in other and change the coordinates to be those in only_b and yield that node
 
                 if only_other.len() != 0 {
-                    let new_node_only_b = self.create_child(
-                        &dim_str,
-                        parent_a,
-                        Some(only_other.clone()),
-                    ).unwrap();
+                    let new_node_only_b =
+                        self.create_child(&dim_str, parent_a, Some(only_other.clone())).unwrap();
 
                     self.add_same_children(new_node_only_b, *other_node);
                     let actual_other_node = other.node_mut(*other_node).unwrap();
@@ -128,10 +117,8 @@ impl Qube {
                 }
 
                 {
-                return_vec.push(*node);
+                    return_vec.push(*node);
                 }
-
-
             }
         }
 
@@ -147,5 +134,3 @@ impl Qube {
         self.compress();
     }
 }
-
-

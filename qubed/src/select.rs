@@ -1,12 +1,12 @@
-use std::collections::{HashMap, HashSet};
 use crate::{Coordinates, Dimension, NodeIdx, Qube};
+use std::collections::{HashMap, HashSet};
 
 // TODO: select should return a QubeView, but this is an optimization
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum SelectMode {
     Default,
-    Prune
+    Prune,
 }
 
 pub(crate) struct WalkPair {
@@ -20,24 +20,17 @@ impl Qube {
 
     pub fn select<C>(&self, selection: &[(&str, C)], mode: SelectMode) -> Result<Qube, String>
     where
-        C: Into<Coordinates> + Clone
+        C: Into<Coordinates> + Clone,
     {
         let root = self.root();
         let mut result = Qube::new();
 
-        let selection: HashMap<&str, Coordinates> = selection
-            .iter()
-            .map(|(k, v)| (*k, v.clone().into()))
-            .collect();
+        let selection: HashMap<&str, Coordinates> =
+            selection.iter().map(|(k, v)| (*k, v.clone().into())).collect();
 
-
-        let parents = WalkPair {
-            left: root,
-            right: result.root(),
-        };
+        let parents = WalkPair { left: root, right: result.root() };
 
         self.select_recurse(&selection, &mut result, parents)?;
-
 
         // Prune any nodes which do not have all selected dimensions
         if mode == SelectMode::Prune {
@@ -59,10 +52,8 @@ impl Qube {
         result: &mut Qube,
         parents: WalkPair,
     ) -> Result<(), String> {
-        
-        let source_node = self
-            .node(parents.left)
-            .ok_or_else(|| format!("Node {:?} not found", parents.left))?;
+        let source_node =
+            self.node(parents.left).ok_or_else(|| format!("Node {:?} not found", parents.left))?;
 
         // For each child in the source Qube, find the values which overlap and create a child in the result Qube
         // We ignore values only_in_a and only_in_b, we only want the intersection
@@ -72,10 +63,7 @@ impl Qube {
 
         for dimension in span {
             let dimension_str = self.dimension_str(dimension).ok_or_else(|| {
-                format!(
-                    "Dimension {:?} not found in key store. Should not happen.",
-                    dimension
-                )
+                format!("Dimension {:?} not found in key store. Should not happen.", dimension)
             })?;
 
             if selection.contains_key(dimension_str) {
@@ -84,13 +72,13 @@ impl Qube {
                 // Get children for this dimension
                 let source_children: Vec<_> = match source_node.children(*dimension) {
                     Some(iter) => iter.collect(),
-                    None => continue,  // Skip this dimension if no children
+                    None => continue, // Skip this dimension if no children
                 };
 
                 for child_id in source_children {
-                    let child_node = self.node(child_id).ok_or_else(|| {
-                        format!("Child node {:?} not found", child_id)
-                    })?;
+                    let child_node = self
+                        .node(child_id)
+                        .ok_or_else(|| format!("Child node {:?} not found", child_id))?;
 
                     let coordinates = child_node.coordinates();
 
@@ -101,16 +89,10 @@ impl Qube {
                         continue;
                     }
 
-                    let new_child = result.create_child(
-                        dimension_str,
-                        parents.right,
-                        Some(intersection),
-                    )?;
+                    let new_child =
+                        result.create_child(dimension_str, parents.right, Some(intersection))?;
 
-                    let new_parents = WalkPair {
-                        left: child_id,
-                        right: new_child,
-                    };
+                    let new_parents = WalkPair { left: child_id, right: new_child };
 
                     self.select_recurse(selection, result, new_parents)?;
                 }
@@ -118,13 +100,13 @@ impl Qube {
                 // Dimension not in selection, so we take all children
                 let source_children: Vec<_> = match source_node.children(*dimension) {
                     Some(iter) => iter.collect(),
-                    None => continue,  // Skip this dimension if no children
+                    None => continue, // Skip this dimension if no children
                 };
 
                 for child_id in source_children {
-                    let child_node = self.node(child_id).ok_or_else(|| {
-                        format!("Child node {:?} not found", child_id)
-                    })?;
+                    let child_node = self
+                        .node(child_id)
+                        .ok_or_else(|| format!("Child node {:?} not found", child_id))?;
 
                     let coordinates = child_node.coordinates();
 
@@ -134,10 +116,7 @@ impl Qube {
                         Some(coordinates.clone()),
                     )?;
 
-                    let new_parents = WalkPair {
-                        left: child_id,
-                        right: new_child,
-                    };
+                    let new_parents = WalkPair { left: child_id, right: new_child };
 
                     self.select_recurse(selection, result, new_parents)?;
                 }
@@ -155,9 +134,9 @@ impl Qube {
                 Some(n) => n,
                 None => return,
             };
-            
+
             let span = node.span();
-            
+
             // Count dimensions in has_none_of
             let mut count = 0;
             for dim in span {
@@ -165,34 +144,34 @@ impl Qube {
                     count += 1;
                 }
             }
-            
+
             // If missing dimensions, we'll remove this node
             if count < has_none_of.len() {
                 drop(node); // Explicitly drop to release borrow
                 self.remove_node(node_id).ok();
                 return;
             }
-            
+
             // Collect child data before releasing the borrow
             let child_dimensions: Vec<Dimension> = node.child_dimensions().copied().collect();
             let mut child_data = Vec::new();
-            
+
             for dim in &child_dimensions {
                 let dim_str = self.dimension_str(&dim).unwrap_or("");
                 let mut new_has_none_of = has_none_of.clone();
                 if new_has_none_of.contains(dim_str) {
                     new_has_none_of.remove(dim_str);
                 }
-                
+
                 if let Some(children_iter) = node.children(*dim) {
                     let children: Vec<NodeIdx> = children_iter.collect();
                     child_data.push((children, new_has_none_of));
                 }
             }
-            
+
             child_data
         }; // node dropped here, borrow released
-        
+
         // Now we can mutably borrow self for recursion
         for (children, new_has_none_of) in child_data {
             for child_id in children {
@@ -200,7 +179,6 @@ impl Qube {
             }
         }
     }
-
 }
 
 #[cfg(test)]
@@ -315,9 +293,8 @@ mod tests {
         let root = qube.root();
         let mut has_none_of = HashSet::new();
         has_none_of.insert("class");
-        
-        qube.prune(root, has_none_of);
 
+        qube.prune(root, has_none_of);
 
         let result = r#"root
 └── class=1
@@ -329,13 +306,8 @@ mod tests {
         └── param=2
 "#;
 
-
         assert_eq!(qube.to_ascii(), result);
 
-
-
         Ok(())
-
     }
-
 }

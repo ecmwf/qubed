@@ -1,8 +1,8 @@
+use lasso::{MiniSpur, Rodeo};
+use slotmap::{SlotMap, new_key_type};
 use std::collections::{BTreeMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
-use lasso::{MiniSpur, Rodeo};
-use slotmap::{SlotMap, new_key_type};
 use tiny_vec::TinyVec;
 
 use crate::coordinates::Coordinates;
@@ -14,7 +14,6 @@ new_key_type! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Dimension(MiniSpur);
 
-
 // -------------------------
 //  Internal Node Structure
 // -------------------------
@@ -22,11 +21,10 @@ pub struct Dimension(MiniSpur);
 // The node needs careful state management to ensure the structural hash is properly invalidated
 // It is fully private and only modified via Qube and NodeRef methods in this module
 
-
 #[derive(Debug)]
 pub(crate) struct Node {
     dim: Dimension,
-    structural_hash: AtomicU64,  // 0 = not computed
+    structural_hash: AtomicU64, // 0 = not computed
     coords: Coordinates,
     parent: Option<NodeIdx>,
     children: BTreeMap<Dimension, TinyVec<NodeIdx, 4>>,
@@ -47,55 +45,37 @@ pub struct NodeRef<'a> {
 }
 
 impl Node {
-    pub(crate) fn children(
-        &self,
-    ) -> &BTreeMap<Dimension, TinyVec<NodeIdx, 4>> {
+    pub(crate) fn children(&self) -> &BTreeMap<Dimension, TinyVec<NodeIdx, 4>> {
         &self.children
     }
 
-    pub(crate) fn structural_hash(
-        &self,
-    ) -> &AtomicU64 {
+    pub(crate) fn structural_hash(&self) -> &AtomicU64 {
         &self.structural_hash
     }
 
-    pub(crate) fn dim(
-        &self,
-    ) -> &Dimension {
+    pub(crate) fn dim(&self) -> &Dimension {
         &self.dim
     }
 
-    pub(crate) fn coords(
-        &self,
-    ) -> &Coordinates {
+    pub(crate) fn coords(&self) -> &Coordinates {
         &self.coords
     }
 
-    pub(crate) fn coords_mut(
-        &mut self,
-    ) -> &mut Coordinates {
+    pub(crate) fn coords_mut(&mut self) -> &mut Coordinates {
         &mut self.coords
     }
 
-    pub(crate) fn children_mut(
-        &mut self,
-    ) -> &mut BTreeMap<Dimension, TinyVec<NodeIdx, 4>> {
+    pub(crate) fn children_mut(&mut self) -> &mut BTreeMap<Dimension, TinyVec<NodeIdx, 4>> {
         &mut self.children
     }
 
     pub(crate) fn parent(&self) -> &Option<NodeIdx> {
         &self.parent
     }
-
 }
 
-
 impl Qube {
-
-    pub(crate) fn node_mut(
-        &mut self,
-        id: NodeIdx,
-    ) -> Option<&mut Node> {
+    pub(crate) fn node_mut(&mut self, id: NodeIdx) -> Option<&mut Node> {
         self.nodes.get_mut(id)
     }
 
@@ -114,11 +94,7 @@ impl Qube {
             children: BTreeMap::new(),
         });
 
-        Qube {
-            nodes,
-            root_id,
-            key_store,
-        }
+        Qube { nodes, root_id, key_store }
     }
 
     pub fn root(&self) -> NodeIdx {
@@ -128,11 +104,7 @@ impl Qube {
     /// Get a read-only reference to a node
     pub fn node(&self, id: NodeIdx) -> Option<NodeRef<'_>> {
         let node = self.nodes.get(id)?;
-        Some(NodeRef {
-            qube: self,
-            node,
-            id,
-        })
+        Some(NodeRef { qube: self, node, id })
     }
 
     pub fn create_child(
@@ -157,10 +129,7 @@ impl Qube {
 
         // Add to parent's children
         if let Some(parent) = self.nodes.get_mut(parent_id) {
-            parent.children
-                .entry(dim)
-                .or_insert_with(TinyVec::new)
-                .push(node_id);
+            parent.children.entry(dim).or_insert_with(TinyVec::new).push(node_id);
             parent.structural_hash.store(0, Ordering::Release);
         }
 
@@ -171,7 +140,6 @@ impl Qube {
     }
 
     pub fn remove_node(&mut self, id: NodeIdx) -> Result<(), String> {
-        
         let node = self.nodes.remove(id).ok_or_else(|| format!("Node {:?} not found", id))?;
 
         // Recursively remove all children
@@ -217,19 +185,10 @@ impl Qube {
         }
     }
 
-    pub(crate) fn add_child(
-        &mut self,
-        parent: NodeIdx,
-        dim: Dimension,
-        child: NodeIdx,
-    ) {
+    pub(crate) fn add_child(&mut self, parent: NodeIdx, dim: Dimension, child: NodeIdx) {
         let parent_node = self.node_mut(parent).unwrap();
 
-        parent_node
-            .children
-            .entry(dim)
-            .or_insert_with(TinyVec::new)
-            .push(child);
+        parent_node.children.entry(dim).or_insert_with(TinyVec::new).push(child);
     }
 
     pub(crate) fn add_same_children(&mut self, node: NodeIdx, other: NodeIdx) {
@@ -240,7 +199,6 @@ impl Qube {
             }
         }
     }
-
 
     pub(crate) fn compute_structural_hash(&self, id: NodeIdx) -> u64 {
         let node = self.nodes.get(id).expect("valid node");
@@ -265,7 +223,10 @@ impl Qube {
             for children in node.children.values() {
                 for &child in children {
                     let mut child_hasher = DefaultHasher::new();
-                    self.node_ref(child).expect("this child should still exist in the children").coords.hash(&mut child_hasher);
+                    self.node_ref(child)
+                        .expect("this child should still exist in the children")
+                        .coords
+                        .hash(&mut child_hasher);
                     let child_hash = self.compute_structural_hash(child);
                     child_hash.hash(&mut child_hasher);
                     child_hashes.push(child_hasher.finish());
@@ -281,8 +242,6 @@ impl Qube {
         node.structural_hash.store(hash, Ordering::Release);
         hash
     }
-
-
 }
 
 impl<'a> NodeRef<'a> {
@@ -320,9 +279,7 @@ impl<'a> NodeRef<'a> {
     }
 
     pub fn children(&self, key: Dimension) -> Option<impl Iterator<Item = NodeIdx> + 'a> {
-        self.node.children
-            .get(&key)
-            .map(|vec| vec.iter().copied())
+        self.node.children.get(&key).map(|vec| vec.iter().copied())
     }
 
     pub fn all_children(&self) -> impl Iterator<Item = NodeIdx> + 'a {
@@ -332,7 +289,7 @@ impl<'a> NodeRef<'a> {
     pub fn ancestors(&self) -> impl Iterator<Item = NodeIdx> + 'a {
         let first_parent = self.node.parent;
         let qube = self.qube;
-        
+
         std::iter::successors(first_parent, move |&current_id| {
             qube.nodes.get(current_id).and_then(|node| node.parent)
         })
@@ -377,10 +334,10 @@ impl<'a> NodeRef<'a> {
         }
 
         let hash = hasher.finish();
-        
+
         // Cache it (thread-safe via AtomicU64)
         self.node.structural_hash.store(hash, Ordering::Release);
-        
+
         Some(hash)
     }
 
@@ -393,23 +350,17 @@ impl<'a> NodeRef<'a> {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_hash() {
         let mut qube = Qube::new();
         let root = qube.root();
 
-        let child1 = qube
-            .create_child("dim1", root, Some(1.into()))
-            .unwrap();
-        let child2 = qube
-            .create_child("dim2", root, Some(2.into()))
-            .unwrap();
+        let child1 = qube.create_child("dim1", root, Some(1.into())).unwrap();
+        let child2 = qube.create_child("dim2", root, Some(2.into())).unwrap();
 
         let hash_root = qube.node(root).unwrap().structural_hash().unwrap();
         let hash_child1 = qube.node(child1).unwrap().structural_hash().unwrap();

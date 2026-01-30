@@ -2,16 +2,13 @@ use std::hash::Hash;
 
 use tiny_str::TinyString;
 
-use crate::utils::tiny_ordered_set::TinyOrderedSet;
 use crate::coordinates::{Coordinates, IntersectionResult};
-
+use crate::utils::tiny_ordered_set::TinyOrderedSet;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StringCoordinates {
     Set(TinyOrderedSet<TinyString<4>, 2>),
 }
-
-
 
 impl StringCoordinates {
     pub(crate) fn extend(&mut self, new_coords: &StringCoordinates) {
@@ -38,15 +35,16 @@ impl StringCoordinates {
     }
     pub(crate) fn to_string(&self) -> String {
         match self {
-            StringCoordinates::Set(list) => list
-                .iter()
-                .map(|v| v.to_string())
-                .collect::<Vec<String>>()
-                .join("/"),
+            StringCoordinates::Set(list) => {
+                list.iter().map(|v| v.to_string()).collect::<Vec<String>>().join("/")
+            }
         }
     }
 
-    pub(crate) fn intersect(&self, other: &StringCoordinates) -> IntersectionResult<StringCoordinates> {
+    pub(crate) fn intersect(
+        &self,
+        other: &StringCoordinates,
+    ) -> IntersectionResult<StringCoordinates> {
         match (self, other) {
             (StringCoordinates::Set(list_a), StringCoordinates::Set(list_b)) => {
                 let result = list_a.intersect(list_b);
