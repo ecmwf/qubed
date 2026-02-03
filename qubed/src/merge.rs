@@ -3,13 +3,10 @@ use crate::{NodeIdx, Qube};
 use std::collections::HashMap;
 
 impl Qube {
-    pub fn node_union_2(
-        &mut self,
-        other: &mut Qube,
-        self_id: NodeIdx,
-        other_id: NodeIdx,
-    ) -> NodeIdx {
-        // group the children of both nodes into groups according to their associated dimensions
+    pub fn node_union(&mut self, other: &mut Qube, self_id: NodeIdx, other_id: NodeIdx) -> NodeIdx {
+        // Performs a union operation between two nodes in two different Qubes.
+
+        // Group the children of both nodes into groups according to their associated dimensions.
         let self_children = {
             let node = self.node_ref(self_id).unwrap();
             node.children().clone()
@@ -20,7 +17,7 @@ impl Qube {
             node.children().clone()
         };
 
-        // create a map of dim, (self_children, other_children)
+        // Create a map of dimensions to (self_children, other_children).
         let mut dim_child_map: HashMap<Dimension, (Vec<NodeIdx>, Vec<NodeIdx>)> = HashMap::new();
 
         for (dim, self_kids) in self_children {
@@ -30,8 +27,7 @@ impl Qube {
             dim_child_map.entry(dim).or_default().1.extend(other_kids);
         }
 
-        // per dimension, perform internal_set_operation on the groups and look at what new children we get from this
-
+        // For each dimension, perform an internal set operation on the groups.
         let dims: Vec<_> = dim_child_map.keys().copied().collect();
 
         for dim in dims {
@@ -52,6 +48,8 @@ impl Qube {
         self_ids: &Vec<NodeIdx>,
         other_ids: &Vec<NodeIdx>,
     ) -> Option<Vec<NodeIdx>> {
+        // Performs a set operation between two groups of nodes from two Qubes.
+
         let mut return_vec = Vec::new();
 
         for node in self_ids {
@@ -71,14 +69,15 @@ impl Qube {
                     )
                 };
 
-                // perform the shallow operation to get the set of values only in self, those only in other, and those in the intersection
-
+                // Perform the shallow operation to get the set of values only in self,
+                // those only in other, and those in the intersection.
                 let intersection_res = self_coords.intersect(other_coords);
                 let actual_intersection = intersection_res.intersection;
                 let only_self = intersection_res.only_a;
                 let only_other = intersection_res.only_b;
 
-                // if the intersection set is non-empty, then do node_union_2 on the new node_a and node_b, who only have the intersection values as values and yield the result
+                // If the intersection set is non-empty, create new nodes for the intersection
+                // and perform a union on them.
                 let dim_str = self.dimension_str(dim_a).unwrap().to_owned();
                 let other_dim_str = other.dimension_str(dim_b).unwrap().to_owned();
 
@@ -94,25 +93,22 @@ impl Qube {
                     self.add_same_children(new_node_a, *node);
                     other.add_same_children(new_node_b, *other_node);
 
-                    let _nested_result = self.node_union_2(other, new_node_a, new_node_b);
+                    let _nested_result = self.node_union(other, new_node_a, new_node_b);
                 }
-                // NOTE: we now have two completely new nodes with only actual_intersection as values, on both self and other...
-                // so we may need to change node and other_node now to have the remaining values, otherwise we have duplicate data?
 
-                // if we keep the values only in A, then for each node that we found in only_a, take that node in self and change the coordinates to be those in only_a and yield that node
-
+                // If there are values only in self, update the coordinates of the current node.
                 if only_self.len() != 0 {
                     let actual_node = self.node_mut(*node).unwrap();
                     *actual_node.coords_mut() = only_self;
                 }
-                // if we keep the values only in B, then for each node that we found in only_b, take that node in other and change the coordinates to be those in only_b and yield that node
 
+                // If there are values only in other, create a new node for those values.
                 if only_other.len() != 0 {
                     let new_node_only_b =
                         self.create_child(&dim_str, parent_a, Some(only_other.clone())).unwrap();
 
                     self.add_same_children(new_node_only_b, *other_node);
-                    let actual_other_node = other.node_mut(*other_node).unwrap();
+                    let actual_other_node = other.node_mut(*otherNode).unwrap();
                     *actual_other_node.coords_mut() = only_other;
                 }
 
@@ -126,11 +122,14 @@ impl Qube {
     }
 
     pub fn union(&mut self, mut other: Qube) {
-        // These two Qubes are now arenas and we access the individual nodes with idx
-        // We start at the root of both ie idx=0
+        // Performs a union operation between two Qubes.
+        //
+        // This method starts at the root of both Qubes and recursively merges their nodes.
+        // After the union, the tree is compressed to remove duplicates and empty nodes.
+
         let self_root_id = self.root();
         let other_root_id = other.root();
-        self.node_union_2(&mut other, self_root_id, other_root_id);
+        self.node_union(&mut other, self_root_id, other_root_id);
         self.compress();
     }
 }
