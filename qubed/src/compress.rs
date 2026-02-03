@@ -10,6 +10,9 @@ impl Qube {
         &mut self,
         children: &BTreeMap<Dimension, TinyVec<NodeIdx, 4>>,
     ) -> HashMap<u64, Vec<NodeIdx>> {
+        // Creates a hash map where the keys are structural hashes of child nodes
+        // and the values are vectors of node indices that share the same hash.
+
         let mut map: HashMap<u64, Vec<NodeIdx>> = HashMap::new();
 
         for (_dim, kids) in children.iter() {
@@ -22,28 +25,28 @@ impl Qube {
     }
 
     fn is_leaf(&self, id: NodeIdx) -> bool {
+        // Checks if a node is a leaf node (i.e., it has no children).
+
         self.node_ref(id).expect("valid node").children().is_empty()
     }
 
     fn prune_empty_nodes_recursively(&mut self, node_id: NodeIdx) {
-        // collect children first
+        // Recursively prunes empty nodes from the tree.
+
         let children: Vec<NodeIdx> = {
             let node = self.node_ref(node_id).unwrap();
             node.children().values().flat_map(|v| v.iter().copied()).collect()
         };
 
-        // recurse first
         for child in &children {
             self.prune_empty_nodes_recursively(*child);
         }
 
-        // decide which children to keep
         let keep: std::collections::HashSet<NodeIdx> = children
             .into_iter()
             .filter(|&child| !matches!(self.node_ref(child).unwrap().coords(), Coordinates::Empty))
             .collect();
 
-        // mutate parent
         let parent = self.node_mut(node_id).unwrap();
         for kids in parent.children_mut().values_mut() {
             kids.retain(|id| keep.contains(id));
@@ -51,11 +54,15 @@ impl Qube {
     }
 
     fn invalidate_structural_hash(&mut self, id: NodeIdx) {
+        // Invalidates the cached structural hash of a node.
+
         let node = self.node_mut(id).unwrap();
         node.structural_hash().store(0, Ordering::Release);
     }
 
     fn dedup_children_locally(&mut self, parent: NodeIdx) {
+        // Deduplicates the children of a node by merging nodes with identical structural hashes.
+
         let snapshot = {
             let node = self.node_ref(parent).unwrap();
             node.children().clone()
@@ -73,7 +80,6 @@ impl Qube {
                 }
             }
 
-            // Replace children list — NO removals
             let parent_node = self.node_mut(parent).unwrap();
             parent_node.children_mut().insert(dim, unique.into());
         }
@@ -82,6 +88,8 @@ impl Qube {
     }
 
     fn dedup_recursively(&mut self, node_id: NodeIdx) {
+        // Recursively deduplicates nodes in the tree, starting from the given node.
+
         let children: Vec<NodeIdx> = {
             let node = self.node_ref(node_id).unwrap();
             node.children().values().flat_map(|v| v.iter().copied()).collect()
@@ -95,17 +103,22 @@ impl Qube {
     }
 
     pub fn compress(&mut self) {
+        // Compresses the tree by merging nodes, pruning empty nodes, and deduplicating nodes.
+        //
+        // This method performs the following steps:
+        // 1. Compresses nodes recursively.
+        // 2. Prunes empty nodes from the tree.
+        // 3. Deduplicates nodes that may have become identical after compression.
+
         let root = self.root();
-        // compress in place to avoid problems with hashes as we remove nodes etc, so we do not remove nodes here, just remove their coords
         self.compress_recursively(root);
-        // prune empty nodes that are left
         self.prune_empty_nodes_recursively(root);
-        // deduplicate nodes that may have become identical after compression because their hashes were different when we recursively compressed (different number of children for example)
         self.dedup_recursively(root);
     }
 
     fn compress_recursively(&mut self, node_id: NodeIdx) {
-        // first, reccurse into children to get to the leaves
+        // Recursively compresses the tree, merging coordinates of child nodes where possible.
+
         let children: Vec<NodeIdx> = {
             let node = self.node_ref(node_id).expect("Valid nodeIdx in tree");
             node.children().values().flat_map(|v| v.iter().copied()).collect()
@@ -158,6 +171,9 @@ impl Qube {
     }
 
     fn merge_coords(&mut self, group: Vec<NodeIdx>) {
+        // Merges the coordinates of a group of nodes into the first node in the group.
+        // The coordinates of all other nodes in the group are set to `Coordinates::Empty`.
+
         assert!(!group.is_empty());
 
         let mut merged: Coordinates = { self.node_ref(group[0]).unwrap().coords().clone() };

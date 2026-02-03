@@ -6,7 +6,6 @@ use std::hash::Hash;
 use integers::IntegerCoordinates;
 use strings::StringCoordinates;
 
-// use smallbitvec::SmallBitVec;
 use tiny_vec::TinyVec;
 
 use crate::utils::tiny_ordered_set::TinyOrderedSet;
@@ -14,8 +13,6 @@ use crate::utils::tiny_ordered_set::TinyOrderedSet;
 // TODO: check for duplicates. Sets may be better than vecs.
 // TODO: Change MixedCoordinates to a HashMap (especially if we allow more types later)
 // TODO: Consider adding a catchall generic type
-
-// pub struct QubeNodeValuesMask(SmallBitVec);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Coordinates {
@@ -288,33 +285,6 @@ where
 }
 
 impl Coordinates {
-    // pub fn merge_from_intersection(
-    //     &self,
-    //     other: &Coordinates,
-    // ) -> Coordinates {
-    //     let result = self.intersect(other);
-
-    //     match result {
-    //         IntersectionResult {
-    //             intersection,
-    //             only_a,
-    //             only_b,
-    //         } => intersection
-    //             .extend(&only_a)
-    //             .extend(&only_b),
-    //     }
-    // }
-    // pub fn extend_from_intersection(
-    //     &mut self,
-    //     other: &Coordinates,
-    // ) {
-    //     let result = self.intersect(other);
-
-    //     self.extend(&result.intersection);
-    //     self.extend(&result.only_b);
-    //     // only_a already present
-    // }
-
     pub fn from_intersection(result: IntersectionResult<Coordinates>) -> Coordinates {
         let mut coords = result.intersection;
         coords.extend(&result.only_a);
@@ -327,87 +297,3 @@ impl Coordinates {
         Coordinates::from_intersection(intersection_result)
     }
 }
-
-// impl<const N: usize> From<&[CoordinateTypes; N]> for Coordinates {
-//     fn from(value: &[CoordinateTypes; N]) -> Self {
-//         let mut coords = Coordinates::new();
-//         for v in value {
-//             match v {
-//                 CoordinateTypes::Integer(i) => coords.append(*i),
-//                 CoordinateTypes::Float(f) => coords.append(*f),
-//                 CoordinateTypes::String(s) => coords.append(s.clone()),
-//             }
-//         }
-//         coords
-//     }
-// }
-
-// impl From<i32> for Coordinates {
-//     fn from(value: i32) -> Self {
-//         let mut set = TinyOrderedSet::new();
-//         set.insert(value);
-//         Coordinates::Integers(IntegerCoordinates::Set(set))
-//     }
-// }
-
-// impl Default for FloatCoordinates {
-//     fn default() -> Self {
-//         FloatCoordinates::Empty
-//     }
-// }
-
-// impl Default for StringCoordinates {
-//     fn default() -> Self {
-//         StringCoordinates::Empty
-//     }
-// }
-
-// --------------- Iteration ----------------------
-
-// pub enum QubeNodeValuesIter<'a> {
-//     Empty,
-//     Integer(Option<i32>),
-//     Float(Option<f64>),
-//     String(Option<&'a str>),
-//     IntegerList(std::slice::Iter<'a, i32>),
-//     IntegerRange(std::ops::Range<i32>),
-//     List(std::slice::Iter<'a, Coordinates>),
-// }
-
-// #[derive(Debug, Clone, PartialEq)]
-// pub enum QubeNodeValuesIteratorItem<'a> {
-//     Integer(i32),
-//     Float(f64),
-//     String(&'a str),
-//     Nested(&'a Coordinates),
-// }
-
-// impl<'a> Iterator for QubeNodeValuesIter<'a> {
-//     type Item = QubeNodeValuesIteratorItem<'a>;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         match self {
-//             Self::Empty => None,
-//             Self::Integer(opt) => opt.take().map(QubeNodeValuesIteratorItem::Integer),
-//             Self::Float(opt) => opt.take().map(QubeNodeValuesIteratorItem::Float),
-//             Self::String(opt) => opt.take().map(QubeNodeValuesIteratorItem::String),
-//             Self::IntegerList(iter) => iter.next().copied().map(QubeNodeValuesIteratorItem::Integer),
-//             Self::IntegerRange(range) => range.next().map(QubeNodeValuesIteratorItem::Integer),
-//             Self::List(iter) => iter.next().map(QubeNodeValuesIteratorItem::Nested),
-//         }
-//     }
-// }
-
-// impl Coordinates {
-//     pub fn iter(&self) -> QubeNodeValuesIter {
-//         match self {
-//             Self::None(_) => QubeNodeValuesIter::Empty,
-//             Self::Integer(i) => QubeNodeValuesIter::Integer(Some(*i)),
-//             Self::Float(f) => QubeNodeValuesIter::Float(Some(*f)),
-//             Self::String(s) => QubeNodeValuesIter::String(Some(s.as_str())),
-//             Self::IntegerList(list) => QubeNodeValuesIter::IntegerList(list.iter()),
-//             Self::IntegerRange(range) => QubeNodeValuesIter::IntegerRange(range.start..range.end),
-//             Self::List(list) => QubeNodeValuesIter::List(list.iter()),
-//         }
-//     }
-// }
