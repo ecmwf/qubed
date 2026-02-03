@@ -14,13 +14,13 @@ impl FromDssConstraints for Qube {
         for datacube in datacubes {
             let qube_part = parse_datacube(datacube);
 
-            let qube_part = match qube_part {
+            let mut qube_part = match qube_part {
                 Ok(dc) => Qube::from_datacube(&dc, None),
                 Err(e) => return Err(format!("Failed to parse datacube: {}", e)),
             };
 
             // add to qube
-            qube.union(qube_part);
+            qube.union(&mut qube_part);
             print!("Parsed datacube: {}", qube_part.to_ascii());
         }
         Ok(qube)

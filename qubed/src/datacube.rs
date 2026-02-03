@@ -60,8 +60,8 @@ impl Qube {
         _accept_existing_order: bool,
     ) {
         // TODO: implement this function
-        let other_qube = Self::from_datacube(&_datacube, _order);
-        self.union(other_qube);
+        let mut other_qube = Self::from_datacube(&_datacube, _order);
+        self.union(&mut other_qube);
         // unimplemented!();
         // Easier to construct a Qube and then merge. Need to implement merge.
         // todo!()

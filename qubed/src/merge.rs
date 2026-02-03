@@ -121,7 +121,7 @@ impl Qube {
         return Some(return_vec);
     }
 
-    pub fn union(&mut self, mut other: Qube) {
+    pub fn union(&mut self, other: &mut Qube) {
         // Performs a union operation between two Qubes.
         //
         // This method starts at the root of both Qubes and recursively merges their nodes.
@@ -129,7 +129,7 @@ impl Qube {
 
         let self_root_id = self.root();
         let other_root_id = other.root();
-        self.node_union(&mut other, self_root_id, other_root_id);
+        self.node_union(other, self_root_id, other_root_id);
         self.compress();
     }
 }
