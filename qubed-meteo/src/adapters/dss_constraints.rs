@@ -7,7 +7,7 @@ pub trait FromDssConstraints {
 
 impl FromDssConstraints for Qube {
     fn from_dss_constraints(dss_constraints: &Value) -> Result<Qube, String> {
-        let qube = Qube::new();
+        let mut qube = Qube::new();
 
         let datacubes = dss_constraints.as_array().expect("DSS constraints should be a JSON array");
 
@@ -20,6 +20,7 @@ impl FromDssConstraints for Qube {
             };
 
             // add to qube
+            qube.union(qube_part);
             print!("Parsed datacube: {}", qube_part.to_ascii());
         }
         Ok(qube)
