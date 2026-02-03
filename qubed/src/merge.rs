@@ -3,9 +3,8 @@ use crate::{NodeIdx, Qube};
 use std::collections::HashMap;
 
 impl Qube {
+    /// Performs a union operation between two nodes in two different Qubes.
     pub fn node_union(&mut self, other: &mut Qube, self_id: NodeIdx, other_id: NodeIdx) -> NodeIdx {
-        // Performs a union operation between two nodes in two different Qubes.
-
         // Group the children of both nodes into groups according to their associated dimensions.
         let self_children = {
             let node = self.node_ref(self_id).unwrap();
@@ -42,14 +41,13 @@ impl Qube {
         return self.root();
     }
 
+    /// Performs a set operation between two groups of nodes from two Qubes.
     pub fn internal_set_operation(
         &mut self,
         other: &mut Qube,
         self_ids: &Vec<NodeIdx>,
         other_ids: &Vec<NodeIdx>,
     ) -> Option<Vec<NodeIdx>> {
-        // Performs a set operation between two groups of nodes from two Qubes.
-
         let mut return_vec = Vec::new();
 
         for node in self_ids {
@@ -121,12 +119,11 @@ impl Qube {
         return Some(return_vec);
     }
 
+    /// Performs a union operation between two Qubes.
+    ///
+    /// This method starts at the root of both Qubes and recursively merges their nodes.
+    /// After the union, the tree is compressed to remove duplicates and empty nodes.
     pub fn union(&mut self, mut other: Qube) {
-        // Performs a union operation between two Qubes.
-        //
-        // This method starts at the root of both Qubes and recursively merges their nodes.
-        // After the union, the tree is compressed to remove duplicates and empty nodes.
-
         let self_root_id = self.root();
         let other_root_id = other.root();
         self.node_union(&mut other, self_root_id, other_root_id);

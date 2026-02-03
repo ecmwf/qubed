@@ -192,12 +192,11 @@ impl Qube {
         parent_node.children.entry(dim).or_insert_with(TinyVec::new).push(child);
     }
 
+    /// Adds all children of the `other` node to the `node` under the same dimensions.
+    ///
+    /// This method iterates over all children of the `other` node, grouped by their dimensions,
+    /// and adds them to the `node` under the same dimensions.
     pub(crate) fn add_same_children(&mut self, node: NodeIdx, other: NodeIdx) {
-        // Adds all children of the `other` node to the `node` under the same dimensions.
-        //
-        // This method iterates over all children of the `other` node, grouped by their dimensions,
-        // and adds them to the `node` under the same dimensions.
-
         let other_children_dims = self.node_ref(other).unwrap().children.clone();
         for (dim, other_children) in other_children_dims {
             for other_child in other_children {
