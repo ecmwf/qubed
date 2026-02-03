@@ -108,7 +108,7 @@ impl Qube {
                         self.create_child(&dim_str, parent_a, Some(only_other.clone())).unwrap();
 
                     self.add_same_children(new_node_only_b, *other_node);
-                    let actual_other_node = other.node_mut(*otherNode).unwrap();
+                    let actual_other_node = other.node_mut(*other_node).unwrap();
                     *actual_other_node.coords_mut() = only_other;
                 }
 
