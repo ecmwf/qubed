@@ -19,7 +19,7 @@ class SelectMode(Enum):
 
 def select(
     qube: Qube,
-    selection: Mapping[str, str | list[str] | Callable[[Any], bool]],
+    selection: Mapping[str, str | Iterable[str] | Callable[[Any], bool]],
     mode: SelectMode = SelectMode.Relaxed,
     consume: bool = False,
 ) -> Qube:
