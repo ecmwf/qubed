@@ -332,7 +332,6 @@ def set_operation(
         B.display(name=pad() + "B")
 
     assert A.key == B.key
-    assert A.type == B.type
     assert A.values == B.values
     assert A.depth == B.depth
 
