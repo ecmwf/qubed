@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 from .set_operations import recursively_take_from_metadata
+from collections.abc import Iterable
 
 if TYPE_CHECKING:
     from .Qube import Qube
@@ -19,7 +20,7 @@ class SelectMode(Enum):
 
 def select(
     qube: Qube,
-    selection: Mapping[str, str | list[str] | Callable[[Any], bool]],
+    selection: Mapping[str, str | Iterable[str] | Callable[[Any], bool]],
     mode: SelectMode = SelectMode.Relaxed,
     consume: bool = False,
 ) -> Qube:
@@ -36,7 +37,7 @@ def select(
             _selection[k] = v
         elif callable(v):
             _selection[k] = v
-        elif iter(v) and not isinstance(v, (str, bytes)):
+        elif isinstance(v, Iterable) and not isinstance(v, (str, bytes)):
             _selection[k] = list(v)
         else:
             _selection[k] = [v]
