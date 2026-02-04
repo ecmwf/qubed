@@ -36,6 +36,8 @@ def select(
             _selection[k] = v
         elif callable(v):
             _selection[k] = v
+        elif iter(v) and not isinstance(v, (str, bytes)):
+            _selection[k] = list(v)
         else:
             _selection[k] = [v]
 

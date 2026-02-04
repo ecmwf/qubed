@@ -23,6 +23,26 @@ root
     assert q.select({"expver": "0001"}, consume=False) == expected
 
 
+def test_select_multiple():
+    expected = Qube.from_tree("""
+root
+├── class=od, expver=0001/0002, param=1/2
+└── class=rd, param=1/2
+""")
+    assert q.select({"param": ["1", "2"]}) == expected
+
+
+def test_select_multiple_set():
+    expected = Qube.from_tree("""
+root
+├── class=od, expver=0001/0002, param=1/2
+└── class=rd, param=1/2
+""")
+
+    print(q.select({"param": {"1", "2"}}))
+    assert q.select({"param": {"1", "2"}}) == expected
+
+
 def test_function_input_to_select():
     q = Qube.from_tree("""
     root, frequency=6:00:00
