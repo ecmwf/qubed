@@ -86,6 +86,16 @@ impl Qube {
                 let other_dim_str = other.dimension_str(dim_b).unwrap().to_owned();
 
                 if actual_intersection.len() != 0 {
+                    let check_new_child_a = self.check_if_new_child(
+                        &dim_str,
+                        parent_a,
+                        Some(actual_intersection.clone()),
+                    );
+                    let check_new_child_b = other.check_if_new_child(
+                        &other_dim_str,
+                        parent_b,
+                        Some(actual_intersection.clone()),
+                    );
                     let new_node_a = self
                         .create_child(&dim_str, parent_a, Some(actual_intersection.clone()))
                         .unwrap();
@@ -94,8 +104,12 @@ impl Qube {
                         .create_child(&other_dim_str, parent_b, Some(actual_intersection))
                         .unwrap();
 
-                    self.add_same_children(new_node_a, *node);
-                    other.add_same_children(new_node_b, *other_node);
+                    if check_new_child_a.unwrap() {
+                        self.add_same_children(new_node_a, *node);
+                    }
+                    if check_new_child_b.unwrap() {
+                        other.add_same_children(new_node_b, *other_node);
+                    }
 
                     let _nested_result = self.node_union(other, new_node_a, new_node_b);
                 }

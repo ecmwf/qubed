@@ -282,4 +282,46 @@ impl Qube {
             *node.coords_mut() = Coordinates::Empty;
         }
     }
+
+    // fn merge_coords(&mut self, group: Vec<NodeIdx>) {
+    //     // Remove duplicate NodeIdx values from the group
+
+    //     println!("WHAT ARE THE NODE IDXS: {:?}", group);
+    //     let mut unique_group: Vec<NodeIdx> = group
+    //         .into_iter()
+    //         .collect::<std::collections::HashSet<_>>()
+    //         .into_iter()
+    //         .collect();
+
+    //     // Ensure the group is not empty after deduplication
+    //     assert!(!unique_group.is_empty());
+
+    //     // Sort the group to ensure deterministic behavior (optional)
+    //     unique_group.sort();
+
+    //     let mut merged: Coordinates = { self.node_ref(unique_group[0]).unwrap().coords().clone() };
+
+    //     println!("QUBE AT THIS POINT: {:?}", self.to_ascii());
+    //     println!("Group size after deduplication: {}", unique_group.len());
+    //     println!("WHAT IS THE MERGED COORDS HERE 1? {:?}", merged.clone());
+
+    //     for &id in unique_group.iter().skip(1) {
+    //         let coords = self.node_ref(id).unwrap().coords();
+    //         merged.extend(coords);
+    //     }
+
+    //     println!("WHAT IS THE MERGED COORDS HERE 2? {:?}", merged.clone());
+
+    //     {
+    //         let node = self.node_mut(unique_group[0]).unwrap();
+    //         *node.coords_mut() = merged;
+    //     }
+
+    //     println!("QUBE AT THIS POINT AFTER: {:?}", self.to_ascii());
+
+    //     for &id in unique_group.iter().skip(1) {
+    //         let node = self.node_mut(id).unwrap();
+    //         *node.coords_mut() = Coordinates::Empty;
+    //     }
+    // }
 }
