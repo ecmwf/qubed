@@ -141,7 +141,22 @@ class QEnum(ValueGroup):
     values: EnumValuesType
     _dtype: str = "str"
 
-    def __init__(self, obj, dtype="str"):
+    def __init__(self, obj, dtype: str | None = None):
+        if dtype is None:
+            values_dtype = set(list(map(type, obj)))
+            if len(values_dtype) > 1:
+                raise ValueError(
+                    f"All values must be of the same type, but found {values_dtype}"
+                )
+            elif len(values_dtype) == 0:
+                dtype = "str"
+            else:
+                dtype = _dtype_map_inv.get(values_dtype.pop(), None)
+
+            if dtype is None:
+                raise ValueError(
+                    f"data type not allowed {dtype}, currently only {_dtype_map_inv.keys()} are supported."
+                )
         object.__setattr__(self, "values", tuple(sorted(obj)))
         object.__setattr__(
             self,
