@@ -100,6 +100,74 @@ impl Qube {
         }
 
         self.dedup_children_locally(node_id);
+
+        // self.dedup_partial_branches(node_id);
+    }
+
+    fn dedup_partial_branches(&mut self, node_id: NodeIdx) {
+        // Get the children of the current node
+        let children = {
+            let node = self.node_ref(node_id).unwrap();
+            node.children().clone()
+        };
+
+        let mut seen: HashMap<u64, NodeIdx> = HashMap::new();
+
+        for (dim, child_ids) in children {
+            let mut unique_children: Vec<NodeIdx> = Vec::new();
+
+            for &child_id in &child_ids {
+                let hash = self.compute_structural_hash(child_id);
+
+                if let Some(&existing_id) = seen.get(&hash) {
+                    // Merge the two subtrees if they are structurally identical
+                    self.merge_subtrees(existing_id, child_id);
+                } else {
+                    seen.insert(hash, child_id);
+                    unique_children.push(child_id);
+                }
+            }
+
+            // Update the children of the current node
+            let node = self.node_mut(node_id).unwrap();
+            node.children_mut().insert(dim, unique_children.into());
+        }
+    }
+
+    fn merge_subtrees(&mut self, target_id: NodeIdx, source_id: NodeIdx) {
+        // Merge the coordinates of the source node into the target node
+        {
+            let mut target_coords = self.node_ref(target_id).unwrap().coords().clone();
+            let source_coords = self.node_ref(source_id).unwrap().coords().clone();
+
+            let merged_coords = target_coords.merge_coords(&source_coords);
+            let target_node = self.node_mut(target_id).unwrap();
+            *target_node.coords_mut() = merged_coords;
+        }
+
+        // Recursively merge the children of the source node into the target node
+        let source_children = {
+            let source_node = self.node_ref(source_id).unwrap();
+            source_node.children().clone()
+        };
+
+        for (dim, source_child_ids) in source_children {
+            for source_child_id in source_child_ids {
+                let target_children = {
+                    let target_node = self.node_ref(target_id).unwrap();
+                    target_node.children().get(&dim).cloned().unwrap_or_default()
+                };
+
+                let mut merged_children = target_children.clone();
+                merged_children.push(source_child_id);
+
+                let target_node = self.node_mut(target_id).unwrap();
+                target_node.children_mut().insert(dim, merged_children.into());
+            }
+        }
+
+        // Invalidate the structural hash of the target node
+        self.invalidate_structural_hash(target_id);
     }
 
     pub fn compress(&mut self) {
@@ -110,8 +178,12 @@ impl Qube {
         // 2. Prunes empty nodes from the tree.
         // 3. Deduplicates nodes that may have become identical after compression.
 
+        println!("BEFORE COMPRESSION WHAT DID WE HAVE???? {:?}", self.to_ascii());
+
         let root = self.root();
         self.compress_recursively(root);
+
+        println!("BEFORE COMPRESSION WHAT DID WE HAVE NUM 2??? {:?}", self.to_ascii());
         self.prune_empty_nodes_recursively(root);
         self.dedup_recursively(root);
     }

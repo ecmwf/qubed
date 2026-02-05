@@ -117,7 +117,7 @@ impl Qube {
 
                     // println!(" HERE WHAT KIND OF NODE DID WE ACTUALLY ADD?? {:?}", self.node(new_node_only_b).unwrap().child_dimensions());
 
-                    println!("WHAT IS THE QUBE HERE NOW: {:?}", self.to_ascii());
+                    // println!("WHAT IS THE QUBE HERE NOW: {:?}", self.to_ascii());
                     let actual_other_node = other.node_mut(*other_node).unwrap();
                     *actual_other_node.coords_mut() = only_other;
                 }

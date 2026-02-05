@@ -108,6 +108,38 @@ impl Qube {
         Some(NodeRef { qube: self, node, id })
     }
 
+    // pub fn create_child(
+    //     &mut self,
+    //     key: &str,
+    //     parent_id: NodeIdx,
+    //     coordinates: Option<Coordinates>,
+    // ) -> Result<NodeIdx, String> {
+    //     if self.nodes.get(parent_id).is_none() {
+    //         return Err(format!("Parent node {:?} not found", parent_id));
+    //     }
+
+    //     let dim = Dimension(self.key_store.get_or_intern(key));
+
+    //     let node_id = self.nodes.insert(Node {
+    //         dim,
+    //         structural_hash: AtomicU64::new(0),
+    //         coords: coordinates.unwrap_or(Coordinates::Empty),
+    //         parent: Some(parent_id),
+    //         children: BTreeMap::new(),
+    //     });
+
+    //     // Add to parent's children
+    //     if let Some(parent) = self.nodes.get_mut(parent_id) {
+    //         parent.children.entry(dim).or_insert_with(TinyVec::new).push(node_id);
+    //         parent.structural_hash.store(0, Ordering::Release);
+    //     }
+
+    //     // Invalidate ancestor hashes
+    //     self.invalidate_ancestors(parent_id);
+
+    //     Ok(node_id)
+    // }
+
     pub fn create_child(
         &mut self,
         key: &str,
@@ -119,11 +151,27 @@ impl Qube {
         }
 
         let dim = Dimension(self.key_store.get_or_intern(key));
+        let coords = coordinates.unwrap_or(Coordinates::Empty);
 
+        // Check if a child with the same key:coordinates pair already exists
+        if let Some(parent) = self.nodes.get(parent_id) {
+            if let Some(children) = parent.children.get(&dim) {
+                for &child_id in children {
+                    if let Some(child) = self.nodes.get(child_id) {
+                        if child.coords == coords {
+                            // Return the existing child node
+                            return Ok(child_id);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Create a new child node if no match is found
         let node_id = self.nodes.insert(Node {
             dim,
             structural_hash: AtomicU64::new(0),
-            coords: coordinates.unwrap_or(Coordinates::Empty),
+            coords,
             parent: Some(parent_id),
             children: BTreeMap::new(),
         });
