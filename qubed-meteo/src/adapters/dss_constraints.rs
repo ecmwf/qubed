@@ -7,11 +7,16 @@ pub trait FromDssConstraints {
 
 impl FromDssConstraints for Qube {
     fn from_dss_constraints(dss_constraints: &Value) -> Result<Qube, String> {
-        let mut qube = Qube::new();
+        // let mut qube = Qube::new();
 
-        let datacubes = dss_constraints.as_array().expect("DSS constraints should be a JSON array");
+        let datacubes: &Vec<Value> =
+            dss_constraints.as_array().expect("DSS constraints should be a JSON array");
 
-        for datacube in datacubes {
+        let first_datacube = parse_datacube(&datacubes[0])?;
+        let mut qube = Qube::from_datacube(&first_datacube, None);
+        print!("Partial datacube: {}", qube.to_ascii());
+
+        for datacube in &datacubes[1..] {
             let qube_part = parse_datacube(datacube);
 
             let mut qube_part = match qube_part {
@@ -22,6 +27,7 @@ impl FromDssConstraints for Qube {
             // add to qube
             qube.union(&mut qube_part);
             print!("Parsed datacube: {}", qube_part.to_ascii());
+            // print!("Partial datacube: {}", qube.to_ascii());
         }
         Ok(qube)
     }

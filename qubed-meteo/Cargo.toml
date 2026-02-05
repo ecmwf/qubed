@@ -7,3 +7,7 @@ edition = "2024"
 qubed = { path = "../qubed" }
 serde = "1.0.228"
 serde_json = "1.0.145"
+
+[[bin]]
+name = "example"
+path = "examples/read_from_dss_constraints.rs"
