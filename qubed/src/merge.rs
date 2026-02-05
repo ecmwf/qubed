@@ -76,6 +76,10 @@ impl Qube {
                 let only_self = intersection_res.only_a;
                 let only_other = intersection_res.only_b;
 
+                println!("HERE WHAT DO WE HAVE?: {:?} ", actual_intersection);
+
+                println!("WHAT IS ONLY IN B?: {:?}", only_other);
+
                 // If the intersection set is non-empty, create new nodes for the intersection
                 // and perform a union on them.
                 let dim_str = self.dimension_str(dim_a).unwrap().to_owned();
@@ -104,10 +108,16 @@ impl Qube {
 
                 // If there are values only in other, create a new node for those values.
                 if only_other.len() != 0 {
+                    println!("WHAT IS THE QUBE HERE BEFORE: {:?}", self.to_ascii());
                     let new_node_only_b =
                         self.create_child(&dim_str, parent_a, Some(only_other.clone())).unwrap();
 
-                    self.add_same_children(new_node_only_b, *other_node);
+                    // self.add_same_children(new_node_only_b, *other_node);
+                    self.copy_subtree(other, *other_node, new_node_only_b);
+
+                    // println!(" HERE WHAT KIND OF NODE DID WE ACTUALLY ADD?? {:?}", self.node(new_node_only_b).unwrap().child_dimensions());
+
+                    println!("WHAT IS THE QUBE HERE NOW: {:?}", self.to_ascii());
                     let actual_other_node = other.node_mut(*other_node).unwrap();
                     *actual_other_node.coords_mut() = only_other;
                 }

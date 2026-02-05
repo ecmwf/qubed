@@ -250,6 +250,29 @@ impl Qube {
     }
 }
 
+impl Qube {
+    /// Recursively copies the subtree from `other_node` in `other` to `new_node` in `self`.
+    pub(crate) fn copy_subtree(&mut self, other: &Qube, other_node: NodeIdx, new_node: NodeIdx) {
+        // Get the children of the `other_node`
+        let other_children = other.node_ref(other_node).unwrap().children().clone();
+
+        for (dim, child_ids) in other_children {
+            for child_id in child_ids {
+                // Get the coordinates of the child node
+                let child_coords = other.node_ref(child_id).unwrap().coords().clone();
+
+                // Create a new child node in `self` with the same dimension and coordinates
+                // let new_child = self.create_child(&self.dimension_str(&dim).unwrap(), new_node, Some(child_coords)).unwrap();
+                let dim_str = self.dimension_str(&dim).unwrap().to_owned(); // Immutable borrow ends here
+                let new_child = self.create_child(&dim_str, new_node, Some(child_coords)).unwrap(); // Mutable borrow starts here
+
+                // Recursively copy the subtree of the child
+                self.copy_subtree(other, child_id, new_child);
+            }
+        }
+    }
+}
+
 impl<'a> NodeRef<'a> {
     pub fn id(&self) -> NodeIdx {
         self.id
