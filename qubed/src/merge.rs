@@ -124,8 +124,10 @@ impl Qube {
                 if only_other.len() != 0 {
                     println!("WHAT IS THE QUBE HERE BEFORE: {:?}", self.to_ascii());
 
-                    let new_node_only_b =
-                        self.create_child(&dim_str, parent_a, Some(only_other.clone())).unwrap();
+                    // TODO: here, we need to pass the dim_str from other actually...
+                    let new_node_only_b = self
+                        .create_child(&other_dim_str, parent_a, Some(only_other.clone()))
+                        .unwrap();
 
                     // self.add_same_children(new_node_only_b, *other_node);
                     // if self.check_if_new_child(&dim_str, parent_a, Some(only_other.clone())).unwrap(){
