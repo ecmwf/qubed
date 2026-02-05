@@ -109,10 +109,15 @@ impl Qube {
                 // If there are values only in other, create a new node for those values.
                 if only_other.len() != 0 {
                     println!("WHAT IS THE QUBE HERE BEFORE: {:?}", self.to_ascii());
+
                     let new_node_only_b =
                         self.create_child(&dim_str, parent_a, Some(only_other.clone())).unwrap();
 
                     // self.add_same_children(new_node_only_b, *other_node);
+                    // if self.check_if_new_child(&dim_str, parent_a, Some(only_other.clone())).unwrap(){
+                    //     self.copy_subtree(other, *other_node, new_node_only_b);
+                    // }
+
                     self.copy_subtree(other, *other_node, new_node_only_b);
 
                     // println!(" HERE WHAT KIND OF NODE DID WE ACTUALLY ADD?? {:?}", self.node(new_node_only_b).unwrap().child_dimensions());

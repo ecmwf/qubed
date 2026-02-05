@@ -140,6 +140,35 @@ impl Qube {
     //     Ok(node_id)
     // }
 
+    pub fn check_if_new_child(
+        &mut self,
+        key: &str,
+        parent_id: NodeIdx,
+        coordinates: Option<Coordinates>,
+    ) -> Result<bool, String> {
+        if self.nodes.get(parent_id).is_none() {
+            return Err(format!("Parent node {:?} not found", parent_id));
+        }
+
+        let dim = Dimension(self.key_store.get_or_intern(key));
+        let coords = coordinates.unwrap_or(Coordinates::Empty);
+
+        // Check if a child with the same key:coordinates pair already exists
+        if let Some(parent) = self.nodes.get(parent_id) {
+            if let Some(children) = parent.children.get(&dim) {
+                for &child_id in children {
+                    if let Some(child) = self.nodes.get(child_id) {
+                        if child.coords == coords {
+                            // Return the existing child node
+                            return Ok(false);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(true)
+    }
+
     pub fn create_child(
         &mut self,
         key: &str,
