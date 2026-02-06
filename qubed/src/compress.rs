@@ -178,12 +178,12 @@ impl Qube {
         // 2. Prunes empty nodes from the tree.
         // 3. Deduplicates nodes that may have become identical after compression.
 
-        println!("BEFORE COMPRESSION WHAT DID WE HAVE???? {:?}", self.to_ascii());
+        // println!("BEFORE COMPRESSION WHAT DID WE HAVE???? {:?}", self.to_ascii());
 
         let root = self.root();
         self.compress_recursively(root);
 
-        println!("BEFORE COMPRESSION WHAT DID WE HAVE NUM 2??? {:?}", self.to_ascii());
+        // println!("BEFORE COMPRESSION WHAT DID WE HAVE NUM 2??? {:?}", self.to_ascii());
         self.prune_empty_nodes_recursively(root);
         self.dedup_recursively(root);
     }
@@ -257,25 +257,25 @@ impl Qube {
 
         let mut merged: Coordinates = { self.node_ref(group[0]).unwrap().coords().clone() };
 
-        println!("QUBE AT THIS POINT: {:?}", self.to_ascii());
+        // println!("QUBE AT THIS POINT: {:?}", self.to_ascii());
 
-        println!("Group size: {}", group.len());
+        // println!("Group size: {}", group.len());
 
-        println!("WHAT IS THE MERGED COORDS HERE 1? {:?}", merged.clone());
+        // println!("WHAT IS THE MERGED COORDS HERE 1? {:?}", merged.clone());
 
         for &id in group.iter().skip(1) {
             let coords = self.node_ref(id).unwrap().coords();
             merged.extend(coords);
         }
 
-        println!("WHAT IS THE MERGED COORDS HERE 2? {:?}", merged.clone());
+        // println!("WHAT IS THE MERGED COORDS HERE 2? {:?}", merged.clone());
 
         {
             let node = self.node_mut(group[0]).unwrap();
             *node.coords_mut() = merged;
         }
 
-        println!("QUBE AT THIS POINT AFTER: {:?}", self.to_ascii());
+        // println!("QUBE AT THIS POINT AFTER: {:?}", self.to_ascii());
 
         for &id in group.iter().skip(1) {
             let node = self.node_mut(id).unwrap();

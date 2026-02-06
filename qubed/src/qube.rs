@@ -348,6 +348,27 @@ impl Qube {
             }
         }
     }
+
+    pub(crate) fn copy_branch(&mut self, source_node: NodeIdx, target_node: NodeIdx) {
+        // Get the children of the `source_node`
+        let source_children = self.node_ref(source_node).unwrap().children().clone();
+
+        for (dim, child_ids) in source_children {
+            for child_id in child_ids {
+                // Clone the coordinates of the child
+                let child_coords = self.node_ref(child_id).unwrap().coords().clone();
+
+                // Create a new child node in `target_node` with the same dimension and coordinates
+                let dim_str = self.dimension_str(&dim).unwrap().to_owned();
+                let new_child = self
+                    .create_child(&dim_str, target_node, Some(child_coords))
+                    .expect("Failed to create child node");
+
+                // Recursively copy the subtree of the child
+                self.copy_branch(child_id, new_child);
+            }
+        }
+    }
 }
 
 impl<'a> NodeRef<'a> {
