@@ -6,9 +6,48 @@ pub trait FromDssConstraints {
 }
 
 impl FromDssConstraints for Qube {
-    fn from_dss_constraints(dss_constraints: &Value) -> Result<Qube, String> {
-        // let mut qube = Qube::new();
+    // fn from_dss_constraints(dss_constraints: &Value) -> Result<Qube, String> {
+    //     // let mut qube = Qube::new();
 
+    //     let datacubes: &Vec<Value> =
+    //         dss_constraints.as_array().expect("DSS constraints should be a JSON array");
+
+    //     let order = vec![
+    //         "origin".to_string(),
+    //         "forecast_type".to_string(),
+    //         "hday".to_string(),
+    //         "day".to_string(),
+    //         "hmonth".to_string(),
+    //         "hyear".to_string(),
+    //         "year".to_string(),
+    //         "month".to_string(),
+    //         "time".to_string(),
+    //         "leadtime_hour".to_string(),
+    //         "level_type".to_string(),
+    //         "variable".to_string(),
+    //     ];
+
+    //     let first_datacube = parse_datacube(&datacubes[0])?;
+    //     let mut qube = Qube::from_datacube(&first_datacube, Some(&order));
+    //     // print!("Partial datacube: {}", qube.to_ascii());
+
+    //     for datacube in &datacubes[1..] {
+    //         let qube_part = parse_datacube(datacube);
+
+    //         let mut qube_part = match qube_part {
+    //             Ok(dc) => Qube::from_datacube(&dc, Some(&order)),
+    //             Err(e) => return Err(format!("Failed to parse datacube: {}", e)),
+    //         };
+
+    //         // add to qube
+    //         qube.union(&mut qube_part);
+    //         // print!("Parsed datacube: {}", qube_part.to_ascii());
+    //         // print!("Partial datacube: {}", qube.to_ascii());
+    //     }
+    //     Ok(qube)
+    // }
+
+    fn from_dss_constraints(dss_constraints: &Value) -> Result<Qube, String> {
         let datacubes: &Vec<Value> =
             dss_constraints.as_array().expect("DSS constraints should be a JSON array");
 
@@ -27,23 +66,26 @@ impl FromDssConstraints for Qube {
             "variable".to_string(),
         ];
 
+        // Parse the first datacube and initialize the main Qube
         let first_datacube = parse_datacube(&datacubes[0])?;
         let mut qube = Qube::from_datacube(&first_datacube, Some(&order));
-        // print!("Partial datacube: {}", qube.to_ascii());
 
+        // Collect all other Qubes into a Vec<Qube>
+        let mut other_qubes: Vec<Qube> = Vec::new();
         for datacube in &datacubes[1..] {
             let qube_part = parse_datacube(datacube);
 
-            let mut qube_part = match qube_part {
+            let qube_part = match qube_part {
                 Ok(dc) => Qube::from_datacube(&dc, Some(&order)),
                 Err(e) => return Err(format!("Failed to parse datacube: {}", e)),
             };
 
-            // add to qube
-            qube.union(&mut qube_part);
-            // print!("Parsed datacube: {}", qube_part.to_ascii());
-            // print!("Partial datacube: {}", qube.to_ascii());
+            other_qubes.push(qube_part);
         }
+
+        // Use union_many to merge all Qubes together
+        qube.union_many(&mut other_qubes);
+
         Ok(qube)
     }
 }

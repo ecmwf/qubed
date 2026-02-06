@@ -167,4 +167,17 @@ impl Qube {
         // println!("WHAT IS THE QUBE HERE AFTER: {:?}", self.to_ascii());
         self.compress();
     }
+
+    pub fn union_many(&mut self, others: &mut Vec<Qube>) {
+        for other in others.iter_mut() {
+            let self_root_id = self.root();
+            let other_root_id = other.root();
+
+            // Perform the union with the current Qube
+            self.node_union(other, self_root_id, other_root_id);
+        }
+
+        // Compress the final result after all unions are complete
+        self.compress();
+    }
 }
