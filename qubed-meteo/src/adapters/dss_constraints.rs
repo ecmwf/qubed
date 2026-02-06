@@ -41,7 +41,7 @@ impl FromDssConstraints for Qube {
 
             // add to qube
             qube.union(&mut qube_part);
-            print!("Parsed datacube: {}", qube_part.to_ascii());
+            // print!("Parsed datacube: {}", qube_part.to_ascii());
             // print!("Partial datacube: {}", qube.to_ascii());
         }
         Ok(qube)

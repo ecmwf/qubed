@@ -162,9 +162,9 @@ impl Qube {
 
         let self_root_id = self.root();
         let other_root_id = other.root();
-        println!("WHAT IS THE QUBE HERE BEFORE: {:?}", self.to_ascii());
+        // println!("WHAT IS THE QUBE HERE BEFORE: {:?}", self.to_ascii());
         self.node_union(other, self_root_id, other_root_id);
-        println!("WHAT IS THE QUBE HERE AFTER: {:?}", self.to_ascii());
+        // println!("WHAT IS THE QUBE HERE AFTER: {:?}", self.to_ascii());
         self.compress();
     }
 }

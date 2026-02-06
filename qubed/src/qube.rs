@@ -340,7 +340,7 @@ impl Qube {
 
                 // Create a new child node in `self` with the same dimension and coordinates
                 // let new_child = self.create_child(&self.dimension_str(&dim).unwrap(), new_node, Some(child_coords)).unwrap();
-                let dim_str = self.dimension_str(&dim).unwrap().to_owned(); // Immutable borrow ends here
+                let dim_str = other.dimension_str(&dim).unwrap().to_owned(); // Immutable borrow ends here
                 let new_child = self.create_child(&dim_str, new_node, Some(child_coords)).unwrap(); // Mutable borrow starts here
 
                 // Recursively copy the subtree of the child
