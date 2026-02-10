@@ -7,9 +7,6 @@ fn main() {
 
     let mars_list = std::fs::read_to_string(path).expect("Failed to read MARS list file");
 
-    // let mars_list =
-    //     serde_json::from_str::<serde_json::Value>(&mars_list).expect("Failed to parse JSON file");
-
     let start_time = Instant::now();
 
     let qube = Qube::from_mars_list(&mars_list);
@@ -28,8 +25,4 @@ fn main() {
 
     println!("Time taken to convert Qube to datacubes: {:?}", duration2);
     println!("Number of datacubes: {}", datacubes.len());
-
-    // println!("datacubes list: {:?}", qube.unwrap().to_datacubes());
-
-    // println!("Constructed Qube: {:?}", qube.unwrap().to_ascii());
 }

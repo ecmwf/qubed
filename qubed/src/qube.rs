@@ -117,38 +117,6 @@ impl Qube {
         Some(NodeRef { qube: self, node, id })
     }
 
-    // pub fn create_child(
-    //     &mut self,
-    //     key: &str,
-    //     parent_id: NodeIdx,
-    //     coordinates: Option<Coordinates>,
-    // ) -> Result<NodeIdx, String> {
-    //     if self.nodes.get(parent_id).is_none() {
-    //         return Err(format!("Parent node {:?} not found", parent_id));
-    //     }
-
-    //     let dim = Dimension(self.key_store.get_or_intern(key));
-
-    //     let node_id = self.nodes.insert(Node {
-    //         dim,
-    //         structural_hash: AtomicU64::new(0),
-    //         coords: coordinates.unwrap_or(Coordinates::Empty),
-    //         parent: Some(parent_id),
-    //         children: BTreeMap::new(),
-    //     });
-
-    //     // Add to parent's children
-    //     if let Some(parent) = self.nodes.get_mut(parent_id) {
-    //         parent.children.entry(dim).or_insert_with(TinyVec::new).push(node_id);
-    //         parent.structural_hash.store(0, Ordering::Release);
-    //     }
-
-    //     // Invalidate ancestor hashes
-    //     self.invalidate_ancestors(parent_id);
-
-    //     Ok(node_id)
-    // }
-
     pub fn check_if_new_child(
         &mut self,
         key: &str,
