@@ -4,13 +4,13 @@ use crate::coordinates::{Coordinates, IntersectionResult};
 use crate::utils::tiny_ordered_set::TinyOrderedSet;
 use tiny_vec::TinyVec;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IntegerCoordinates {
     Set(TinyOrderedSet<i32, 6>),
     RangeSet(TinyVec<IntegerRange, 2>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IntegerRange {
     start: i32,
     end: i32,

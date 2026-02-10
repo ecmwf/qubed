@@ -226,8 +226,26 @@ impl Qube {
         Ok(node_id)
     }
 
-    pub fn all_unique_dim_coords(&mut self) {
+    pub fn all_unique_dim_coords(&self) -> BTreeMap<String, HashSet<Coordinates>> {
         // TODO
+        let mut map: BTreeMap<String, HashSet<Coordinates>> = BTreeMap::new();
+
+        for (_id, node) in self.nodes.iter() {
+            // resolve dimension string; skip if we can't resolve
+            if let Some(dim_str) = self.dimension_str(&node.dim) {
+                // clone coordinates (owned) so we don't return references into self
+                let coords = node.coords.clone();
+
+                // optionally skip empty coords (uncomment if desired)
+                if coords.is_empty() {
+                    continue;
+                }
+
+                map.entry(dim_str.to_string()).or_insert_with(HashSet::new).insert(coords);
+            }
+        }
+
+        map
     }
 
     pub fn remove_node(&mut self, id: NodeIdx) -> Result<(), String> {

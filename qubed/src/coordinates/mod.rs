@@ -14,7 +14,7 @@ use crate::utils::tiny_ordered_set::TinyOrderedSet;
 // TODO: Change MixedCoordinates to a HashMap (especially if we allow more types later)
 // TODO: Consider adding a catchall generic type
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Coordinates {
     Empty,
     Integers(IntegerCoordinates),
@@ -23,7 +23,7 @@ pub enum Coordinates {
     Mixed(Box<MixedCoordinates>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FloatCoordinates {
     List(TinyVec<f64, 4>),
 }
@@ -34,7 +34,7 @@ pub enum CoordinateTypes {
     String(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Eq, Hash)]
 pub struct MixedCoordinates {
     integers: integers::IntegerCoordinates,
     floats: FloatCoordinates,

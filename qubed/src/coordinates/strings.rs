@@ -5,7 +5,7 @@ use tiny_str::TinyString;
 use crate::coordinates::{Coordinates, IntersectionResult};
 use crate::utils::tiny_ordered_set::TinyOrderedSet;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum StringCoordinates {
     Set(TinyOrderedSet<TinyString<4>, 2>),
 }
