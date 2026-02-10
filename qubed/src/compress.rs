@@ -100,8 +100,6 @@ impl Qube {
         }
 
         self.dedup_children_locally(node_id);
-
-        // self.dedup_partial_branches(node_id);
     }
 
     fn dedup_partial_branches(&mut self, node_id: NodeIdx) {
@@ -178,12 +176,8 @@ impl Qube {
         // 2. Prunes empty nodes from the tree.
         // 3. Deduplicates nodes that may have become identical after compression.
 
-        // println!("BEFORE COMPRESSION WHAT DID WE HAVE???? {:?}", self.to_ascii());
-
         let root = self.root();
         self.compress_recursively(root);
-
-        // println!("BEFORE COMPRESSION WHAT DID WE HAVE NUM 2??? {:?}", self.to_ascii());
         self.prune_empty_nodes_recursively(root);
         self.dedup_recursively(root);
     }
@@ -208,12 +202,8 @@ impl Qube {
 
             for &child in &children {
                 let dim = *self.node_ref(child).unwrap().dim();
-                // println!("WHAT ARE THE LEAF BY DIM 1 {:?}", self.dimension_str(&dim));
-                // println!("WHAT ARE THE LEAF BY DIM 2 {:?}", by_dim.values());
                 by_dim.entry(dim).or_default().push(child);
             }
-
-            // println!("WHAT ARE THE LEAF BY DIM {:?}", by_dim);
 
             for group in by_dim.values() {
                 if group.len() > 1 {
@@ -223,8 +213,6 @@ impl Qube {
 
             return;
         }
-
-        // println!("AND WHAT ABOUT INSIDE OF HERE WHAT'S THE QUBE? {:?}", self.to_ascii());
 
         for child in children {
             self.compress_recursively(child);
@@ -241,7 +229,6 @@ impl Qube {
 
         for group in children_map.values() {
             if group.len() <= 1 {
-                // println!("AND LOOK HERE WHAT ABOUT HERE?? {:?}", group);
                 continue; // nothing to merge
             }
 
@@ -257,71 +244,19 @@ impl Qube {
 
         let mut merged: Coordinates = { self.node_ref(group[0]).unwrap().coords().clone() };
 
-        // println!("QUBE AT THIS POINT: {:?}", self.to_ascii());
-
-        // println!("Group size: {}", group.len());
-
-        // println!("WHAT IS THE MERGED COORDS HERE 1? {:?}", merged.clone());
-
         for &id in group.iter().skip(1) {
             let coords = self.node_ref(id).unwrap().coords();
             merged.extend(coords);
         }
-
-        // println!("WHAT IS THE MERGED COORDS HERE 2? {:?}", merged.clone());
 
         {
             let node = self.node_mut(group[0]).unwrap();
             *node.coords_mut() = merged;
         }
 
-        // println!("QUBE AT THIS POINT AFTER: {:?}", self.to_ascii());
-
         for &id in group.iter().skip(1) {
             let node = self.node_mut(id).unwrap();
             *node.coords_mut() = Coordinates::Empty;
         }
     }
-
-    // fn merge_coords(&mut self, group: Vec<NodeIdx>) {
-    //     // Remove duplicate NodeIdx values from the group
-
-    //     println!("WHAT ARE THE NODE IDXS: {:?}", group);
-    //     let mut unique_group: Vec<NodeIdx> = group
-    //         .into_iter()
-    //         .collect::<std::collections::HashSet<_>>()
-    //         .into_iter()
-    //         .collect();
-
-    //     // Ensure the group is not empty after deduplication
-    //     assert!(!unique_group.is_empty());
-
-    //     // Sort the group to ensure deterministic behavior (optional)
-    //     unique_group.sort();
-
-    //     let mut merged: Coordinates = { self.node_ref(unique_group[0]).unwrap().coords().clone() };
-
-    //     println!("QUBE AT THIS POINT: {:?}", self.to_ascii());
-    //     println!("Group size after deduplication: {}", unique_group.len());
-    //     println!("WHAT IS THE MERGED COORDS HERE 1? {:?}", merged.clone());
-
-    //     for &id in unique_group.iter().skip(1) {
-    //         let coords = self.node_ref(id).unwrap().coords();
-    //         merged.extend(coords);
-    //     }
-
-    //     println!("WHAT IS THE MERGED COORDS HERE 2? {:?}", merged.clone());
-
-    //     {
-    //         let node = self.node_mut(unique_group[0]).unwrap();
-    //         *node.coords_mut() = merged;
-    //     }
-
-    //     println!("QUBE AT THIS POINT AFTER: {:?}", self.to_ascii());
-
-    //     for &id in unique_group.iter().skip(1) {
-    //         let node = self.node_mut(id).unwrap();
-    //         *node.coords_mut() = Coordinates::Empty;
-    //     }
-    // }
 }
