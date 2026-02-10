@@ -76,6 +76,11 @@ impl Node {
 }
 
 impl Qube {
+    pub fn is_empty(&self) -> bool {
+        let root = self.node_ref(self.root()).unwrap();
+        root.coords().is_empty() && root.children().is_empty()
+    }
+
     pub(crate) fn node_mut(&mut self, id: NodeIdx) -> Option<&mut Node> {
         self.nodes.get_mut(id)
     }
