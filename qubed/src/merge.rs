@@ -103,10 +103,6 @@ impl Qube {
                 let only_self = intersection_res.only_a;
                 let only_other = intersection_res.only_b;
 
-                // println!("HERE WHAT DO WE HAVE?: {:?} ", actual_intersection);
-
-                // println!("WHAT IS ONLY IN B?: {:?}", only_other);
-
                 // If the intersection set is non-empty, create new nodes for the intersection
                 // and perform a union on them.
                 let dim_str = self.dimension_str(dim_a).unwrap().to_owned();
@@ -132,11 +128,9 @@ impl Qube {
                         .unwrap();
 
                     if check_new_child_a.unwrap() {
-                        // self.add_same_children(new_node_a, *node);
                         self.copy_branch(*node, new_node_a);
                     }
                     if check_new_child_b.unwrap() {
-                        // other.add_same_children(new_node_b, *other_node);
                         other.copy_branch(*other_node, new_node_b);
                     }
 
@@ -151,23 +145,12 @@ impl Qube {
 
                 // If there are values only in other, create a new node for those values.
                 if only_other.len() != 0 {
-                    // println!("WHAT IS THE QUBE HERE BEFORE: {:?}", self.to_ascii());
-
-                    // TODO: here, we need to pass the dim_str from other actually...
                     let new_node_only_b = self
                         .create_child(&other_dim_str, parent_a, Some(only_other.clone()))
                         .unwrap();
 
-                    // self.add_same_children(new_node_only_b, *other_node);
-                    // if self.check_if_new_child(&dim_str, parent_a, Some(only_other.clone())).unwrap(){
-                    //     self.copy_subtree(other, *other_node, new_node_only_b);
-                    // }
-
                     self.copy_subtree(other, *other_node, new_node_only_b);
 
-                    // println!(" HERE WHAT KIND OF NODE DID WE ACTUALLY ADD?? {:?}", self.node(new_node_only_b).unwrap().child_dimensions());
-
-                    // println!("WHAT IS THE QUBE HERE NOW: {:?}", self.to_ascii());
                     let actual_other_node = other.node_mut(*other_node).unwrap();
                     *actual_other_node.coords_mut() = only_other;
                 }
@@ -189,9 +172,7 @@ impl Qube {
 
         let self_root_id = self.root();
         let other_root_id = other.root();
-        // println!("WHAT IS THE QUBE HERE BEFORE: {:?}", self.to_ascii());
         self.node_union(other, self_root_id, other_root_id);
-        // println!("WHAT IS THE QUBE HERE AFTER: {:?}", self.to_ascii());
         self.compress();
     }
 
@@ -237,8 +218,6 @@ impl Qube {
     // }
 
     pub fn union_many(&mut self, others: &mut Vec<Qube>) {
-        let start_time = Instant::now();
-
         let others_len = others.len();
         for (i, other) in others.iter_mut().enumerate() {
             let self_root_id = self.root();
@@ -256,22 +235,8 @@ impl Qube {
                 self.compress();
             }
         }
-
-        // Stop the timer
-        let duration = start_time.elapsed();
-
-        // Print the time taken
-        println!("Time taken to union Qubes: {:?}", duration);
-
-        let start_time_2 = Instant::now();
-
         // Final compression after all unions are complete
         self.compress();
-
-        let duration_2 = start_time_2.elapsed();
-
-        // Print the time taken
-        println!("Time taken to compress Qube: {:?}", duration_2);
     }
 }
 
