@@ -3,7 +3,7 @@ use qubed_meteo::adapters::mars_list::FromMARSList;
 use std::time::Instant;
 
 fn main() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/data/mars.list");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/data/large_mars.list");
 
     let mars_list = std::fs::read_to_string(path).expect("Failed to read MARS list file");
 
