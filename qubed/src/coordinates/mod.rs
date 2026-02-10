@@ -46,6 +46,89 @@ impl Coordinates {
         Coordinates::Empty
     }
 
+    // pub fn iter_values(&self) -> Vec<CoordinateTypes> {
+    //     match self {
+    //         Coordinates::Empty => Vec::new(),
+    //         Coordinates::Integers(ints) => ints.iter().cloned().map(CoordinateTypes::Integer).collect(),
+    //         Coordinates::Floats(floats) => match floats {
+    //             FloatCoordinates::List(list) => list.iter().cloned().map(CoordinateTypes::Float).collect(),
+    //         },
+    //         Coordinates::Strings(strings) => strings.iter().cloned().map(CoordinateTypes::String).collect(),
+    //         Coordinates::Mixed(mixed) => {
+    //             let mut out = Vec::new();
+    //             out.extend(mixed.integers.iter().cloned().map(CoordinateTypes::Integer));
+    //             match &mixed.floats {
+    //                 FloatCoordinates::List(list) => out.extend(list.iter().cloned().map(CoordinateTypes::Float)),
+    //             }
+    //             out.extend(mixed.strings.iter().cloned().map(CoordinateTypes::String));
+    //             out
+    //         }
+    //     }
+    // }
+
+    // pub fn iter_values(&self) -> Vec<CoordinateTypes> {
+    //     match self {
+    //         Coordinates::Empty => Vec::new(),
+
+    //         // INTEGER case: inspect the IntegerCoordinates variants and iterate the inner set/ranges
+    //         Coordinates::Integers(ints) => match ints {
+    //             IntegerCoordinates::Set(set) => {
+    //                 set.iter().cloned().map(CoordinateTypes::Integer).collect()
+    //             }
+    //             IntegerCoordinates::RangeSet(ranges) => {
+    //                 // If you want to expand ranges into individual integers, implement here.
+    //                 // For now, return a string representation per range.
+    //                 ranges
+    //                     .iter()
+    //                     .map(|r| {
+    //                         CoordinateTypes::String(format!("{}:{}:{}", r.start, r.step, r.end))
+    //                     })
+    //                     .collect()
+    //             }
+    //         },
+
+    //         // STRINGS case: inspect the StringCoordinates variants and iterate the inner set
+    //         Coordinates::Strings(strings) => match strings {
+    //             StringCoordinates::Set(set) => {
+    //                 set.iter().cloned().map(CoordinateTypes::String).collect()
+    //             }
+    //             // handle other StringCoordinates variants if present
+    //             _ => Vec::new(),
+    //         },
+
+    //         // FLOATS / MIXED: adapt to your actual enums/types here
+    //         Coordinates::Floats(floats) => match floats {
+    //             FloatCoordinates::List(list) => {
+    //                 list.iter().cloned().map(CoordinateTypes::Float).collect()
+    //             }
+    //         },
+
+    //         Coordinates::Mixed(mixed) => {
+    //             let mut out = Vec::new();
+    //             out.extend(mixed.integers.clone().into_iter().map(CoordinateTypes::Integer));
+    //             match &mixed.floats {
+    //                 FloatCoordinates::List(list) => {
+    //                     out.extend(list.iter().cloned().map(CoordinateTypes::Float))
+    //                 }
+    //             }
+    //             out.extend(mixed.strings.clone().into_iter().map(CoordinateTypes::String));
+    //             out
+    //         }
+    //     }
+    // }
+
+    // /// Convenience: get all coordinate values as strings.
+    // pub fn values_as_strings(&self) -> Vec<String> {
+    //     self.iter_values()
+    //         .into_iter()
+    //         .map(|ct| match ct {
+    //             CoordinateTypes::Integer(i) => i.to_string(),
+    //             CoordinateTypes::Float(f) => f.to_string(),
+    //             CoordinateTypes::String(s) => s,
+    //         })
+    //         .collect()
+    // }
+
     pub fn from_string(s: &str) -> Self {
         if s.is_empty() {
             return Coordinates::Empty;

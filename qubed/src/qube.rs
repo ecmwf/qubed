@@ -76,12 +76,21 @@ impl Node {
 }
 
 impl Qube {
+    pub fn is_empty(&self) -> bool {
+        let root = self.node_ref(self.root()).unwrap();
+        root.coords().is_empty() && root.children().is_empty()
+    }
+
     pub(crate) fn node_mut(&mut self, id: NodeIdx) -> Option<&mut Node> {
         self.nodes.get_mut(id)
     }
 
     pub(crate) fn node_ref(&self, id: NodeIdx) -> Option<&Node> {
         self.nodes.get(id)
+    }
+
+    pub(crate) fn node_dim(&self, id: NodeIdx) -> Option<&Dimension> {
+        Some(self.nodes.get(id).unwrap().dim())
     }
 
     pub fn new() -> Self {
@@ -217,6 +226,10 @@ impl Qube {
         Ok(node_id)
     }
 
+    pub fn all_unique_dim_coords(&mut self) {
+        // TODO
+    }
+
     pub fn remove_node(&mut self, id: NodeIdx) -> Result<(), String> {
         let node = self.nodes.remove(id).ok_or_else(|| format!("Node {:?} not found", id))?;
 
@@ -324,6 +337,37 @@ impl Qube {
 
         node.structural_hash.store(hash, Ordering::Release);
         hash
+    }
+
+    pub(crate) fn leaf_node_ids_paths(&self) -> Vec<Vec<NodeIdx>> {
+        let mut paths = Vec::new();
+
+        fn traverse(
+            qube: &Qube,
+            current_node: NodeIdx,
+            current_path: &mut Vec<NodeIdx>,
+            paths: &mut Vec<Vec<NodeIdx>>,
+        ) {
+            current_path.push(current_node);
+
+            // let node_ref = qube.node_ref(current_node).unwrap();
+            let current_actual_node = qube.nodes.get(current_node).unwrap();
+            if current_actual_node.children().is_empty() {
+                paths.push(current_path.clone());
+            } else {
+                let all_children_node_idxs = current_actual_node.children().values().flatten();
+                for &child_id in all_children_node_idxs {
+                    traverse(qube, child_id, current_path, paths);
+                }
+            }
+
+            current_path.pop();
+        }
+
+        let mut current_path = Vec::new();
+        traverse(self, self.root(), &mut current_path, &mut paths);
+
+        paths
     }
 }
 

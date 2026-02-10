@@ -3,7 +3,7 @@ use qubed_meteo::adapters::dss_constraints::FromDssConstraints;
 use std::time::Instant;
 
 fn main() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/data/medium_era5_constraints.json");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/data/medium2_era5_constraints.json");
 
     let dss_json = std::fs::read_to_string(path).expect("Failed to read DSS constraints JSON file");
 
@@ -20,7 +20,7 @@ fn main() {
     // Print the time taken
     println!("Time taken to construct Qube: {:?}", duration);
 
-    // println!("Constructed Qube: {:?}", qube.unwrap().to_ascii());
+    println!("Constructed Qube: {:?}", qube.unwrap().to_ascii());
 }
 
 // #[cfg(test)]

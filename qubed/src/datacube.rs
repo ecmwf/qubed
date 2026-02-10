@@ -25,6 +25,38 @@ impl Datacube {
 }
 
 impl Qube {
+    pub fn to_datacubes(&self) -> Vec<Datacube> {
+        let mut datacubes = Vec::new();
+
+        let datacube_paths = self.leaf_node_ids_paths();
+        for datacube_path in datacube_paths {
+            let mut datacube = Datacube::new();
+            for node_id in datacube_path {
+                // let actual_node = self.node_ref(node_id).unwrap();
+                if let Some(dim) = self.dimension_str(self.node_dim(node_id).unwrap()) {
+                    if let Some(coords) =
+                        // self.node(node_id).and_then(|node| Some(node.coordinates()))
+                        self.node(node_id).map(|node| node.coordinates().clone())
+                    {
+                        datacube.add_coordinate(&dim, coords.clone());
+                    }
+                }
+            }
+            datacubes.push(datacube);
+        }
+        // for child_id in self.get_span_of(self.root()).unwrap_or_default() {
+        //     let mut datacube = Datacube::new();
+        //     if let Some(dim) = self.dimension_str(*child_id) {
+        //         if let Some(coords) = self.node(*child_id).and_then(|node| Some(node.coordinates())) {
+        //             datacube.add_coordinate(&dim, coords.clone());
+        //         }
+        //     }
+        //     datacubes.push(datacube);
+        // }
+
+        datacubes
+    }
+
     pub fn from_datacube(datacube: &Datacube, order: Option<&[String]>) -> Self {
         let mut qube = Qube::new();
         let mut parent = qube.root();
