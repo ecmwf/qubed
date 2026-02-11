@@ -1,5 +1,6 @@
 use crate::{Coordinates, Qube};
 use std::collections::HashMap;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Datacube {
@@ -62,9 +63,6 @@ impl Qube {
         // TODO: implement this function
         let mut other_qube = Self::from_datacube(&_datacube, _order);
         self.union(&mut other_qube);
-        // unimplemented!();
-        // Easier to construct a Qube and then merge. Need to implement merge.
-        // todo!()
 
         // // we consume the datacube
 
