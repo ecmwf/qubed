@@ -1,6 +1,7 @@
 use crate::qube::Dimension;
 use crate::{NodeIdx, Qube};
 use std::collections::HashMap;
+use std::time::Instant;
 
 impl Qube {
     /// Performs a union operation between two nodes in two different Qubes.
@@ -80,6 +81,16 @@ impl Qube {
                 let other_dim_str = other.dimension_str(dim_b).unwrap().to_owned();
 
                 if actual_intersection.len() != 0 {
+                    let check_new_child_a = self.check_if_new_child(
+                        &dim_str,
+                        parent_a,
+                        Some(actual_intersection.clone()),
+                    );
+                    let check_new_child_b = other.check_if_new_child(
+                        &other_dim_str,
+                        parent_b,
+                        Some(actual_intersection.clone()),
+                    );
                     let new_node_a = self
                         .create_child(&dim_str, parent_a, Some(actual_intersection.clone()))
                         .unwrap();
@@ -88,8 +99,12 @@ impl Qube {
                         .create_child(&other_dim_str, parent_b, Some(actual_intersection))
                         .unwrap();
 
-                    self.add_same_children(new_node_a, *node);
-                    other.add_same_children(new_node_b, *other_node);
+                    if check_new_child_a.unwrap() {
+                        self.copy_branch(*node, new_node_a);
+                    }
+                    if check_new_child_b.unwrap() {
+                        other.copy_branch(*other_node, new_node_b);
+                    }
 
                     let _nested_result = self.node_union(other, new_node_a, new_node_b);
                 }
@@ -102,10 +117,12 @@ impl Qube {
 
                 // If there are values only in other, create a new node for those values.
                 if only_other.len() != 0 {
-                    let new_node_only_b =
-                        self.create_child(&dim_str, parent_a, Some(only_other.clone())).unwrap();
+                    let new_node_only_b = self
+                        .create_child(&other_dim_str, parent_a, Some(only_other.clone()))
+                        .unwrap();
 
-                    self.add_same_children(new_node_only_b, *other_node);
+                    self.copy_subtree(other, *other_node, new_node_only_b);
+
                     let actual_other_node = other.node_mut(*other_node).unwrap();
                     *actual_other_node.coords_mut() = only_other;
                 }
@@ -120,13 +137,36 @@ impl Qube {
     }
 
     /// Performs a union operation between two Qubes.
-    ///
-    /// This method starts at the root of both Qubes and recursively merges their nodes.
-    /// After the union, the tree is compressed to remove duplicates and empty nodes.
-    pub fn union(&mut self, mut other: Qube) {
+    pub fn union(&mut self, other: &mut Qube) {
+        // This method starts at the root of both Qubes and recursively merges their nodes.
+        // After the union, the tree is compressed to remove duplicates and empty nodes.
+
         let self_root_id = self.root();
         let other_root_id = other.root();
-        self.node_union(&mut other, self_root_id, other_root_id);
+        self.node_union(other, self_root_id, other_root_id);
+        self.compress();
+    }
+
+    /// Performs a union operation between many Qubes
+    pub fn union_many(&mut self, others: &mut Vec<Qube>) {
+        let others_len = others.len();
+        for (i, other) in others.iter_mut().enumerate() {
+            let self_root_id = self.root();
+            let other_root_id = other.root();
+
+            // Perform the union with the current Qube
+            self.node_union(other, self_root_id, other_root_id);
+
+            // Print progress update
+            println!("Union completed for Qube {}/{}", i + 1, others_len);
+
+            // Compress every 1000th Qube
+            if (i + 1) % 500 == 0 {
+                println!("Compressing after processing {} Qubes...", i + 1);
+                self.compress();
+            }
+        }
+        // Final compression after all unions are complete
         self.compress();
     }
 }
