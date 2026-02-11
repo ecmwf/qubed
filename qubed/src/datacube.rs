@@ -1,6 +1,5 @@
 use crate::{Coordinates, Qube};
 use std::collections::HashMap;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Datacube {

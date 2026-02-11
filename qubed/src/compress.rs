@@ -6,13 +6,12 @@ use std::sync::atomic::Ordering;
 use tiny_vec::TinyVec;
 
 impl Qube {
+    /// Creates a hash map where the keys are structural hashes of child nodes
+    /// and the values are vectors of node indices that share the same hash.
     fn children_hash_map(
         &mut self,
         children: &BTreeMap<Dimension, TinyVec<NodeIdx, 4>>,
     ) -> HashMap<u64, Vec<NodeIdx>> {
-        // Creates a hash map where the keys are structural hashes of child nodes
-        // and the values are vectors of node indices that share the same hash.
-
         let mut map: HashMap<u64, Vec<NodeIdx>> = HashMap::new();
 
         for (_dim, kids) in children.iter() {
@@ -24,15 +23,13 @@ impl Qube {
         map
     }
 
+    /// Checks if a node is a leaf node (i.e., it has no children).
     fn is_leaf(&self, id: NodeIdx) -> bool {
-        // Checks if a node is a leaf node (i.e., it has no children).
-
         self.node_ref(id).expect("valid node").children().is_empty()
     }
 
+    /// Recursively prunes empty nodes from the tree.
     fn prune_empty_nodes_recursively(&mut self, node_id: NodeIdx) {
-        // Recursively prunes empty nodes from the tree.
-
         let children: Vec<NodeIdx> = {
             let node = self.node_ref(node_id).unwrap();
             node.children().values().flat_map(|v| v.iter().copied()).collect()
@@ -53,16 +50,14 @@ impl Qube {
         }
     }
 
+    /// Invalidates the cached structural hash of a node.
     fn invalidate_structural_hash(&mut self, id: NodeIdx) {
-        // Invalidates the cached structural hash of a node.
-
         let node = self.node_mut(id).unwrap();
         node.structural_hash().store(0, Ordering::Release);
     }
 
+    /// Deduplicates the children of a node by merging nodes with identical structural hashes.
     fn dedup_children_locally(&mut self, parent: NodeIdx) {
-        // Deduplicates the children of a node by merging nodes with identical structural hashes.
-
         let snapshot = {
             let node = self.node_ref(parent).unwrap();
             node.children().clone()
@@ -87,9 +82,8 @@ impl Qube {
         self.invalidate_structural_hash(parent);
     }
 
+    /// Recursively deduplicates nodes in the tree, starting from the given node.
     fn dedup_recursively(&mut self, node_id: NodeIdx) {
-        // Recursively deduplicates nodes in the tree, starting from the given node.
-
         let children: Vec<NodeIdx> = {
             let node = self.node_ref(node_id).unwrap();
             node.children().values().flat_map(|v| v.iter().copied()).collect()
@@ -102,36 +96,7 @@ impl Qube {
         self.dedup_children_locally(node_id);
     }
 
-    fn dedup_partial_branches(&mut self, node_id: NodeIdx) {
-        // Get the children of the current node
-        let children = {
-            let node = self.node_ref(node_id).unwrap();
-            node.children().clone()
-        };
-
-        let mut seen: HashMap<u64, NodeIdx> = HashMap::new();
-
-        for (dim, child_ids) in children {
-            let mut unique_children: Vec<NodeIdx> = Vec::new();
-
-            for &child_id in &child_ids {
-                let hash = self.compute_structural_hash(child_id);
-
-                if let Some(&existing_id) = seen.get(&hash) {
-                    // Merge the two subtrees if they are structurally identical
-                    self.merge_subtrees(existing_id, child_id);
-                } else {
-                    seen.insert(hash, child_id);
-                    unique_children.push(child_id);
-                }
-            }
-
-            // Update the children of the current node
-            let node = self.node_mut(node_id).unwrap();
-            node.children_mut().insert(dim, unique_children.into());
-        }
-    }
-
+    /// Merges two subtrees by merging their coordinates and children.
     fn merge_subtrees(&mut self, target_id: NodeIdx, source_id: NodeIdx) {
         // Merge the coordinates of the source node into the target node
         {
