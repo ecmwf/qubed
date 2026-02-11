@@ -26,6 +26,26 @@ impl Datacube {
 }
 
 impl Qube {
+    pub fn to_datacubes(&self) -> Vec<Datacube> {
+        let mut datacubes = Vec::new();
+
+        let datacube_paths = self.leaf_node_ids_paths();
+        for datacube_path in datacube_paths {
+            let mut datacube = Datacube::new();
+            for node_id in datacube_path {
+                if let Some(dim) = self.dimension_str(self.node_dim(node_id).unwrap()) {
+                    if let Some(coords) = self.node(node_id).map(|node| node.coordinates().clone())
+                    {
+                        datacube.add_coordinate(&dim, coords.clone());
+                    }
+                }
+            }
+            datacubes.push(datacube);
+        }
+
+        datacubes
+    }
+
     pub fn from_datacube(datacube: &Datacube, order: Option<&[String]>) -> Self {
         let mut qube = Qube::new();
         let mut parent = qube.root();
@@ -60,7 +80,6 @@ impl Qube {
         _order: Option<&[String]>,
         _accept_existing_order: bool,
     ) {
-        // TODO: implement this function
         let mut other_qube = Self::from_datacube(&_datacube, _order);
         self.union(&mut other_qube);
 

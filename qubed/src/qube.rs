@@ -89,6 +89,10 @@ impl Qube {
         self.nodes.get(id)
     }
 
+    pub(crate) fn node_dim(&self, id: NodeIdx) -> Option<&Dimension> {
+        Some(self.nodes.get(id).unwrap().dim())
+    }
+
     pub fn new() -> Self {
         let mut key_store = Rodeo::<MiniSpur>::new();
         let mut nodes = SlotMap::with_key();
@@ -112,38 +116,6 @@ impl Qube {
         let node = self.nodes.get(id)?;
         Some(NodeRef { qube: self, node, id })
     }
-
-    // pub fn create_child(
-    //     &mut self,
-    //     key: &str,
-    //     parent_id: NodeIdx,
-    //     coordinates: Option<Coordinates>,
-    // ) -> Result<NodeIdx, String> {
-    //     if self.nodes.get(parent_id).is_none() {
-    //         return Err(format!("Parent node {:?} not found", parent_id));
-    //     }
-
-    //     let dim = Dimension(self.key_store.get_or_intern(key));
-
-    //     let node_id = self.nodes.insert(Node {
-    //         dim,
-    //         structural_hash: AtomicU64::new(0),
-    //         coords: coordinates.unwrap_or(Coordinates::Empty),
-    //         parent: Some(parent_id),
-    //         children: BTreeMap::new(),
-    //     });
-
-    //     // Add to parent's children
-    //     if let Some(parent) = self.nodes.get_mut(parent_id) {
-    //         parent.children.entry(dim).or_insert_with(TinyVec::new).push(node_id);
-    //         parent.structural_hash.store(0, Ordering::Release);
-    //     }
-
-    //     // Invalidate ancestor hashes
-    //     self.invalidate_ancestors(parent_id);
-
-    //     Ok(node_id)
-    // }
 
     pub fn check_if_new_child(
         &mut self,
@@ -220,6 +192,25 @@ impl Qube {
         self.invalidate_ancestors(parent_id);
 
         Ok(node_id)
+    }
+
+    pub fn all_unique_dim_coords(&mut self) -> BTreeMap<String, Coordinates> {
+        // TODO
+        let mut map: BTreeMap<String, Coordinates> = BTreeMap::new();
+
+        for (_id, node) in self.nodes.iter() {
+            if let Some(dim_str) = self.dimension_str(&node.dim) {
+                let coords = node.coords.clone();
+                if coords.is_empty() {
+                    continue; // Skip empty coordinates
+                }
+                // if there is no entry in map for this dimension, just fill it in with coords, otherwise extend the current entry with coords
+                map.entry(dim_str.to_string())
+                    .and_modify(|existing| existing.extend(&coords))
+                    .or_insert(coords);
+            }
+        }
+        map
     }
 
     pub fn remove_node(&mut self, id: NodeIdx) -> Result<(), String> {
@@ -329,6 +320,37 @@ impl Qube {
 
         node.structural_hash.store(hash, Ordering::Release);
         hash
+    }
+
+    pub(crate) fn leaf_node_ids_paths(&self) -> Vec<Vec<NodeIdx>> {
+        let mut paths = Vec::new();
+
+        fn traverse(
+            qube: &Qube,
+            current_node: NodeIdx,
+            current_path: &mut Vec<NodeIdx>,
+            paths: &mut Vec<Vec<NodeIdx>>,
+        ) {
+            current_path.push(current_node);
+
+            // let node_ref = qube.node_ref(current_node).unwrap();
+            let current_actual_node = qube.nodes.get(current_node).unwrap();
+            if current_actual_node.children().is_empty() {
+                paths.push(current_path.clone());
+            } else {
+                let all_children_node_idxs = current_actual_node.children().values().flatten();
+                for &child_id in all_children_node_idxs {
+                    traverse(qube, child_id, current_path, paths);
+                }
+            }
+
+            current_path.pop();
+        }
+
+        let mut current_path = Vec::new();
+        traverse(self, self.root(), &mut current_path, &mut paths);
+
+        paths
     }
 }
 
@@ -519,5 +541,33 @@ mod tests {
         assert_eq!(node.dimension(), Some("test"));
         assert_eq!(node.coordinates().len(), 1);
         assert_eq!(node.parent(), Some(root));
+    }
+
+    #[test]
+    fn test_all_unique_dim_coords() {
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        // create two distinct coordinate nodes under same dimension, and a duplicate
+        let child1 = qube.create_child("dim1", root, Some(1.into())).unwrap();
+        let child2 = qube.create_child("dim1", root, Some(2.into())).unwrap();
+        // creating the same coords again should return the existing node
+        let child1_dup = qube.create_child("dim1", root, Some(1.into())).unwrap();
+        assert_eq!(child1, child1_dup);
+
+        let grandchild1_dup = qube.create_child("dim3", child1_dup, Some(4.into())).unwrap();
+
+        // collect unique coordinates per dimension
+        let map = qube.all_unique_dim_coords();
+        // only one dimension key present
+        assert_eq!(map.len(), 2);
+        let coords = map.get("dim1").expect("dim1 should be present");
+        // merged coordinates should contain both unique values
+        assert_eq!(coords.len(), 2);
+
+        // add another dimension to ensure multiple keys are handled
+        qube.create_child("dim2", root, Some(3.into())).unwrap();
+        let map2 = qube.all_unique_dim_coords();
+        assert_eq!(map2.len(), 3);
     }
 }
