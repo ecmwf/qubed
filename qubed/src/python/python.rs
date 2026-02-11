@@ -15,6 +15,21 @@ impl PyQube {
         PyQube { inner: Qube::new() }
     }
 
+    /// Construct a PyQube from an ASCII representation.
+    /// Example: q = PyQube.from_ascii(ascii_text)
+    #[staticmethod]
+    pub fn from_ascii(input: &str) -> PyResult<Self> {
+        match Qube::from_ascii(input) {
+            Ok(qube) => Ok(PyQube { inner: qube }),
+            Err(e) => Err(PyTypeError::new_err(e)),
+        }
+    }
+
+    /// Serialize this Qube to the ASCII representation produced by to_ascii()
+    pub fn to_ascii(&self) -> PyResult<String> {
+        Ok(self.inner.to_ascii())
+    }
+
     /// In-place union: self = self ∪ other
     pub fn union(&mut self, other: &PyCell<PyQube>) -> PyResult<()> {
         let mut other_mut = other.borrow_mut();
