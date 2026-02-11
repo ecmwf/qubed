@@ -14,3 +14,8 @@ smallbitvec = "2.6.0"
 tiny-str = "0.10.0"
 tiny-vec = "0.10.0"
 rayon = "1.7"
+pyo3 = { version = "0.18", features = ["extension-module", "auto-initialize"] }
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
