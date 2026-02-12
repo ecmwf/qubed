@@ -324,7 +324,7 @@ def pushdown_metadata(A: Qube, B: Qube) -> tuple[Metadata, Qube, Qube]:
 
 # @line_profiler.profile
 def set_operation(
-    A: Qube, B: Qube, operation_type: SetOperation, node_type, depth=0
+    A: Qube, B: Qube, operation_type: SetOperation, node_type, depth=0, check_depth=True
 ) -> Qube | None:
     if DEBUG:
         print(f"{pad()}operation({operation_type.name}, depth={depth})")
@@ -333,7 +333,8 @@ def set_operation(
 
     assert A.key == B.key
     assert A.values == B.values
-    assert A.depth == B.depth
+    if check_depth:
+        assert A.depth == B.depth
 
     new_children: list[Qube] = []
 
@@ -346,7 +347,9 @@ def set_operation(
     # For every node group, perform the set operation
     for A_nodes, B_nodes in nodes_by_key.values():
         output = list(
-            _set_operation(A_nodes, B_nodes, operation_type, node_type, depth + 1)
+            _set_operation(
+                A_nodes, B_nodes, operation_type, node_type, depth + 1, check_depth
+            )
         )
         new_children.extend(output)
 
@@ -397,6 +400,7 @@ def _set_operation(
     operation_type: SetOperation,
     node_type,
     depth: int,
+    check_depth,
 ) -> Iterable[Qube]:
     """
     This operation get called from `operation` when we've found two nodes that match and now need
@@ -460,6 +464,7 @@ def _set_operation(
                     operation_type,
                     node_type,
                     depth=depth + 1,
+                    check_depth=check_depth,
                 )
                 if result is not None:
                     # If we're doing a difference or xor we might want to throw away the intersection
@@ -481,7 +486,7 @@ def _set_operation(
                 continue
             else:
                 raise ValueError(
-                    f"Only one of set_ops_result.intersection_A and set_ops_result.intersection_B is None, I didn't think that could happen! {set_ops_result = }"
+                    f"Only one of set_ops_result.intersection_A and set_ops_result.intersection_B is None, I didn't think that could happen! {set_ops_result=}"
                 )
 
     if keep_only_A:
@@ -557,7 +562,7 @@ def merge_values(qubes: list[Qube]) -> Qube:
     axis = example.depth
 
     if DEBUG:
-        print(f"{pad()}merge_values --- {axis = }")
+        print(f"{pad()}merge_values --- {axis=}")
         for i, qube in enumerate(qubes):
             qube.display(f"{pad()}in_{i}")
 
@@ -693,7 +698,7 @@ def concat_metadata(
     example = qubes[0]
 
     if DEBUG:
-        print(f"concat_metadata --- {axis = }, qubes:")
+        print(f"concat_metadata --- {axis=}, qubes:")
         for qube in qubes:
             qube.display()
 
@@ -746,8 +751,8 @@ def shallow_concat_metadata(
 
     if DEBUG:
         print("shallow_concat_metadata")
-        print(f"{concatenation_axis = }")
-        print(f"{sorting_indices = }")
+        print(f"{concatenation_axis=}")
+        print(f"{sorting_indices=}")
         for k, metadata_group in metadata_groups.items():
             print(k, [m.shape for m in metadata_group])
 
