@@ -21,4 +21,3 @@ if True:
     # # ensure key nodes/values appear in the serialized output
     # for token in ("class=3", "expver=0001", "expver=0002", "param=1", "param=2"):
     #     assert token in out
-
