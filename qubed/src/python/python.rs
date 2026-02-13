@@ -1,3 +1,4 @@
+#![cfg(feature = "python")]
 use crate::Qube;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
