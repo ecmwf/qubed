@@ -1,5 +1,5 @@
 [package]
-name = "qubed-meteo"
+name = "qubed_meteo"
 version = "0.1.0"
 edition = "2024"
 
@@ -7,6 +7,11 @@ edition = "2024"
 qubed = { path = "../qubed" }
 serde = "1.0.228"
 serde_json = "1.0.145"
+pyo3 = { version = "0.18", features = ["extension-module", "auto-initialize"] }
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
 
 [[bin]]
 name = "example"

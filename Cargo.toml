@@ -3,6 +3,6 @@ resolver = "3"
 
 members = [
     "qubed",
-    "qubed-meteo",
+    "qubed_meteo",
 ]
 
