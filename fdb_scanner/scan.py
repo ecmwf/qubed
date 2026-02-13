@@ -239,8 +239,9 @@ while current_span[1] >= start_date:
         request = dict(split(v.split("=")) for v in line.strip().split(","))
 
         # Remove year and month from request
-        request.pop("year", None)
-        request.pop("month", None)
+        if "date" in request.keys():
+            request.pop("year", None)
+            request.pop("month", None)
 
         # Order the keys
         key_order = [
@@ -256,6 +257,8 @@ while current_span[1] >= start_date:
             "realization",
             "type",
             "date",
+            "year",
+            "month",
             "time",
             "datetime",
             "levtype",
