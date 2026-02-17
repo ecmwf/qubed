@@ -1,8 +1,9 @@
 #![cfg(feature = "python")]
 use crate::Qube;
+use pyo3::PyObject;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use pyo3::types::PyList;
+use pyo3::types::{PyDict, PyList};
 
 #[pyclass(unsendable)]
 pub struct PyQube {
@@ -29,6 +30,23 @@ impl PyQube {
     /// Serialize this Qube to the ASCII representation produced by to_ascii()
     pub fn to_ascii(&self) -> PyResult<String> {
         Ok(self.inner.to_ascii())
+    }
+
+    /// Convert this Qube into a list of datacubes.
+    /// Returns a Python list of dicts mapping dimension -> coordinates (string).
+    pub fn to_datacubes(&self, py: Python) -> PyResult<PyObject> {
+        let datacubes = self.inner.to_datacubes();
+        let py_list = PyList::empty(py);
+
+        for dc in datacubes.iter() {
+            let dict = PyDict::new(py);
+            for (dim, coords) in dc.coordinates().iter() {
+                dict.set_item(dim, coords.to_string())?;
+            }
+            py_list.append(dict)?;
+        }
+
+        Ok(py_list.to_object(py))
     }
 
     /// In-place union: self = self ∪ other
