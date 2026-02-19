@@ -60,11 +60,18 @@ impl PyQube {
     }
 
     pub fn union_many(&mut self, others: &Bound<'_, PyList>) -> PyResult<()> {
+        // First validate all types so type errors happen before any mutation.
+        let mut validated_qubes = Vec::with_capacity(others.len());
         for item in others.iter() {
-            // We fail fast with a clear type error so mixed Python lists do not partially mutate.
             let other_cell =
                 item.cast::<PyQube>().map_err(|_| PyTypeError::new_err("expected PyQube"))?;
-            let mut other_mut = other_cell.borrow_mut();
+            validated_qubes.push(other_cell.clone().unbind());
+        }
+
+        let py = others.py();
+        for py_qube in validated_qubes {
+            let bound_qube = py_qube.bind(py);
+            let mut other_mut = bound_qube.borrow_mut();
             self.inner.union(&mut other_mut.inner);
         }
         Ok(())
