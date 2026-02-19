@@ -27,6 +27,7 @@ uv.lock
 test_scripts
 tests/example_qubes
 **/*venv*
+.idea/
 
 
 # Added by cargo
