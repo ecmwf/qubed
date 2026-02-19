@@ -354,6 +354,23 @@ impl Qube {
 
         paths
     }
+
+    pub fn datacube_count(&self) -> usize {
+        fn count_leaves(qube: &Qube, node_id: NodeIdx) -> usize {
+            let node = qube.nodes.get(node_id).expect("valid node");
+            if node.children().is_empty() {
+                return 1;
+            }
+
+            node.children()
+                .values()
+                .flat_map(|children| children.iter().copied())
+                .map(|child_id| count_leaves(qube, child_id))
+                .sum()
+        }
+
+        count_leaves(self, self.root())
+    }
 }
 
 impl Qube {

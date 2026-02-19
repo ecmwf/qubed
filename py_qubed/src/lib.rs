@@ -50,7 +50,7 @@ impl PyQube {
 
     #[pyo3(name = "__len__")]
     pub fn py_len(&self) -> PyResult<usize> {
-        Ok(self.inner.to_datacubes().len())
+        Ok(self.inner.datacube_count())
     }
 
     pub fn union(&mut self, other: &Bound<'_, PyQube>) -> PyResult<()> {
