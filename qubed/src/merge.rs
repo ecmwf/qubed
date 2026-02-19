@@ -1,7 +1,6 @@
 use crate::qube::Dimension;
 use crate::{NodeIdx, Qube};
 use std::collections::HashMap;
-use std::time::Instant;
 
 impl Qube {
     /// Performs a union operation between two nodes in two different Qubes.

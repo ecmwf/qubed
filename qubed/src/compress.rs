@@ -97,6 +97,7 @@ impl Qube {
     }
 
     /// Merges two subtrees by merging their coordinates and children.
+    #[allow(dead_code)]
     fn merge_subtrees(&mut self, target_id: NodeIdx, source_id: NodeIdx) {
         // Merge the coordinates of the source node into the target node
         {
