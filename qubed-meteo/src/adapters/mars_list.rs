@@ -162,3 +162,77 @@ impl FromMARSList for Qube {
         Ok(qube)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_mars_list_basic_structure() {
+        // Construct a small MARS list that exercises indent/chain behavior
+        let mars = "alpha, beta=1/2\n  gamma=3\ndelta=4\n";
+
+        let qube = <Qube as FromMARSList>::from_mars_list(mars).expect("failed to parse");
+        let root = qube.root();
+        let root_ref = qube.node(root).expect("root node missing");
+
+        // root should have two top-level children (alpha and delta)
+        assert_eq!(root_ref.children_count(), 2);
+
+        // find `alpha` under root
+        let mut alpha_id = None;
+        for child in root_ref.all_children() {
+            if let Some(nr) = qube.node(child) {
+                if nr.dimension() == Some("alpha") {
+                    alpha_id = Some(child);
+                    break;
+                }
+            }
+        }
+        let alpha_id = alpha_id.expect("alpha child not found");
+
+        // alpha should have one child (beta)
+        let alpha_ref = qube.node(alpha_id).unwrap();
+        assert_eq!(alpha_ref.children_count(), 1);
+
+        // find `beta` under alpha and assert its coordinates length (1/2 -> two entries)
+        let mut beta_id = None;
+        for child in alpha_ref.all_children() {
+            if let Some(nr) = qube.node(child) {
+                if nr.dimension() == Some("beta") {
+                    beta_id = Some(child);
+                    break;
+                }
+            }
+        }
+        let beta_id = beta_id.expect("beta child not found");
+        let beta_ref = qube.node(beta_id).unwrap();
+        assert_eq!(beta_ref.coordinates().len(), 2);
+
+        // gamma should be a child of beta with one coordinate
+        let mut gamma_id = None;
+        for child in beta_ref.all_children() {
+            if let Some(nr) = qube.node(child) {
+                if nr.dimension() == Some("gamma") {
+                    gamma_id = Some(child);
+                    break;
+                }
+            }
+        }
+        let gamma_id = gamma_id.expect("gamma child not found");
+        let gamma_ref = qube.node(gamma_id).unwrap();
+        assert_eq!(gamma_ref.coordinates().len(), 1);
+
+        // delta should exist under root with one coordinate
+        let mut delta_found = false;
+        for child in root_ref.all_children() {
+            if let Some(nr) = qube.node(child) {
+                if nr.dimension() == Some("delta") {
+                    delta_found = true;
+                    assert_eq!(nr.coordinates().len(), 1);
+                }
+            }
+        }
+        assert!(delta_found, "delta child not found under root");
+    }
+}
