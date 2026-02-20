@@ -106,7 +106,7 @@ impl Qube {
                         other.copy_branch(*other_node, new_node_b);
                     }
 
-                    let _nested_result = self.node_union(other, new_node_a, new_node_b);
+                    let _nested_result = self.node_merge(other, new_node_a, new_node_b);
                 }
 
                 // If there are values only in self, update the coordinates of the current node.
@@ -143,8 +143,10 @@ impl Qube {
 
         let self_root_id = self.root();
         let other_root_id = other.root();
-        self.node_union(other, self_root_id, other_root_id);
+        self.node_merge(other, self_root_id, other_root_id);
         self.compress();
+        // Clear the other Qube
+        *other = Qube::new();
     }
 
     /// Performs a union operation between many Qubes
@@ -155,7 +157,7 @@ impl Qube {
             let other_root_id = other.root();
 
             // Perform the union with the current Qube
-            self.node_union(other, self_root_id, other_root_id);
+            self.node_merge(other, self_root_id, other_root_id);
 
             // Print progress update
             println!("Union completed for Qube {}/{}", i + 1, others_len);
