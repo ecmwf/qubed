@@ -5,7 +5,7 @@ use std::time::Instant;
 
 impl Qube {
     /// Performs a union operation between two nodes in two different Qubes.
-    pub fn node_union(&mut self, other: &mut Qube, self_id: NodeIdx, other_id: NodeIdx) -> NodeIdx {
+    fn node_merge(&mut self, other: &mut Qube, self_id: NodeIdx, other_id: NodeIdx) -> NodeIdx {
         // Group the children of both nodes into groups according to their associated dimensions.
         let self_children = {
             let node = self.node_ref(self_id).unwrap();
@@ -43,7 +43,7 @@ impl Qube {
     }
 
     /// Performs a set operation between two groups of nodes from two Qubes.
-    pub fn internal_set_operation(
+    fn internal_set_operation(
         &mut self,
         other: &mut Qube,
         self_ids: &Vec<NodeIdx>,
@@ -137,7 +137,7 @@ impl Qube {
     }
 
     /// Performs a union operation between two Qubes.
-    pub fn union(&mut self, other: &mut Qube) {
+    pub fn append(&mut self, other: &mut Qube) {
         // This method starts at the root of both Qubes and recursively merges their nodes.
         // After the union, the tree is compressed to remove duplicates and empty nodes.
 
@@ -148,7 +148,7 @@ impl Qube {
     }
 
     /// Performs a union operation between many Qubes
-    pub fn union_many(&mut self, others: &mut Vec<Qube>) {
+    pub fn append_many(&mut self, others: &mut Vec<Qube>) {
         let others_len = others.len();
         for (i, other) in others.iter_mut().enumerate() {
             let self_root_id = self.root();
@@ -160,7 +160,7 @@ impl Qube {
             // Print progress update
             println!("Union completed for Qube {}/{}", i + 1, others_len);
 
-            // Compress every 1000th Qube
+            // Compress every nth Qube
             if (i + 1) % 500 == 0 {
                 println!("Compressing after processing {} Qubes...", i + 1);
                 self.compress();
