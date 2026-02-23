@@ -550,12 +550,12 @@ mod tests {
 
         // create two distinct coordinate nodes under same dimension, and a duplicate
         let child1 = qube.create_child("dim1", root, Some(1.into())).unwrap();
-        let child2 = qube.create_child("dim1", root, Some(2.into())).unwrap();
+        let _child2 = qube.create_child("dim1", root, Some(2.into())).unwrap();
         // creating the same coords again should return the existing node
         let child1_dup = qube.create_child("dim1", root, Some(1.into())).unwrap();
         assert_eq!(child1, child1_dup);
 
-        let grandchild1_dup = qube.create_child("dim3", child1_dup, Some(4.into())).unwrap();
+        let _grandchild1_dup = qube.create_child("dim3", child1_dup, Some(4.into())).unwrap();
 
         // collect unique coordinates per dimension
         let map = qube.all_unique_dim_coords();

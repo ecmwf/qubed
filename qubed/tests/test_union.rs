@@ -43,7 +43,7 @@ fn union_almost_identical_qubes() {
 
     let hash_b = qube_b.node(qube_b.root()).unwrap().structural_hash();
 
-    qube_a.union(&mut qube_b);
+    qube_a.append(&mut qube_b);
 
     println!("{:#?}", Qube::to_ascii(&qube_a));
 
@@ -99,7 +99,7 @@ fn union_different_qubes() {
 
     let hash_b = qube_b.node(qube_b.root()).unwrap().structural_hash();
 
-    qube_a.union(&mut qube_b);
+    qube_a.append(&mut qube_b);
 
     println!("{:#?}", Qube::to_ascii(&qube_a));
 
