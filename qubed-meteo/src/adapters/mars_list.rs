@@ -170,7 +170,7 @@ mod tests {
     #[test]
     fn test_from_mars_list_basic_structure() {
         // Construct a small MARS list that exercises indent/chain behavior
-        let mars = "alpha, beta=1/2\n  gamma=3\ndelta=4\n";
+        let mars = "alpha=0,beta=1/2\n  gamma=3\ndelta=4";
 
         let qube = <Qube as FromMARSList>::from_mars_list(mars).expect("failed to parse");
         let root = qube.root();
