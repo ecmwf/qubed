@@ -8,8 +8,6 @@ use floats::FloatCoordinates;
 use integers::IntegerCoordinates;
 use strings::StringCoordinates;
 
-use tiny_vec::TinyVec;
-
 use crate::utils::tiny_ordered_set::TinyOrderedSet;
 
 // TODO: check for duplicates. Sets may be better than vecs.

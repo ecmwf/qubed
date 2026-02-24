@@ -85,13 +85,11 @@ impl FromMARSList for Qube {
                                 .create_child(key.trim(), parent, coords)
                                 .map_err(|e| format!("create_child failed: {:?}", e))?;
                             parent = child;
-                            last_created = Some(child);
                         } else {
                             let child = qube
                                 .create_child(tok, parent, None)
                                 .map_err(|e| format!("create_child failed: {:?}", e))?;
                             parent = child;
-                            last_created = Some(child);
                         }
                     }
                     // ensure last_created references the final node in the chain

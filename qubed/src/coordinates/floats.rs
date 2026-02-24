@@ -1,7 +1,6 @@
 use std::hash::Hash;
 
-use crate::coordinates::{Coordinates, IntersectionResult};
-use crate::utils::tiny_ordered_set::TinyOrderedSet;
+use crate::coordinates::Coordinates;
 use tiny_vec::TinyVec;
 
 #[derive(Debug, Clone, PartialEq)]
