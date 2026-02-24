@@ -22,6 +22,10 @@ impl Datacube {
     pub fn len(&self) -> usize {
         self.coordinates.len()
     }
+
+    pub fn coordinates(&self) -> &HashMap<String, Coordinates> {
+        &self.coordinates
+    }
 }
 
 impl Qube {
