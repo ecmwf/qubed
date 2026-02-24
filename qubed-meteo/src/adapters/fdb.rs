@@ -17,19 +17,14 @@ impl FromFDBList for Qube {
         let root = qube.root();
 
         fn make_coords(vals: &[&str]) -> Option<Coordinates> {
+            // Keep every token as a string to preserve formatting (e.g. leading zeros).
             let mut coords = Coordinates::new();
             for v in vals {
                 let s = v.trim();
                 if s.is_empty() {
                     continue;
                 }
-                if let Ok(i) = s.parse::<i32>() {
-                    coords.append(i);
-                } else if let Ok(f) = s.parse::<f64>() {
-                    coords.append(f);
-                } else {
-                    coords.append(s.to_string());
-                }
+                coords.append(s.to_string());
             }
             if coords.is_empty() { None } else { Some(coords) }
         }
@@ -94,10 +89,10 @@ mod tests {
         let serialized = qube.to_ascii();
         let expected = r#"root
 ├── class=od
-│   └── expver=1
+│   └── expver=0001
 │       └── param=1/2
 └── class=rd
-    └── expver=2/3
+    └── expver=0002/0003
         └── param=3/4
 "#;
 
