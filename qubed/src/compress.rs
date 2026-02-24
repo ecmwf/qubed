@@ -96,13 +96,50 @@ impl Qube {
         self.dedup_children_locally(node_id);
     }
 
+    /// Merges two subtrees by merging their coordinates and children.
+    fn merge_subtrees(&mut self, target_id: NodeIdx, source_id: NodeIdx) {
+        // Merge the coordinates of the source node into the target node
+        {
+            let mut target_coords = self.node_ref(target_id).unwrap().coords().clone();
+            let source_coords = self.node_ref(source_id).unwrap().coords().clone();
+
+            let merged_coords = target_coords.merge_coords(&source_coords);
+            let target_node = self.node_mut(target_id).unwrap();
+            *target_node.coords_mut() = merged_coords;
+        }
+
+        // Recursively merge the children of the source node into the target node
+        let source_children = {
+            let source_node = self.node_ref(source_id).unwrap();
+            source_node.children().clone()
+        };
+
+        for (dim, source_child_ids) in source_children {
+            for source_child_id in source_child_ids {
+                let target_children = {
+                    let target_node = self.node_ref(target_id).unwrap();
+                    target_node.children().get(&dim).cloned().unwrap_or_default()
+                };
+
+                let mut merged_children = target_children.clone();
+                merged_children.push(source_child_id);
+
+                let target_node = self.node_mut(target_id).unwrap();
+                target_node.children_mut().insert(dim, merged_children.into());
+            }
+        }
+
+        // Invalidate the structural hash of the target node
+        self.invalidate_structural_hash(target_id);
+    }
+
     /// Compresses the tree by merging nodes, pruning empty nodes, and deduplicating nodes.
-    ///
-    /// This method performs the following steps:
-    /// 1. Compresses nodes recursively.
-    /// 2. Prunes empty nodes from the tree.
-    /// 3. Deduplicates nodes that may have become identical after compression.
     pub fn compress(&mut self) {
+        // This method performs the following steps:
+        // 1. Compresses nodes recursively.
+        // 2. Prunes empty nodes from the tree.
+        // 3. Deduplicates nodes that may have become identical after compression.
+
         let root = self.root();
         self.compress_recursively(root);
         self.prune_empty_nodes_recursively(root);
@@ -163,8 +200,9 @@ impl Qube {
     }
 
     /// Merges the coordinates of a group of nodes into the first node in the group.
-    /// The coordinates of all other nodes in the group are set to `Coordinates::Empty`.
     fn merge_coords(&mut self, group: Vec<NodeIdx>) {
+        // The coordinates of all other nodes in the group are set to `Coordinates::Empty`.
+
         assert!(!group.is_empty());
 
         let mut merged: Coordinates = { self.node_ref(group[0]).unwrap().coords().clone() };
