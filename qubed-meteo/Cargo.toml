@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 qubed = { path = "../qubed" }
+rsfdb = { path = "../../rsfdb" }
 serde = "1.0.228"
 serde_json = "1.0.145"
 
