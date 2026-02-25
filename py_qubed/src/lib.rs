@@ -74,7 +74,6 @@ impl PyQube {
             let mut other_mut = bound_qube.borrow_mut();
             self.inner.append(&mut other_mut.inner);
         }
-
         Ok(())
     }
 

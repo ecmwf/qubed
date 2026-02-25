@@ -21,7 +21,7 @@ def test_ascii_roundtrip_contains_expected_nodes() -> None:
         assert token in output
 
 
-def test_union_and_union_many_smoke() -> None:
+def test_append_and_append_many_smoke() -> None:
     # Each source has a distinct class value, so all three should survive the merge.
     left = PyQube.from_ascii("""root
 └── class=1
@@ -36,8 +36,8 @@ def test_union_and_union_many_smoke() -> None:
     └── param=30
 """)
 
-    left.union(right)
-    left.union_many([third])
+    left.append(right)
+    left.append_many([third])
 
     output = left.to_ascii()
     assert "class=1" in output
@@ -45,11 +45,11 @@ def test_union_and_union_many_smoke() -> None:
     assert "class=3" in output
 
 
-def test_union_many_rejects_non_qube_items() -> None:
+def test_append_many_rejects_non_qube_items() -> None:
     target = PyQube()
 
     with pytest.raises(TypeError, match="expected PyQube"):
-        target.union_many(["not-a-qube"])
+        target.append_many(["not-a-qube"])
 
 
 def test_to_datacubes_shape() -> None:
