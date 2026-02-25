@@ -1,11 +1,5 @@
 name: CI
-name: CI
 
-on:
-  push:
-    branches: ["main"]
-  pull_request:
-  workflow_dispatch:
 on:
   # Trigger the workflow on push to master or develop, except tag creation
   push:
