@@ -23,7 +23,15 @@ impl FromMARSList for Qube {
                 if s.is_empty() {
                     continue;
                 }
-                if let Ok(i) = s.parse::<i32>() {
+                // Check for leading zeros to preserve formatting (e.g., "0001")
+                let has_leading_zero = s.len() > 1
+                    && s.starts_with('0')
+                    && s.chars().nth(1).map_or(false, |c| c.is_ascii_digit());
+
+                if has_leading_zero {
+                    // Preserve as string to keep formatting
+                    coords.append(s.to_string());
+                } else if let Ok(i) = s.parse::<i32>() {
                     coords.append(i);
                 } else if let Ok(f) = s.parse::<f64>() {
                     coords.append(f);

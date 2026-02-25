@@ -49,7 +49,15 @@ impl Coordinates {
         let split: Vec<&str> = s.split('|').collect();
 
         for part in split {
-            if let Ok(int_val) = part.parse::<i32>() {
+            // Check for leading zeros to preserve formatting (e.g., "0001")
+            let has_leading_zero = part.len() > 1
+                && part.starts_with('0')
+                && part.chars().nth(1).map_or(false, |c| c.is_ascii_digit());
+
+            if has_leading_zero {
+                // Preserve as string to keep formatting
+                coords.append(part.to_string());
+            } else if let Ok(int_val) = part.parse::<i32>() {
                 coords.append(int_val);
             } else if let Ok(float_val) = part.parse::<f64>() {
                 coords.append(float_val);

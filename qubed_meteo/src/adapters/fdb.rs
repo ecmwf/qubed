@@ -17,14 +17,27 @@ impl FromFDBList for Qube {
         let root = qube.root();
 
         fn make_coords(vals: &[&str]) -> Option<Coordinates> {
-            // Keep every token as a string to preserve formatting (e.g. leading zeros).
             let mut coords = Coordinates::new();
             for v in vals {
                 let s = v.trim();
                 if s.is_empty() {
                     continue;
                 }
-                coords.append(s.to_string());
+                // Check for leading zeros to preserve formatting (e.g., "0001")
+                let has_leading_zero = s.len() > 1
+                    && s.starts_with('0')
+                    && s.chars().nth(1).map_or(false, |c| c.is_ascii_digit());
+
+                if has_leading_zero {
+                    // Preserve as string to keep formatting
+                    coords.append(s.to_string());
+                } else if let Ok(i) = s.parse::<i32>() {
+                    coords.append(i);
+                } else if let Ok(f) = s.parse::<f64>() {
+                    coords.append(f);
+                } else {
+                    coords.append(s.to_string());
+                }
             }
             if coords.is_empty() { None } else { Some(coords) }
         }
