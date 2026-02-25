@@ -259,12 +259,14 @@ impl Qube {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn add_child(&mut self, parent: NodeIdx, dim: Dimension, child: NodeIdx) {
         let parent_node = self.node_mut(parent).unwrap();
 
         parent_node.children.entry(dim).or_insert_with(TinyVec::new).push(child);
     }
 
+    #[allow(dead_code)]
     pub(crate) fn add_same_children(&mut self, node: NodeIdx, other: NodeIdx) {
         // Adds all children of the `other` node to the `node` under the same dimensions.
         //
@@ -351,6 +353,23 @@ impl Qube {
         traverse(self, self.root(), &mut current_path, &mut paths);
 
         paths
+    }
+
+    pub fn datacube_count(&self) -> usize {
+        fn count_leaves(qube: &Qube, node_id: NodeIdx) -> usize {
+            let node = qube.nodes.get(node_id).expect("valid node");
+            if node.children().is_empty() {
+                return 1;
+            }
+
+            node.children()
+                .values()
+                .flat_map(|children| children.iter().copied())
+                .map(|child_id| count_leaves(qube, child_id))
+                .sum()
+        }
+
+        count_leaves(self, self.root())
     }
 }
 

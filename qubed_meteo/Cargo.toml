@@ -1,5 +1,5 @@
 [package]
-name = "qubed-meteo"
+name = "qubed_meteo"
 version = "0.1.0"
 edition = "2024"
 
@@ -8,6 +8,6 @@ qubed = { path = "../qubed" }
 serde = "1.0.228"
 serde_json = "1.0.145"
 
-[[bin]]
-name = "example"
-path = "examples/read_from_mars_list.rs"
+[lib]
+path = "src/lib.rs"
+crate-type = ["rlib"]

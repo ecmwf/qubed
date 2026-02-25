@@ -91,6 +91,16 @@ impl Qube {
                         parent_b,
                         Some(actual_intersection.clone()),
                     );
+                    let check_new_child_a = self.check_if_new_child(
+                        &dim_str,
+                        parent_a,
+                        Some(actual_intersection.clone()),
+                    );
+                    let check_new_child_b = other.check_if_new_child(
+                        &other_dim_str,
+                        parent_b,
+                        Some(actual_intersection.clone()),
+                    );
                     let new_node_a = self
                         .create_child(&dim_str, parent_a, Some(actual_intersection.clone()))
                         .unwrap();

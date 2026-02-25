@@ -1,4 +1,6 @@
 __pycache__
+**/__pycache__/
+**/.pytest_cache/
 .DS_Store
 .venv
 *.json
@@ -14,7 +16,6 @@ build/
 .ipynb_checkpoints/
 dist/
 Cargo.lock
-src/python/qubed/_version.py
 *.ipynb
 cmake_build/
 tests/data/
@@ -27,6 +28,7 @@ uv.lock
 test_scripts
 tests/example_qubes
 **/*venv*
+.idea/
 
 
 # Added by cargo
