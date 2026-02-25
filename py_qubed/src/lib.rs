@@ -53,13 +53,13 @@ impl PyQube {
         Ok(self.inner.datacube_count())
     }
 
-    pub fn union(&mut self, other: &Bound<'_, PyQube>) -> PyResult<()> {
+    pub fn append(&mut self, other: &Bound<'_, PyQube>) -> PyResult<()> {
         let mut other_mut = other.borrow_mut();
-        self.inner.union(&mut other_mut.inner);
+        self.inner.append(&mut other_mut.inner);
         Ok(())
     }
 
-    pub fn union_many(&mut self, others: &Bound<'_, PyList>) -> PyResult<()> {
+    pub fn append_many(&mut self, others: &Bound<'_, PyList>) -> PyResult<()> {
         // First validate all types so type errors happen before any mutation.
         let mut validated_qubes = Vec::with_capacity(others.len());
         for item in others.iter() {
@@ -72,7 +72,7 @@ impl PyQube {
         for py_qube in validated_qubes {
             let bound_qube = py_qube.bind(py);
             let mut other_mut = bound_qube.borrow_mut();
-            self.inner.union(&mut other_mut.inner);
+            self.inner.append(&mut other_mut.inner);
         }
         Ok(())
     }

@@ -84,7 +84,7 @@ impl Qube {
         _accept_existing_order: bool,
     ) {
         let mut other_qube = Self::from_datacube(&_datacube, _order);
-        self.union(&mut other_qube);
+        self.append(&mut other_qube);
 
         // // we consume the datacube
 
