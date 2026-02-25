@@ -141,11 +141,6 @@ impl Qube {
         // 2. Prunes empty nodes from the tree.
         // 3. Deduplicates nodes that may have become identical after compression.
 
-        // This method performs the following steps:
-        // 1. Compresses nodes recursively.
-        // 2. Prunes empty nodes from the tree.
-        // 3. Deduplicates nodes that may have become identical after compression.
-
         let root = self.root();
         self.compress_recursively(root);
         self.prune_empty_nodes_recursively(root);
@@ -207,8 +202,6 @@ impl Qube {
 
     /// Merges the coordinates of a group of nodes into the first node in the group.
     fn merge_coords(&mut self, group: Vec<NodeIdx>) {
-        // The coordinates of all other nodes in the group are set to `Coordinates::Empty`.
-
         // The coordinates of all other nodes in the group are set to `Coordinates::Empty`.
 
         assert!(!group.is_empty());
