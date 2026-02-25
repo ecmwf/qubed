@@ -29,6 +29,8 @@ test_scripts
 tests/example_qubes
 **/*venv*
 .idea/
+*.grib
+fdb
 
 
 # Added by cargo

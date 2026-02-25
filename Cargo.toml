@@ -7,3 +7,10 @@ members = [
     "py_qubed",
     "py_qubed_meteo",
 ]
+
+[patch.'https://github.com/ecmwf/rsfdb']
+rsfdb = { path = "/Users/male/git/rsfdb" }
+
+[patch.'https://github.com/ecmwf-projects/rsfindlibs']
+rsfindlibs = { path = "/Users/male/git/rsfindlibs" }
+
