@@ -16,6 +16,15 @@
 
     <link rel="stylesheet" href="/static/modules/airdatepicker/air-datepicker.css" />
     <script src="/static/modules/airdatepicker/air-datepicker.js"></script>
+
+    <!-- Leaflet CSS and JS for map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Leaflet Draw for polygon drawing -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
     <script>
         var exports = {
             default: {}
@@ -82,6 +91,37 @@
                 <!-- Catalog Items -->
                 <div id="items" class="catalog-items">
                     <!-- Items from the STAC catalog will be rendered here -->
+                </div>
+
+                <!-- Geographic Region Selection -->
+                <div id="region-selection" class="region-selection" style="display: none;">
+                    <h3 class="region-title">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10 2a6 6 0 00-6 6c0 4.5 6 10 6 10s6-5.5 6-10a6 6 0 00-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z"/>
+                        </svg>
+                        Geographic Region Selection
+                    </h3>
+                    <p class="region-description">Would you like to filter your data by geographic region?</p>
+
+                    <div class="region-controls">
+                        <button id="enable-region-btn" class="region-btn primary">Select Region on Map</button>
+                        <button id="skip-region-btn" class="region-btn secondary">Skip Region Selection</button>
+                    </div>
+
+                    <div id="map-container" style="display: none;">
+                        <div class="map-instructions">
+                            <p><strong>Instructions:</strong> Use the polygon (□) or rectangle (▭) tool to draw your region.</p>
+                        </div>
+                        <div id="map" style="height: 400px; width: 100%; border-radius: 10px; overflow: hidden; margin-bottom: 1rem;"></div>
+
+                        <div id="selected-region" class="selected-region" style="display: none;">
+                            <h4>Selected Region Feature:</h4>
+                            <div class="code-block">
+                                <pre id="region-coordinates"></pre>
+                            </div>
+                            <button id="clear-region-btn" class="region-btn secondary">Clear Selection</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Additional Actions -->

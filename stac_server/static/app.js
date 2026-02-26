@@ -469,20 +469,43 @@ function renderMARSRequest(request, descriptions) {
     return `[${values.map((v) => format_value(key, v)).join(", ")}]`;
   };
 
+  // Add feature object to each request if polygon is selected
+  const requestsWithFeature = selectedPolygon ? request.map(obj => ({
+    ...obj,
+    feature: {
+      type: "polygon",
+      shape: selectedPolygon
+    }
+  })) : request;
+
+  // Store for copying
+  currentMARSRequests = requestsWithFeature;
+
   let html =
   `[\n` +
-  request
+  requestsWithFeature
     .map(
-      obj =>
-        `  {\n` +
-        Object.entries(obj)
+      obj => {
+        const entries = Object.entries(obj);
+        return `  {\n` +
+        entries
           .map(
-            ([key, values]) =>
-              `    <span class="key" title="${descriptions[key]?.description || ""
-              }">"${key}"</span>: ${format_values(key, values)},`
+            ([key, values], idx) => {
+              const isLast = idx === entries.length - 1;
+              if (key === "feature" && values && typeof values === "object" && values.type === "polygon") {
+                // Format the feature object specially
+                const shapeStr = JSON.stringify(values.shape, null, 0);
+                return `    <span class="key">"feature"</span>: {\n` +
+                       `      <span class="key">"type"</span>: <span class="value">"${values.type}"</span>,\n` +
+                       `      <span class="key">"shape"</span>: <span class="value">${shapeStr}</span>\n` +
+                       `    }${isLast ? '' : ','}`;
+              }
+              return `    <span class="key" title="${descriptions[key]?.description || ""}">"${key}"</span>: ${format_values(key, values)}${isLast ? '' : ','}`;
+            }
           )
           .join("\n") +
-        `\n  }`
+        `\n  }`;
+      }
     )
     .join(",\n") +
   `\n]`;
@@ -522,6 +545,7 @@ async function fetchCatalog(request, stacUrl) {
       currentSelectionSection.style.display = "none";
       marsRequestsSection.style.display = "block";
       nextButton.style.display = "none";
+      catalogCache = catalog; // Store catalog for re-rendering with features
       renderMARSRequest(catalog.final_object, catalog.debug.descriptions);
     } else {
       // Not at the end: show current selection, hide MARS requests, show next button
@@ -538,6 +562,17 @@ async function fetchCatalog(request, stacUrl) {
     if (catalog.links) {
       console.log("Fetched STAC catalog:", stacUrl, catalog.links);
       renderCatalogItems(catalog.links);
+    }
+
+    // Show region selection at the end of catalogue
+    const regionSelection = document.getElementById("region-selection");
+    const catalogList = document.getElementById("catalog-list");
+    if (hasReachedEnd) {
+      regionSelection.style.display = "block";
+      catalogList.classList.add("region-active");
+    } else {
+      regionSelection.style.display = "none";
+      catalogList.classList.remove("region-active");
     }
 
     // Highlight the request and raw STAC
@@ -575,11 +610,13 @@ function initializeViewer() {
 
 // Copy MARS requests to clipboard
 function copyMARSRequests() {
-  const marsContent = document.getElementById("final_req").textContent;
   const copyBtn = document.getElementById("copy-mars-btn");
   const btnText = copyBtn.querySelector(".copy-btn-text");
 
-  navigator.clipboard.writeText(marsContent).then(() => {
+  // Use the stored MARS requests with feature if available
+  const jsonContent = JSON.stringify(currentMARSRequests, null, 2);
+
+  navigator.clipboard.writeText(jsonContent).then(() => {
     // Change button text temporarily
     btnText.textContent = "Copied!";
     copyBtn.classList.add("copied");
@@ -597,6 +634,164 @@ function copyMARSRequests() {
     }, 2000);
   });
 }
+
+// ============================================
+// Geographic Region Selection with Map
+// ============================================
+
+let regionMap = null;
+let drawnItems = null;
+let selectedPolygon = null;
+let currentMARSRequests = []; // Store current MARS requests for copying
+let catalogCache = null; // Store catalog for re-rendering when polygon changes
+
+function initializeRegionMap() {
+  const mapElement = document.getElementById('map');
+  if (!mapElement || regionMap) return;
+
+  // Initialize map centered on the world
+  regionMap = L.map('map').setView([20, 0], 2);
+
+  // Add OpenStreetMap tile layer
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 18,
+  }).addTo(regionMap);
+
+  // Initialize the FeatureGroup to store editable layers
+  drawnItems = new L.FeatureGroup();
+  regionMap.addLayer(drawnItems);
+
+  // Initialize the draw control
+  const drawControl = new L.Control.Draw({
+    position: 'topright',
+    draw: {
+      polyline: false,
+      circle: false,
+      circlemarker: false,
+      marker: false,
+      rectangle: true,
+      polygon: {
+        allowIntersection: false,
+        showArea: true,
+        shapeOptions: {
+          color: '#0066cc',
+          weight: 2,
+          fillOpacity: 0.2
+        }
+      }
+    },
+    edit: {
+      featureGroup: drawnItems,
+      remove: true
+    }
+  });
+  regionMap.addControl(drawControl);
+
+  // Handle polygon creation
+  regionMap.on('draw:created', function (e) {
+    // Clear previous polygons
+    drawnItems.clearLayers();
+
+    const layer = e.layer;
+    drawnItems.addLayer(layer);
+
+    // Get the coordinates
+    const coordinates = layer.getLatLngs()[0].map(latlng => [
+      parseFloat(latlng.lat.toFixed(6)),
+      parseFloat(latlng.lng.toFixed(6))
+    ]);
+
+    // Close the polygon by adding the first point at the end
+    coordinates.push(coordinates[0]);
+
+    selectedPolygon = coordinates;
+    displaySelectedRegion(coordinates);
+  });
+
+  // Handle polygon edit
+  regionMap.on('draw:edited', function (e) {
+    const layers = e.layers;
+    layers.eachLayer(function (layer) {
+      const coordinates = layer.getLatLngs()[0].map(latlng => [
+        parseFloat(latlng.lat.toFixed(6)),
+        parseFloat(latlng.lng.toFixed(6))
+      ]);
+      coordinates.push(coordinates[0]);
+      selectedPolygon = coordinates;
+      displaySelectedRegion(coordinates);
+    });
+  });
+
+  // Handle polygon deletion
+  regionMap.on('draw:deleted', function (e) {
+    selectedPolygon = null;
+    document.getElementById('selected-region').style.display = 'none';
+  });
+
+  // Force map to resize properly
+  setTimeout(() => {
+    regionMap.invalidateSize();
+  }, 100);
+}
+
+function displaySelectedRegion(coordinates) {
+  const selectedRegionDiv = document.getElementById('selected-region');
+  const coordinatesDisplay = document.getElementById('region-coordinates');
+
+  const regionFeature = {
+    type: "polygon",
+    shape: coordinates
+  };
+
+  coordinatesDisplay.textContent = JSON.stringify({ feature: regionFeature }, null, 2);
+  selectedRegionDiv.style.display = 'block';
+
+  // Re-render MARS requests with the feature appended
+  if (catalogCache && catalogCache.final_object) {
+    renderMARSRequest(catalogCache.final_object, catalogCache.debug.descriptions);
+  }
+}
+
+// Event listeners for region selection
+document.addEventListener("DOMContentLoaded", () => {
+  const enableRegionBtn = document.getElementById('enable-region-btn');
+  const skipRegionBtn = document.getElementById('skip-region-btn');
+  const clearRegionBtn = document.getElementById('clear-region-btn');
+  const mapContainer = document.getElementById('map-container');
+
+  if (enableRegionBtn) {
+    enableRegionBtn.addEventListener('click', () => {
+      mapContainer.style.display = 'block';
+      enableRegionBtn.style.display = 'none';
+      skipRegionBtn.textContent = 'Continue Without Region';
+      initializeRegionMap();
+    });
+  }
+
+  if (skipRegionBtn) {
+    skipRegionBtn.addEventListener('click', () => {
+      // User chose to skip region selection - could proceed to next step
+      console.log('User skipped region selection');
+      // Here you could trigger the next action or inform the user
+    });
+  }
+
+  if (clearRegionBtn) {
+    clearRegionBtn.addEventListener('click', () => {
+      if (drawnItems) {
+        drawnItems.clearLayers();
+      }
+      selectedPolygon = null;
+      document.getElementById('selected-region').style.display = 'none';
+
+      // Re-render MARS requests without the feature
+      if (catalogCache && catalogCache.final_object) {
+        renderMARSRequest(catalogCache.final_object, catalogCache.debug.descriptions);
+      }
+    });
+  }
+});
 
 // Call initializeViewer on page load
 initializeViewer();
