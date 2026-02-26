@@ -468,40 +468,40 @@ function renderCatalogItems(links) {
 function renderRequestBreakdown(request, descriptions) {
   const container = document.getElementById("request-breakdown");
   const format_value = (key, value) => {
-    return `<span class="value" title="${descriptions[key]["value_descriptions"][value]}">"${value}"</span>`;
+    return `<span class="punct">"</span><span class="value" title="${descriptions[key]["value_descriptions"][value]}">${value}</span><span class="punct">"</span>`;
   };
 
   const format_values = (key, values) => {
     if (values.length === 1) {
       return format_value(key, values[0]);
     }
-    return `[${values.map((v) => format_value(key, v)).join(", ")}]`;
+    return `<span class="punct">[</span>${values.map((v) => format_value(key, v)).join(`<span class="punct">,</span> `)}<span class="punct">]</span>`;
   };
 
   let html =
-    `{\n` +
+    `<span class="punct">{</span>\n` +
     request
       .map(
         ([key, values]) =>
-          `    <span class="key" title="${descriptions[key]["description"]
-          }">"${key}"</span>: ${format_values(key, values)},`
+          `    <span class="punct">"</span><span class="key" title="${descriptions[key]["description"]
+          }">${key}</span><span class="punct">"</span><span class="punct">:</span> ${format_values(key, values)}<span class="punct">,</span>`
       )
       .join("\n") +
-    `\n}`;
+    `\n<span class="punct">}</span>`;
   container.innerHTML = html;
 }
 
 function renderMARSRequest(request, descriptions) {
   const container = document.getElementById("final_req");
   const format_value = (key, value) => {
-    return `<span class="value" title="${descriptions[key]["value_descriptions"][value]}">"${value}"</span>`;
+    return `<span class="punct">"</span><span class="value" title="${descriptions[key]["value_descriptions"][value]}">${value}</span><span class="punct">"</span>`;
   };
 
   const format_values = (key, values) => {
     if (values.length === 1) {
       return format_value(key, values[0]);
     }
-    return `[${values.map((v) => format_value(key, v)).join(", ")}]`;
+    return `<span class="punct">[</span>${values.map((v) => format_value(key, v)).join(`<span class="punct">,</span> `)}<span class="punct">]</span>`;
   };
 
   // Add feature object to each request if polygon is selected
@@ -517,12 +517,12 @@ function renderMARSRequest(request, descriptions) {
   currentMARSRequests = requestsWithFeature;
 
   let html =
-  `[\n` +
+  `<span class="punct">[</span>\n` +
   requestsWithFeature
     .map(
       obj => {
         const entries = Object.entries(obj);
-        return `  {\n` +
+        return `  <span class="punct">{</span>\n` +
         entries
           .map(
             ([key, values], idx) => {
@@ -530,20 +530,20 @@ function renderMARSRequest(request, descriptions) {
               if (key === "feature" && values && typeof values === "object" && values.type === "polygon") {
                 // Format the feature object specially
                 const shapeStr = JSON.stringify(values.shape, null, 0);
-                return `    <span class="key">"feature"</span>: {\n` +
-                       `      <span class="key">"type"</span>: <span class="value">"${values.type}"</span>,\n` +
-                       `      <span class="key">"shape"</span>: <span class="value">${shapeStr}</span>\n` +
-                       `    }${isLast ? '' : ','}`;
+                return `    <span class="punct">"</span><span class="key">feature</span><span class="punct">"</span><span class="punct">:</span> <span class="punct">{</span>\n` +
+                       `      <span class="punct">"</span><span class="key">type</span><span class="punct">"</span><span class="punct">:</span> <span class="punct">"</span><span class="value">${values.type}</span><span class="punct">"</span><span class="punct">,</span>\n` +
+                       `      <span class="punct">"</span><span class="key">shape</span><span class="punct">"</span><span class="punct">:</span> <span class="value">${shapeStr}</span>\n` +
+                       `    <span class="punct">}</span>${isLast ? '' : '<span class="punct">,</span>'}`;
               }
-              return `    <span class="key" title="${descriptions[key]?.description || ""}">"${key}"</span>: ${format_values(key, values)}${isLast ? '' : ','}`;
+              return `    <span class="punct">"</span><span class="key" title="${descriptions[key]?.description || ""}">${key}</span><span class="punct">"</span><span class="punct">:</span> ${format_values(key, values)}${isLast ? '' : '<span class="punct">,</span>'}`;
             }
           )
           .join("\n") +
-        `\n  }`;
+        `\n  <span class="punct">}</span>`;
       }
     )
-    .join(",\n") +
-  `\n]`;
+    .join(`<span class="punct">,</span>\n`) +
+  `\n<span class="punct">]</span>`;
   container.innerHTML = html;
 }
 

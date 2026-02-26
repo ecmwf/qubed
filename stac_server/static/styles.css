@@ -654,6 +654,11 @@ span.value:hover {
     cursor: help;
 }
 
+span.punct {
+    color: #e0e0e0;
+    font-weight: 500;
+}
+
 /* ============================================
    Form Elements
    ============================================ */

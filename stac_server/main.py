@@ -121,6 +121,15 @@ async def deprecated():
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     index_config = {
+        "title": os.environ.get("TITLE", "Qubed Catalogue Browser"),
+    }
+
+    return templates.TemplateResponse(request, "landing.html", index_config)
+
+
+@app.get("/browse", response_class=HTMLResponse)
+async def browse_catalogue(request: Request):
+    index_config = {
         "api_url": os.environ.get("API_URL", "/api/v2/"),
         "title": os.environ.get("TITLE", "Qubed Catalogue Browser"),
         "message": "",
