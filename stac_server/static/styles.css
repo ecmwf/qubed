@@ -1383,3 +1383,16 @@ canvas {
     color: var(--text-secondary);
     font-family: 'Monaco', 'Courier New', monospace;
 }
+.download-json-btn {
+    transition: all 0.2s ease;
+}
+
+.download-json-btn:hover {
+    background: var(--secondary-color) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 115, 230, 0.3);
+}
+
+.download-json-btn:active {
+    transform: translateY(0);
+}

@@ -674,6 +674,20 @@ function copyMARSRequests() {
   });
 }
 
+// Download JSON data as a file
+function downloadJSON(data, filename) {
+  const jsonString = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 // ============================================
 // Geographic Region Selection with Map
 // ============================================
@@ -910,9 +924,25 @@ async function queryPolytope() {
             }
           </div>
           ${res.message ? `<div class="polytope-result-detail">${res.message}</div>` : ''}
+          ${res.success && res.json_data ? `
+            <button class="download-json-btn" data-request-idx="${idx}" style="margin-top: 0.5rem; padding: 0.4rem 0.8rem; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
+              📥 Download JSON
+            </button>
+          ` : ''}
         </div>
       `).join('');
       polytopeResults.style.display = 'block';
+
+      // Add event listeners to download buttons
+      document.querySelectorAll('.download-json-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.getAttribute('data-request-idx'));
+          const resultData = result.results[idx];
+          if (resultData && resultData.json_data) {
+            downloadJSON(resultData.json_data, `polytope_request_${idx + 1}.json`);
+          }
+        });
+      });
     }
 
     polytopeBtnText.textContent = 'Query Complete';

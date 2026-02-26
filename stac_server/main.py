@@ -216,6 +216,16 @@ async def query_polytope(
                 "polytope", "destination-earth", mars_request, **polytope_kwargs
             )
 
+            # Get JSON representation of the data
+            try:
+                ds_json = ds._json()
+                logger.info(f"Successfully extracted JSON from request {idx + 1}")
+            except Exception as json_error:
+                logger.warning(
+                    f"Could not extract JSON from request {idx + 1}: {json_error}"
+                )
+                ds_json = None
+
             # Get some basic info about the result
             data_info = (
                 f"Retrieved {len(ds)} fields"
@@ -223,21 +233,33 @@ async def query_polytope(
                 else "Data retrieved"
             )
 
-            results.append(
-                {
-                    "success": True,
-                    "request_index": idx,
-                    "message": data_info,
-                    "data_size": str(len(ds)) if hasattr(ds, "__len__") else None,
-                }
-            )
+            result_entry = {
+                "success": True,
+                "request_index": idx,
+                "message": data_info,
+                "data_size": str(len(ds)) if hasattr(ds, "__len__") else None,
+                "mars_request": mars_request,
+            }
+
+            # Add JSON data if available
+            if ds_json is not None:
+                result_entry["json_data"] = ds_json
+
+            results.append(result_entry)
             successful += 1
             logger.info(f"Request {idx + 1} successful: {data_info}")
 
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Request {idx + 1} failed: {error_msg}")
-            results.append({"success": False, "request_index": idx, "error": error_msg})
+            results.append(
+                {
+                    "success": False,
+                    "request_index": idx,
+                    "error": error_msg,
+                    "mars_request": mars_request,
+                }
+            )
             failed += 1
 
     return {
