@@ -4,19 +4,19 @@
 
 /* CSS Variables for consistent theming */
 :root {
-    --primary-color: #0066cc;
-    --primary-dark: #004c99;
-    --primary-light: #3385d6;
-    --secondary-color: #00a0dc;
-    --accent-color: #ff6b35;
+    --primary-color: #0073E6;
+    --primary-dark: #2F3842;
+    --primary-light: #009DEB;
+    --secondary-color: #009DEB;
+    --accent-color: #FF6B9D;
 
     --bg-primary: #ffffff;
-    --bg-secondary: #f8f9fa;
-    --bg-tertiary: #e9ecef;
-    --bg-dark: #1a1a2e;
+    --bg-secondary: #F6F9FC;
+    --bg-tertiary: #F2F7FD;
+    --bg-dark: #2F3842;
 
-    --text-primary: #212529;
-    --text-secondary: #6c757d;
+    --text-primary: #100F0F;
+    --text-secondary: #B1B5C3;
     --text-light: #adb5bd;
     --text-inverse: #ffffff;
 
@@ -276,7 +276,7 @@ body {
 }
 
 .item.selected {
-    background: linear-gradient(135deg, #f0f7ff 0%, #e6f2ff 100%);
+    background: linear-gradient(135deg, #F2F7FD 0%, #F6F9FC 100%);
     border-color: var(--primary-color);
     box-shadow: var(--shadow-md);
 }
@@ -389,7 +389,7 @@ body {
 }
 
 .checkbox-row:hover > input[type='checkbox'] {
-    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.15);
+    box-shadow: 0 0 0 3px rgba(0, 115, 230, 0.15);
 }
 
 .checkbox-row input[type='checkbox'] {
@@ -443,6 +443,40 @@ body {
     font-family: 'Monaco', 'Courier New', monospace;
     font-size: 0.8rem;
     color: var(--text-secondary);
+}
+
+/* ============================================
+   Filter Input for Checkbox Lists
+   ============================================ */
+
+.filter-wrapper {
+    margin-top: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.filter-input {
+    width: 100%;
+    padding: 0.625rem 0.875rem 0.625rem 2.25rem;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    transition: all var(--transition-base);
+    background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="%23B1B5C3"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: 0.75rem center;
+    background-size: 16px 16px;
+}
+
+.filter-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 115, 230, 0.1);
+}
+
+.filter-input::placeholder {
+    color: var(--text-light);
 }
 
 /* Sidebar Footer */
@@ -638,7 +672,7 @@ input[type="text"] {
 input[type="text"]:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+    box-shadow: 0 0 0 3px rgba(0, 115, 230, 0.1);
 }
 
 /* ============================================
@@ -671,7 +705,7 @@ input[type="text"]:focus {
 .date-picker-hint {
     margin: 0.75rem 0 1rem 0;
     padding: 0.75rem 1rem;
-    background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%);
+    background: linear-gradient(135deg, #F2F7FD 0%, #F6F9FC 100%);
     border-left: 4px solid var(--primary-color);
     border-radius: var(--radius-sm);
     font-size: 0.85rem;
@@ -742,27 +776,27 @@ div.air-datepicker .air-datepicker-cell:not(.-disabled-):hover {
 }
 
 div.air-datepicker .air-datepicker-cell.-selected- {
-    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-color) 100%) !important;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%) !important;
     color: var(--text-inverse) !important;
     font-weight: 700;
-    box-shadow: 0 2px 8px rgba(0, 76, 153, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 115, 230, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
     border: none !important;
 }
 
 div.air-datepicker .air-datepicker-cell.-in-range- {
-    background: linear-gradient(135deg, rgba(0, 102, 204, 0.2) 0%, rgba(0, 102, 204, 0.15) 100%) !important;
+    background: linear-gradient(135deg, rgba(0, 115, 230, 0.2) 0%, rgba(0, 115, 230, 0.15) 100%) !important;
     color: var(--primary-dark);
     font-weight: 600;
-    border-top: 1px solid rgba(0, 102, 204, 0.3);
-    border-bottom: 1px solid rgba(0, 102, 204, 0.3);
+    border-top: 1px solid rgba(0, 115, 230, 0.3);
+    border-bottom: 1px solid rgba(0, 115, 230, 0.3);
 }
 
 div.air-datepicker .air-datepicker-cell.-range-from-,
 div.air-datepicker .air-datepicker-cell.-range-to- {
-    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-color) 100%) !important;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%) !important;
     color: var(--text-inverse) !important;
     font-weight: 700;
-    box-shadow: 0 2px 8px rgba(0, 76, 153, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 115, 230, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
     border: none !important;
 }
 
@@ -770,8 +804,8 @@ div.air-datepicker .air-datepicker-cell.-range-to- {
 div.air-datepicker .air-datepicker-cell.has-data {
     font-weight: 600;
     position: relative;
-    background: rgba(0, 102, 204, 0.06);
-    border-bottom: 2px solid rgba(0, 102, 204, 0.4);
+    background: rgba(0, 115, 230, 0.06);
+    border-bottom: 2px solid rgba(0, 115, 230, 0.4);
 }
 
 div.air-datepicker .air-datepicker-cell.has-data:not(.-disabled-) {
@@ -782,19 +816,19 @@ div.air-datepicker .air-datepicker-cell.has-data:not(.-disabled-) {
 div.air-datepicker .air-datepicker-cell.-selected-.has-data,
 div.air-datepicker .air-datepicker-cell.-range-from-.has-data,
 div.air-datepicker .air-datepicker-cell.-range-to-.has-data {
-    background: linear-gradient(135deg, #003366 0%, var(--primary-dark) 100%) !important;
+    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-color) 100%) !important;
     color: var(--text-inverse) !important;
-    border-bottom: 2px solid #001a33;
+    border-bottom: 2px solid var(--primary-dark);
     font-weight: 700;
-    box-shadow: 0 3px 10px rgba(0, 51, 102, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    box-shadow: 0 3px 10px rgba(47, 56, 66, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 div.air-datepicker .air-datepicker-cell.-in-range-.has-data {
-    background: linear-gradient(135deg, rgba(0, 102, 204, 0.25) 0%, rgba(0, 102, 204, 0.2) 100%) !important;
+    background: linear-gradient(135deg, rgba(0, 115, 230, 0.25) 0%, rgba(0, 115, 230, 0.2) 100%) !important;
     color: var(--primary-dark);
-    border-bottom: 2px solid rgba(0, 102, 204, 0.5);
+    border-bottom: 2px solid rgba(0, 115, 230, 0.5);
     font-weight: 600;
-    border-top: 1px solid rgba(0, 102, 204, 0.4);
+    border-top: 1px solid rgba(0, 115, 230, 0.4);
 }
 
 /* ============================================
@@ -1172,7 +1206,7 @@ canvas {
 .polytope-section {
     margin-top: 2rem;
     padding: 1.5rem;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    background: linear-gradient(135deg, #F6F9FC 0%, #F2F7FD 100%);
     border: 2px solid var(--border-light);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
@@ -1236,7 +1270,7 @@ canvas {
 .form-input:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+    box-shadow: 0 0 0 3px rgba(0, 115, 230, 0.1);
 }
 
 .form-input::placeholder {

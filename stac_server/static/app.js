@@ -343,20 +343,55 @@ async function createCatalogItem(link, itemsContainer) {
 
       console.log("Datepicker initialized");
     } else if (variable.enum && variable.enum.length > 0) {
+      // Add filter input at the top if there are many options
+      if (variable.enum.length > 5) {
+        const filterWrapper = toHTML(`
+          <div class="filter-wrapper">
+            <input type="text" class="filter-input" id="filter-${link.title}" placeholder="🔍 Filter options...">
+          </div>
+        `);
+        itemDiv.appendChild(filterWrapper);
+      }
+
+      // Add checkbox list
       const checkbox_list = renderCheckboxList(link);
       itemDiv.appendChild(checkbox_list);
+
+      // Add filter functionality if filter exists
+      if (variable.enum.length > 5) {
+        const filterInput = itemDiv.querySelector(`#filter-${link.title}`);
+        if (filterInput) {
+          filterInput.addEventListener('input', (e) => {
+            const filterText = e.target.value.toLowerCase();
+            const checkboxRows = checkbox_list.querySelectorAll('.checkbox-row');
+
+            checkboxRows.forEach(row => {
+              const label = row.querySelector('label');
+              const code = row.querySelector('label.code code');
+              const labelText = label ? label.textContent.toLowerCase() : '';
+              const codeText = code ? code.textContent.toLowerCase() : '';
+
+              if (labelText.includes(filterText) || codeText.includes(filterText)) {
+                row.style.display = '';
+              } else {
+                row.style.display = 'none';
+              }
+            });
+          });
+        }
+      }
 
       itemDiv.querySelector("button.all").addEventListener("click", () => {
         let new_state;
         if (checkbox_list.hasAttribute("disabled")) {
           checkbox_list.removeAttribute("disabled");
-          itemDiv.querySelectorAll("input").forEach((c) => {
+          itemDiv.querySelectorAll("input[type='checkbox']").forEach((c) => {
             c.removeAttribute("checked");
             c.removeAttribute("disabled");
           });
         } else {
           checkbox_list.setAttribute("disabled", "");
-          itemDiv.querySelectorAll("input").forEach((c) => {
+          itemDiv.querySelectorAll("input[type='checkbox']").forEach((c) => {
             c.setAttribute("checked", "true");
             c.setAttribute("disabled", "");
           });
