@@ -656,14 +656,140 @@ input[type="text"]:focus {
 }
 
 /* Date Picker Styles */
-#date-picker {
-    align-self: center;
-    width: calc(100% - 2rem);
-    margin: 1rem;
+.date-picker-input {
+    width: 100%;
+    margin-top: 1rem;
+    border: none;
+    background: transparent;
+}
+
+.date-picker-hint {
+    margin: 0.75rem 0 1rem 0;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%);
+    border-left: 4px solid var(--primary-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    font-weight: 500;
+    transition: all var(--transition-base);
+}
+
+.date-picker-hint:empty {
+    display: none;
 }
 
 div.air-datepicker {
-    align-self: center;
+    width: 100% !important;
+    background: var(--bg-primary);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    font-family: inherit;
+}
+
+div.air-datepicker .air-datepicker-nav {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-light);
+    padding: 0.75rem;
+}
+
+div.air-datepicker .air-datepicker-nav--title {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+div.air-datepicker .air-datepicker-nav--action {
+    color: var(--primary-color);
+}
+
+div.air-datepicker .air-datepicker-nav--action:hover {
+    background: var(--primary-light);
+}
+
+div.air-datepicker .air-datepicker-body--day-name {
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+div.air-datepicker .air-datepicker-cell {
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+}
+
+div.air-datepicker .air-datepicker-cell.-disabled- {
+    color: var(--text-light);
+    opacity: 0.25;
+    cursor: not-allowed;
+    background: transparent;
+    text-decoration: line-through;
+}
+
+div.air-datepicker .air-datepicker-cell:not(.-disabled-):hover {
+    background: var(--primary-light);
+    color: var(--text-inverse);
+    cursor: pointer;
+    transform: scale(1.05);
+    transition: all var(--transition-fast);
+}
+
+div.air-datepicker .air-datepicker-cell.-selected- {
+    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-color) 100%) !important;
+    color: var(--text-inverse) !important;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0, 76, 153, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    border: none !important;
+}
+
+div.air-datepicker .air-datepicker-cell.-in-range- {
+    background: linear-gradient(135deg, rgba(0, 102, 204, 0.2) 0%, rgba(0, 102, 204, 0.15) 100%) !important;
+    color: var(--primary-dark);
+    font-weight: 600;
+    border-top: 1px solid rgba(0, 102, 204, 0.3);
+    border-bottom: 1px solid rgba(0, 102, 204, 0.3);
+}
+
+div.air-datepicker .air-datepicker-cell.-range-from-,
+div.air-datepicker .air-datepicker-cell.-range-to- {
+    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-color) 100%) !important;
+    color: var(--text-inverse) !important;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0, 76, 153, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    border: none !important;
+}
+
+/* Subtle indicator for dates with available data */
+div.air-datepicker .air-datepicker-cell.has-data {
+    font-weight: 600;
+    position: relative;
+    background: rgba(0, 102, 204, 0.06);
+    border-bottom: 2px solid rgba(0, 102, 204, 0.4);
+}
+
+div.air-datepicker .air-datepicker-cell.has-data:not(.-disabled-) {
+    color: var(--primary-dark);
+}
+
+/* When dates are selected, make them darker and more prominent */
+div.air-datepicker .air-datepicker-cell.-selected-.has-data,
+div.air-datepicker .air-datepicker-cell.-range-from-.has-data,
+div.air-datepicker .air-datepicker-cell.-range-to-.has-data {
+    background: linear-gradient(135deg, #003366 0%, var(--primary-dark) 100%) !important;
+    color: var(--text-inverse) !important;
+    border-bottom: 2px solid #001a33;
+    font-weight: 700;
+    box-shadow: 0 3px 10px rgba(0, 51, 102, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+div.air-datepicker .air-datepicker-cell.-in-range-.has-data {
+    background: linear-gradient(135deg, rgba(0, 102, 204, 0.25) 0%, rgba(0, 102, 204, 0.2) 100%) !important;
+    color: var(--primary-dark);
+    border-bottom: 2px solid rgba(0, 102, 204, 0.5);
+    font-weight: 600;
+    border-top: 1px solid rgba(0, 102, 204, 0.4);
 }
 
 /* ============================================

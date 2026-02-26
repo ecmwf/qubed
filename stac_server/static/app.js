@@ -160,32 +160,188 @@ async function createCatalogItem(link, itemsContainer) {
       }</p>
     `;
 
-    if (false && key === "date") {
-      console.log("Date", variable, exports);
+    if (key === "date" && variable.enum && variable.enum.length > 30) {
+      console.log("Date picker enabled");
+      console.log("First few dates:", variable.enum.slice(0, 10));
 
-      itemDiv.appendChild(toHTML("<input id='date-picker'></input>"));
-      let dates = variable.enum;
+      // Create a unique ID for this date picker
+      const pickerId = `date-picker-${link.title}`;
+      const hiddenInputId = `date-input-${link.title}`;
+
+      itemDiv.appendChild(toHTML(`<input id='${pickerId}' class='date-picker-input'></input>`));
+      itemDiv.appendChild(toHTML(`<input type='text' id='${hiddenInputId}' style='display:none;' name='${link.title}'></input>`));
+      itemDiv.appendChild(toHTML(`<div class='date-picker-hint' id='${pickerId}-hint'>💡 Click a date twice to select it individually, or click two different dates to select a range.</div>`));
+
+      let dates = variable.enum.map(d => String(d));
       itemDiv.querySelector("button.all").style.display = "none";
 
-      let picker = new AirDatepicker("#date-picker", {
+      // Create a set for fast lookup (normalize to YYYY-MM-DD format)
+      const availableDatesSet = new Set(dates);
+      console.log("Available dates set size:", availableDatesSet.size);
+
+      // Parse dates from enum to get min and max dates
+      let parsedDates = dates.map(d => {
+        // Handle both formats: "YYYY-MM-DD" or "YYYYMMDD"
+        const dateStr = String(d);
+        if (dateStr.includes('-')) {
+          return new Date(dateStr);
+        } else {
+          const year = parseInt(dateStr.substring(0, 4));
+          const month = parseInt(dateStr.substring(4, 6)) - 1;
+          const day = parseInt(dateStr.substring(6, 8));
+          return new Date(year, month, day);
+        }
+      });
+
+      let minDate = new Date(Math.min(...parsedDates));
+      let maxDate = new Date(Math.max(...parsedDates));
+
+      console.log("Date range:", minDate.toISOString(), "to", maxDate.toISOString());
+
+      // Track selected dates manually for better control
+      let manuallySelectedDates = new Set();
+      let lastClickedDate = null;
+
+      let picker = new AirDatepicker(`#${pickerId}`, {
         position: "bottom center",
         inline: true,
         locale: exports.default,
-        range: true,
-        multipleDatesSeparator: " - ",
+        multipleDates: true,
+        multipleDatesSeparator: ",",
+        minDate: minDate,
+        maxDate: maxDate,
+        onSelect({ date, formattedDate, datepicker }) {
+          // Prevent default behavior - we'll handle selection manually
+        },
         onRenderCell({ date, cellType }) {
-          let isDay = cellType === "day",
-            _date =
-              String(date.getFullYear()).padStart(4, "0") +
-              String(date.getMonth()).padStart(2, "0") +
-              String(date.getDate()).padStart(2, "0"),
-            shouldChangeContent = isDay && dates.includes(_date);
+          if (cellType === "day") {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            // Check in the format that matches the input
+            let dateStr;
+            if (dates[0].includes('-')) {
+              dateStr = `${year}-${month}-${day}`;
+            } else {
+              dateStr = `${year}${month}${day}`;
+            }
+            const hasData = availableDatesSet.has(dateStr);
 
-          return {
-            classes: shouldChangeContent ? "has-data" : undefined,
-          };
+            return {
+              classes: hasData ? "has-data" : "",
+              disabled: !hasData,
+            };
+          }
+          return {};
         },
       });
+
+      // Custom click handler for date cells
+      const hintElement = document.getElementById(`${pickerId}-hint`);
+
+      // Wait for datepicker to render, then attach event handler
+      setTimeout(() => {
+        const datepickerContainer = document.querySelector(`#${pickerId}`).parentElement.querySelector('.air-datepicker');
+
+        if (datepickerContainer) {
+          datepickerContainer.addEventListener('click', (e) => {
+            const cell = e.target.closest('.air-datepicker-cell.-day-');
+            if (!cell || cell.classList.contains('-disabled-')) return;
+
+            // Get the date from the cell's data attributes
+            const dayNumber = cell.getAttribute('data-date');
+            const monthNumber = cell.getAttribute('data-month');
+            const yearNumber = cell.getAttribute('data-year');
+
+            if (!dayNumber || !monthNumber || !yearNumber) return;
+
+            const cellDate = new Date(parseInt(yearNumber), parseInt(monthNumber), parseInt(dayNumber));
+
+            const formatDate = (d) => {
+              const year = d.getFullYear();
+              const month = String(d.getMonth() + 1).padStart(2, '0');
+              const day = String(d.getDate()).padStart(2, '0');
+              if (dates[0].includes('-')) {
+                return `${year}-${month}-${day}`;
+              } else {
+                return `${year}${month}${day}`;
+              }
+            };
+
+            const clickedDateStr = formatDate(cellDate);
+
+            // Check if this date has data
+            if (!availableDatesSet.has(clickedDateStr)) return;
+
+            const isSameAsPrevious = lastClickedDate &&
+                                     cellDate.getTime() === lastClickedDate.getTime();
+
+            if (isSameAsPrevious) {
+              // Clicking same date twice - toggle individual date
+              if (manuallySelectedDates.has(clickedDateStr)) {
+                manuallySelectedDates.delete(clickedDateStr);
+                console.log("Removed date:", clickedDateStr);
+                if (hintElement) hintElement.textContent = `🗑️ Removed ${clickedDateStr}. Total: ${manuallySelectedDates.size} dates selected.`;
+              } else {
+                manuallySelectedDates.add(clickedDateStr);
+                console.log("Added single date:", clickedDateStr);
+                if (hintElement) hintElement.textContent = `✅ Added ${clickedDateStr}. Total: ${manuallySelectedDates.size} dates selected.`;
+              }
+              lastClickedDate = null; // Reset for next selection
+            } else if (lastClickedDate) {
+              // Two different dates clicked - create a range
+              const [startDate, endDate] = [lastClickedDate, cellDate].sort((a, b) => a - b);
+
+              console.log("Creating range from", formatDate(startDate), "to", formatDate(endDate));
+
+              let currentDate = new Date(startDate);
+              const rangeEnd = new Date(endDate);
+              let rangeCount = 0;
+
+              while (currentDate <= rangeEnd) {
+                const dateStr = formatDate(currentDate);
+                if (availableDatesSet.has(dateStr)) {
+                  manuallySelectedDates.add(dateStr);
+                  rangeCount++;
+                }
+                currentDate.setDate(currentDate.getDate() + 1);
+              }
+
+              console.log("Range added, total dates selected:", manuallySelectedDates.size);
+              if (hintElement) hintElement.textContent = `📅 Added range: ${rangeCount} dates. Total: ${manuallySelectedDates.size} dates selected.`;
+              lastClickedDate = null; // Reset for next selection
+            } else {
+              // First click of a potential range
+              lastClickedDate = cellDate;
+              console.log("First date clicked for range:", clickedDateStr);
+              if (hintElement) hintElement.textContent = `🎯 First date selected: ${clickedDateStr}. Click another date to create a range, or click this date again to select it individually.`;
+              return; // Don't update selection yet, wait for second click
+            }
+
+            // Update the visual selection in datepicker
+            const selectedDateObjects = Array.from(manuallySelectedDates).map(dateStr => {
+              if (dateStr.includes('-')) {
+                return new Date(dateStr);
+              } else {
+                const year = parseInt(dateStr.substring(0, 4));
+                const month = parseInt(dateStr.substring(4, 6)) - 1;
+                const day = parseInt(dateStr.substring(6, 8));
+                return new Date(year, month, day);
+              }
+            });
+
+            picker.selectDate(selectedDateObjects);
+
+            // Update hidden input
+            const hiddenInput = document.getElementById(hiddenInputId);
+            hiddenInput.value = Array.from(manuallySelectedDates).join(',');
+            console.log("Total selected dates:", manuallySelectedDates.size);
+            console.log("Selected dates:", hiddenInput.value.split(',').slice(0, 10).join(', '), '...');
+          });
+        }
+      }, 100);
+
+      console.log("Datepicker initialized");
     } else if (variable.enum && variable.enum.length > 0) {
       const checkbox_list = renderCheckboxList(link);
       itemDiv.appendChild(checkbox_list);
