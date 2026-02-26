@@ -353,9 +353,27 @@ async function fetchCatalog(request, stacUrl) {
     const response = await fetch(stacUrl);
     const catalog = await response.json();
 
-    // Render the request breakdown in the sidebar
-    renderRequestBreakdown(request, catalog.debug.descriptions);
-    renderMARSRequest(catalog.final_object, catalog.debug.descriptions);
+    // Check if we've reached the end of the catalogue (final_object has data)
+    const hasReachedEnd = catalog.final_object && catalog.final_object.length > 0;
+
+    // Get section elements
+    const currentSelectionSection = document.getElementById("current-selection-section");
+    const marsRequestsSection = document.getElementById("mars-requests-section");
+    const nextButton = document.getElementById("next-btn");
+
+    if (hasReachedEnd) {
+      // At the end: show MARS requests, hide current selection and next button
+      currentSelectionSection.style.display = "none";
+      marsRequestsSection.style.display = "block";
+      nextButton.style.display = "none";
+      renderMARSRequest(catalog.final_object, catalog.debug.descriptions);
+    } else {
+      // Not at the end: show current selection, hide MARS requests, show next button
+      currentSelectionSection.style.display = "block";
+      marsRequestsSection.style.display = "none";
+      nextButton.style.display = "flex";
+      renderRequestBreakdown(request, catalog.debug.descriptions);
+    }
 
     // Show the raw STAC in the sidebar
     renderRawSTACResponse(catalog);
@@ -399,5 +417,38 @@ function initializeViewer() {
   stacAnchor.href = getSTACUrlFromQuery();
 }
 
+// Copy MARS requests to clipboard
+function copyMARSRequests() {
+  const marsContent = document.getElementById("final_req").textContent;
+  const copyBtn = document.getElementById("copy-mars-btn");
+  const btnText = copyBtn.querySelector(".copy-btn-text");
+
+  navigator.clipboard.writeText(marsContent).then(() => {
+    // Change button text temporarily
+    btnText.textContent = "Copied!";
+    copyBtn.classList.add("copied");
+
+    // Reset after 2 seconds
+    setTimeout(() => {
+      btnText.textContent = "Copy";
+      copyBtn.classList.remove("copied");
+    }, 2000);
+  }).catch(err => {
+    console.error("Failed to copy:", err);
+    btnText.textContent = "Failed";
+    setTimeout(() => {
+      btnText.textContent = "Copy";
+    }, 2000);
+  });
+}
+
 // Call initializeViewer on page load
 initializeViewer();
+
+// Add event listener for copy button
+document.addEventListener("DOMContentLoaded", () => {
+  const copyBtn = document.getElementById("copy-mars-btn");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", copyMARSRequests);
+  }
+});
