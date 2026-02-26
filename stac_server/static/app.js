@@ -910,6 +910,9 @@ async function queryPolytope() {
     polytopeStatus.textContent = `Successfully submitted ${result.total} request(s). ${result.successful} succeeded, ${result.failed} failed.`;
     polytopeStatus.className = 'polytope-status success';
 
+    // Store results globally for notebook access
+    window.polytopeResults = result.results;
+
     // Display detailed results
     if (result.results && result.results.length > 0) {
       polytopeResults.innerHTML = result.results.map((res, idx) => `
@@ -925,9 +928,17 @@ async function queryPolytope() {
           </div>
           ${res.message ? `<div class="polytope-result-detail">${res.message}</div>` : ''}
           ${res.success && res.json_data ? `
-            <button class="download-json-btn" data-request-idx="${idx}" style="margin-top: 0.5rem; padding: 0.4rem 0.8rem; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
-              📥 Download JSON
-            </button>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+              <button class="download-json-btn" data-request-idx="${idx}" style="padding: 0.4rem 0.8rem; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
+                📥 Download JSON
+              </button>
+              <button class="open-notebook-btn" data-request-idx="${idx}" style="padding: 0.4rem 0.8rem; font-size: 0.9rem;">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>
+                </svg>
+                Open in Notebook
+              </button>
+            </div>
           ` : ''}
         </div>
       `).join('');
@@ -940,6 +951,17 @@ async function queryPolytope() {
           const resultData = result.results[idx];
           if (resultData && resultData.json_data) {
             downloadJSON(resultData.json_data, `polytope_request_${idx + 1}.json`);
+          }
+        });
+      });
+
+      // Add event listeners to notebook buttons
+      document.querySelectorAll('.open-notebook-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.closest('.open-notebook-btn').getAttribute('data-request-idx'));
+          const resultData = result.results[idx];
+          if (resultData && resultData.json_data) {
+            openInNotebook(resultData.json_data, idx);
           }
         });
       });
@@ -959,6 +981,269 @@ async function queryPolytope() {
   }
 }
 
+// ============================================
+// JupyterLite Notebook Integration
+// ============================================
+
+let pyodideInstance = null;
+let codeEditor = null;
+let currentNotebookData = null;
+
+async function initPyodide() {
+  if (pyodideInstance) {
+    return pyodideInstance;
+  }
+
+  console.log('Initializing Pyodide...');
+  pyodideInstance = await loadPyodide({
+    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/"
+  });
+
+  // Load commonly used packages
+  await pyodideInstance.loadPackage(['numpy', 'matplotlib']);
+  console.log('Pyodide initialized successfully!');
+
+  return pyodideInstance;
+}
+
+function initCodeEditor() {
+  if (codeEditor) {
+    return codeEditor;
+  }
+
+  const editorElement = document.getElementById('code-editor');
+  codeEditor = CodeMirror(editorElement, {
+    value: getDefaultNotebookCode(),
+    mode: 'python',
+    theme: 'monokai',
+    lineNumbers: true,
+    indentUnit: 4,
+    tabSize: 4,
+    indentWithTabs: false,
+    lineWrapping: true,
+  });
+
+  return codeEditor;
+}
+
+function getDefaultNotebookCode() {
+  return `# Polytope Data Visualization
+# The data is available in the 'polytope_data' variable
+
+import json
+
+# Print data structure
+print("Data type:", type(polytope_data))
+print("\\nData preview:")
+if isinstance(polytope_data, dict):
+    print("Keys:", list(polytope_data.keys()))
+    for key, value in list(polytope_data.items())[:3]:
+        print(f"  {key}: {type(value)}")
+elif isinstance(polytope_data, list):
+    print(f"List with {len(polytope_data)} items")
+    if len(polytope_data) > 0:
+        print("First item:", polytope_data[0])
+else:
+    print(polytope_data)
+
+# Check if this is COVJSON format
+if isinstance(polytope_data, dict) and 'domain' in polytope_data:
+    print("\\n✓ COVJSON format detected!")
+    domain = polytope_data.get('domain', {})
+    axes = domain.get('axes', {})
+    print(f"Available axes: {list(axes.keys())}")
+
+    if 'ranges' in polytope_data:
+        ranges = polytope_data.get('ranges', {})
+        print(f"Available parameters: {list(ranges.keys())}")
+`;
+}
+
+async function openInNotebook(jsonData, requestIdx) {
+  const notebookSection = document.getElementById('notebook-section');
+
+  // Show notebook section
+  notebookSection.style.display = 'block';
+  notebookSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Store data globally
+  currentNotebookData = jsonData;
+  window.currentNotebookRequestIdx = requestIdx;
+
+  // Initialize code editor if not already done
+  if (!codeEditor) {
+    initCodeEditor();
+  }
+
+  // Update the default code with the request index
+  const defaultCode = `# Polytope Data Visualization - Request ${requestIdx + 1}
+# The data is available in the 'polytope_data' variable
+
+import json
+
+# Print data structure
+print("Data type:", type(polytope_data))
+print("\\nData preview:")
+if isinstance(polytope_data, dict):
+    print("Keys:", list(polytope_data.keys()))
+    for key, value in list(polytope_data.items())[:5]:
+        if isinstance(value, (dict, list)):
+            print(f"  {key}: {type(value).__name__} (length: {len(value)})")
+        else:
+            print(f"  {key}: {value}")
+elif isinstance(polytope_data, list):
+    print(f"List with {len(polytope_data)} items")
+    if len(polytope_data) > 0:
+        print("First item:", polytope_data[0])
+else:
+    print(str(polytope_data)[:500])
+
+# Check if this is COVJSON format
+if isinstance(polytope_data, dict) and 'domain' in polytope_data:
+    print("\\n✓ COVJSON format detected!")
+    domain = polytope_data.get('domain', {})
+    axes = domain.get('axes', {})
+    print(f"Available axes: {list(axes.keys())}")
+
+    if 'ranges' in polytope_data:
+        ranges = polytope_data.get('ranges', {})
+        print(f"Available parameters: {list(ranges.keys())}")
+`;
+
+  codeEditor.setValue(defaultCode);
+}
+
+async function runPythonCode() {
+  const runBtn = document.getElementById('run-code-btn');
+  const runBtnText = document.getElementById('run-code-text');
+  const outputDiv = document.getElementById('notebook-output');
+  const outputContent = document.getElementById('output-content');
+  const loadingDiv = document.getElementById('notebook-loading-exec');
+
+  if (!currentNotebookData) {
+    outputContent.textContent = 'Error: No data available. Please query Polytope first.';
+    outputDiv.style.display = 'block';
+    return;
+  }
+
+  // Disable button and show loading
+  runBtn.disabled = true;
+  runBtnText.textContent = 'Executing...';
+  loadingDiv.style.display = 'flex';
+  outputDiv.style.display = 'none';
+
+  try {
+    // Initialize Pyodide if not already done
+    if (!pyodideInstance) {
+      await initPyodide();
+    }
+
+    // Get code from editor
+    const code = codeEditor.getValue();
+
+    // Convert data to JSON string and inject into Python namespace
+    const dataJsonString = JSON.stringify(currentNotebookData);
+    pyodideInstance.globals.set('polytope_data_json', dataJsonString);
+
+    // Parse JSON in Python to get native Python object
+    await pyodideInstance.runPythonAsync(`
+import json
+polytope_data = json.loads(polytope_data_json)
+`);
+
+    // Capture stdout
+    await pyodideInstance.runPythonAsync(`
+import sys
+from io import StringIO
+sys.stdout = StringIO()
+`);
+
+    // Run user code
+    try {
+      await pyodideInstance.runPythonAsync(code);
+    } catch (error) {
+      // Capture the error
+      await pyodideInstance.runPythonAsync(`
+import traceback
+sys.stdout.write("\\n\\nError:\\n")
+sys.stdout.write(traceback.format_exc())
+`);
+    }
+
+    // Get output
+    const output = await pyodideInstance.runPythonAsync('sys.stdout.getvalue()');
+
+    // Display output
+    outputContent.textContent = output || '(No output)';
+    outputDiv.style.display = 'block';
+    loadingDiv.style.display = 'none';
+
+    runBtnText.textContent = 'Run Code';
+    runBtn.disabled = false;
+
+  } catch (error) {
+    console.error('Python execution error:', error);
+    outputContent.textContent = `Error: ${error.message}`;
+    outputDiv.style.display = 'block';
+    loadingDiv.style.display = 'none';
+    runBtnText.textContent = 'Run Code';
+    runBtn.disabled = false;
+  }
+}
+
+function resetCode() {
+  if (codeEditor) {
+    const requestIdx = window.currentNotebookRequestIdx || 0;
+    const defaultCode = `# Polytope Data Visualization - Request ${requestIdx + 1}
+# The data is available in the 'polytope_data' variable
+
+import json
+
+# Print data structure
+print("Data type:", type(polytope_data))
+print("\\nData preview:")
+if isinstance(polytope_data, dict):
+    print("Keys:", list(polytope_data.keys()))
+    for key, value in list(polytope_data.items())[:5]:
+        if isinstance(value, (dict, list)):
+            print(f"  {key}: {type(value).__name__} (length: {len(value)})")
+        else:
+            print(f"  {key}: {value}")
+elif isinstance(polytope_data, list):
+    print(f"List with {len(polytope_data)} items")
+    if len(polytope_data) > 0:
+        print("First item:", polytope_data[0])
+else:
+    print(str(polytope_data)[:500])
+
+# Check if this is COVJSON format
+if isinstance(polytope_data, dict) and 'domain' in polytope_data:
+    print("\\n✓ COVJSON format detected!")
+    domain = polytope_data.get('domain', {})
+    axes = domain.get('axes', {})
+    print(f"Available axes: {list(axes.keys())}")
+
+    if 'ranges' in polytope_data:
+        ranges = polytope_data.get('ranges', {})
+        print(f"Available parameters: {list(ranges.keys())}")
+`;
+    codeEditor.setValue(defaultCode);
+  }
+
+  // Clear output
+  const outputDiv = document.getElementById('notebook-output');
+  outputDiv.style.display = 'none';
+}
+
+function closeNotebook() {
+  const notebookSection = document.getElementById('notebook-section');
+  notebookSection.style.display = 'none';
+
+  // Clear output
+  const outputDiv = document.getElementById('notebook-output');
+  outputDiv.style.display = 'none';
+}
+
 // Call initializeViewer on page load
 initializeViewer();
 
@@ -973,5 +1258,23 @@ document.addEventListener("DOMContentLoaded", () => {
   const polytopeBtn = document.getElementById('polytope-btn');
   if (polytopeBtn) {
     polytopeBtn.addEventListener('click', queryPolytope);
+  }
+
+  // Add event listener for close notebook button
+  const closeNotebookBtn = document.getElementById('close-notebook-btn');
+  if (closeNotebookBtn) {
+    closeNotebookBtn.addEventListener('click', closeNotebook);
+  }
+
+  // Add event listener for run code button
+  const runCodeBtn = document.getElementById('run-code-btn');
+  if (runCodeBtn) {
+    runCodeBtn.addEventListener('click', runPythonCode);
+  }
+
+  // Add event listener for reset code button
+  const resetCodeBtn = document.getElementById('reset-code-btn');
+  if (resetCodeBtn) {
+    resetCodeBtn.addEventListener('click', resetCode);
   }
 });
