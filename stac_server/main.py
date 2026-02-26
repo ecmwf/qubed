@@ -147,6 +147,95 @@ async def union(
     return qube.to_json()
 
 
+@app.post("/api/v2/polytope/query")
+async def query_polytope(
+    body_json=Depends(get_body_json),
+):
+    """
+    Query the Polytope data extraction service with MARS requests.
+    Expects a JSON body with:
+    - 'requests': array of MARS request objects
+    - 'credentials': object with 'user_email' and 'user_key' fields
+    """
+    try:
+        import earthkit.data
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="earthkit.data is not installed. Please install it with 'pip install earthkit-data'",
+        )
+
+    requests = body_json.get("requests", [])
+    if not requests:
+        raise HTTPException(status_code=400, detail="No requests provided")
+
+    # Get credentials from request body
+    credentials = body_json.get("credentials", {})
+    user_email = credentials.get("user_email")
+    user_key = credentials.get("user_key")
+
+    if not user_email or not user_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Credentials required: provide user_email and user_key",
+        )
+
+    # Prepare kwargs for polytope connection
+    polytope_kwargs = {
+        "stream": False,
+        "address": "polytope.ecmwf.int",
+        "user_email": user_email,
+        "user_key": user_key,
+    }
+
+    logger.info(f"Querying Polytope with user email: {user_email}")
+
+    results = []
+    successful = 0
+    failed = 0
+
+    for idx, mars_request in enumerate(requests):
+        try:
+            logger.info(f"Querying Polytope for request {idx + 1}/{len(requests)}")
+            logger.debug(f"Request: {mars_request}")
+
+            # Query Polytope service
+            ds = earthkit.data.from_source(
+                "polytope", "ecmwf-mars", mars_request, **polytope_kwargs
+            )
+
+            # Get some basic info about the result
+            data_info = (
+                f"Retrieved {len(ds)} fields"
+                if hasattr(ds, "__len__")
+                else "Data retrieved"
+            )
+
+            results.append(
+                {
+                    "success": True,
+                    "request_index": idx,
+                    "message": data_info,
+                    "data_size": str(len(ds)) if hasattr(ds, "__len__") else None,
+                }
+            )
+            successful += 1
+            logger.info(f"Request {idx + 1} successful: {data_info}")
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Request {idx + 1} failed: {error_msg}")
+            results.append({"success": False, "request_index": idx, "error": error_msg})
+            failed += 1
+
+    return {
+        "total": len(requests),
+        "successful": successful,
+        "failed": failed,
+        "results": results,
+    }
+
+
 def follow_query(request: dict[str, str | list[str]], qube: Qube):
     rel_qube = qube.select(request, consume=False)
 

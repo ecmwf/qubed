@@ -76,6 +76,8 @@ cli = [
 stac_server = [
     "fastapi[standard]",
     "Jinja2",
+    "earthkit-data",
+    "polytope-client",
 ]
 
 docs = [

@@ -567,12 +567,15 @@ async function fetchCatalog(request, stacUrl) {
     // Show region selection at the end of catalogue
     const regionSelection = document.getElementById("region-selection");
     const catalogList = document.getElementById("catalog-list");
+    const polytopeSection = document.getElementById("polytope-section");
     if (hasReachedEnd) {
       regionSelection.style.display = "block";
       catalogList.classList.add("region-active");
+      if (polytopeSection) polytopeSection.style.display = "block";
     } else {
       regionSelection.style.display = "none";
       catalogList.classList.remove("region-active");
+      if (polytopeSection) polytopeSection.style.display = "none";
     }
 
     // Highlight the request and raw STAC
@@ -793,6 +796,103 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+// ============================================
+// Polytope Query Handler
+// ============================================
+
+async function queryPolytope() {
+  const polytopeBtn = document.getElementById('polytope-btn');
+  const polytopeBtnText = document.getElementById('polytope-btn-text');
+  const polytopeStatus = document.getElementById('polytope-status');
+  const polytopeResults = document.getElementById('polytope-results');
+  const emailInput = document.getElementById('polytope-email');
+  const keyInput = document.getElementById('polytope-key');
+
+  if (!currentMARSRequests || currentMARSRequests.length === 0) {
+    polytopeStatus.textContent = 'No MARS requests available to query.';
+    polytopeStatus.className = 'polytope-status error';
+    polytopeStatus.style.display = 'block';
+    return;
+  }
+
+  // Validate credentials
+  const email = emailInput.value.trim();
+  const apiKey = keyInput.value.trim();
+
+  if (!email || !apiKey) {
+    polytopeStatus.textContent = 'Please provide both email and API key to query Polytope.';
+    polytopeStatus.className = 'polytope-status error';
+    polytopeStatus.style.display = 'block';
+    return;
+  }
+
+  // Disable button and show loading state
+  polytopeBtn.disabled = true;
+  polytopeBtnText.textContent = 'Querying...';
+  polytopeStatus.textContent = `Submitting ${currentMARSRequests.length} request(s) to Polytope service...`;
+  polytopeStatus.className = 'polytope-status loading';
+  polytopeStatus.style.display = 'block';
+  polytopeResults.innerHTML = '';
+  polytopeResults.style.display = 'none';
+
+  try {
+    const response = await fetch('/api/v2/polytope/query', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        requests: currentMARSRequests,
+        credentials: {
+          user_email: email,
+          user_key: apiKey
+        }
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.detail || 'Failed to query Polytope service');
+    }
+
+    // Show success message
+    polytopeStatus.textContent = `Successfully submitted ${result.total} request(s). ${result.successful} succeeded, ${result.failed} failed.`;
+    polytopeStatus.className = 'polytope-status success';
+
+    // Display detailed results
+    if (result.results && result.results.length > 0) {
+      polytopeResults.innerHTML = result.results.map((res, idx) => `
+        <div class="polytope-result-item ${res.success ? 'success' : 'error'}">
+          <div class="polytope-result-header">
+            Request ${idx + 1}: ${res.success ? '✓ Success' : '✗ Failed'}
+          </div>
+          <div class="polytope-result-detail">
+            ${res.success
+              ? `Data retrieved successfully${res.data_size ? ` (${res.data_size})` : ''}`
+              : `Error: ${res.error || 'Unknown error'}`
+            }
+          </div>
+          ${res.message ? `<div class="polytope-result-detail">${res.message}</div>` : ''}
+        </div>
+      `).join('');
+      polytopeResults.style.display = 'block';
+    }
+
+    polytopeBtnText.textContent = 'Query Complete';
+  } catch (error) {
+    console.error('Polytope query error:', error);
+    polytopeStatus.textContent = `Error: ${error.message}`;
+    polytopeStatus.className = 'polytope-status error';
+  } finally {
+    // Re-enable button after a delay
+    setTimeout(() => {
+      polytopeBtn.disabled = false;
+      polytopeBtnText.textContent = 'Query Polytope Service';
+    }, 2000);
+  }
+}
+
 // Call initializeViewer on page load
 initializeViewer();
 
@@ -801,5 +901,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const copyBtn = document.getElementById("copy-mars-btn");
   if (copyBtn) {
     copyBtn.addEventListener("click", copyMARSRequests);
+  }
+
+  // Add event listener for Polytope button
+  const polytopeBtn = document.getElementById('polytope-btn');
+  if (polytopeBtn) {
+    polytopeBtn.addEventListener('click', queryPolytope);
   }
 });
