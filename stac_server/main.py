@@ -152,10 +152,13 @@ async def query_polytope(
     body_json=Depends(get_body_json),
 ):
     """
-    Query the Polytope data extraction service with MARS requests.
+    Query the Destination Earth Polytope data extraction service with MARS requests.
     Expects a JSON body with:
     - 'requests': array of MARS request objects
     - 'credentials': object with 'user_email' and 'user_key' fields
+
+    Connects to: polytope.lumi.apps.dte.destination-earth.eu
+    Collection: destination-earth
     """
     try:
         import earthkit.data
@@ -183,7 +186,7 @@ async def query_polytope(
     # Prepare kwargs for polytope connection
     polytope_kwargs = {
         "stream": False,
-        "address": "polytope.ecmwf.int",
+        "address": "polytope.lumi.apps.dte.destination-earth.eu",
         "user_email": user_email,
         "user_key": user_key,
     }
@@ -201,7 +204,7 @@ async def query_polytope(
 
             # Query Polytope service
             ds = earthkit.data.from_source(
-                "polytope", "ecmwf-mars", mars_request, **polytope_kwargs
+                "polytope", "destination-earth", mars_request, **polytope_kwargs
             )
 
             # Get some basic info about the result
