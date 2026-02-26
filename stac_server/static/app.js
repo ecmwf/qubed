@@ -82,7 +82,8 @@ function goToNextUrl() {
       );
     }
 
-    const any = item.querySelector("input[type='text']");
+    // Get text inputs but exclude the filter input
+    const any = item.querySelector("input[type='text']:not(.filter-input)");
     if (any && any.value !== "") {
       values.push(any.value);
     }

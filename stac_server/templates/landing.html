@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}} - Welcome</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
+    <style>
+        .landing-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+        }
+
+        .landing-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-inverse);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .landing-header h1 {
+            margin: 0 0 0.5rem 0;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+
+        .landing-header p {
+            margin: 0;
+            font-size: 1.1rem;
+            opacity: 0.95;
+        }
+
+        .landing-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .step-container {
+            width: 100%;
+            max-width: 800px;
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .step-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .step-number {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            line-height: 40px;
+            background: var(--primary-color);
+            color: var(--text-inverse);
+            border-radius: 50%;
+            font-weight: 700;
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+        }
+
+        .step-title {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 0.5rem 0;
+        }
+
+        .step-description {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin: 0;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .option-card {
+            background: var(--bg-primary);
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            cursor: pointer;
+            transition: all var(--transition-base);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .option-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform var(--transition-base);
+        }
+
+        .option-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow-hover);
+            transform: translateY(-4px);
+        }
+
+        .option-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .option-card.selected {
+            border-color: var(--primary-color);
+            background: linear-gradient(135deg, #F2F7FD 0%, #F6F9FC 100%);
+            box-shadow: var(--shadow-md);
+        }
+
+        .option-card.selected::before {
+            transform: scaleX(1);
+        }
+
+        .option-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .option-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 0.5rem 0;
+        }
+
+        .option-description {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .template-list {
+            background: var(--bg-primary);
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .template-item {
+            padding: 1rem;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all var(--transition-base);
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .template-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .template-item:hover {
+            border-color: var(--primary-color);
+            background: var(--bg-secondary);
+        }
+
+        .template-item.selected {
+            border-color: var(--primary-color);
+            background: linear-gradient(135deg, #F2F7FD 0%, #F6F9FC 100%);
+        }
+
+        .template-radio {
+            margin-top: 0.25rem;
+        }
+
+        .template-content {
+            flex: 1;
+        }
+
+        .template-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 0.5rem 0;
+        }
+
+        .template-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin: 0 0 0.5rem 0;
+        }
+
+        .template-params {
+            font-size: 0.8rem;
+            font-family: 'Monaco', 'Courier New', monospace;
+            color: var(--text-secondary);
+            background: var(--bg-tertiary);
+            padding: 0.5rem;
+            border-radius: var(--radius-sm);
+            margin: 0;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-base);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: var(--text-inverse);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .btn-secondary {
+            background: var(--bg-primary);
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--primary-color);
+            color: var(--text-inverse);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .skip-option {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        .skip-link {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all var(--transition-fast);
+        }
+
+        .skip-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="landing-container">
+        <header class="landing-header">
+            <h1>📚 {{title}}</h1>
+            <p>Your gateway to climate and weather data</p>
+        </header>
+
+        <div class="landing-content">
+            <!-- Step 1: Dataset Selection -->
+            <div id="step1" class="step-container">
+                <div class="step-header">
+                    <div class="step-number">1</div>
+                    <h2 class="step-title">Select a Dataset</h2>
+                    <p class="step-description">Choose the dataset you want to explore</p>
+                </div>
+
+                <div class="options-grid">
+                    <div class="option-card" data-dataset="climate-dt" onclick="selectDataset('climate-dt')">
+                        <div class="option-icon">🌍</div>
+                        <h3 class="option-title">Climate DT</h3>
+                        <p class="option-description">Digital Twin for Climate Change Adaptation - Long-term climate projections and historical climate data</p>
+                    </div>
+
+                    <div class="option-card" data-dataset="extremes-dt" onclick="selectDataset('extremes-dt')">
+                        <div class="option-icon">⚡</div>
+                        <h3 class="option-title">Extremes DT</h3>
+                        <p class="option-description">Digital Twin for Weather-Induced Extremes - High-resolution extreme weather events and forecasts</p>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-primary" id="continueBtn1" disabled onclick="goToStep2()">
+                        Continue
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="skip-option">
+                    <a href="/browse" class="skip-link">Skip to full catalogue browser →</a>
+                </div>
+            </div>
+
+            <!-- Step 2: Template Selection -->
+            <div id="step2" class="step-container" style="display: none;">
+                <div class="step-header">
+                    <div class="step-number">2</div>
+                    <h2 class="step-title">Choose a Starting Point</h2>
+                    <p class="step-description">Select a pre-configured template or start from scratch</p>
+                </div>
+
+                <div class="template-list" id="templateList">
+                    <!-- Templates will be dynamically inserted here -->
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" onclick="goToStep1()">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M8 5l-5 5 5 5V5z"/>
+                        </svg>
+                        Back
+                    </button>
+                    <button class="btn btn-primary" onclick="startBrowsing()">
+                        Start Browsing
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedDataset = null;
+        let selectedTemplate = null;
+
+        const templates = {
+            'climate-dt': [
+                {
+                    id: 'blank',
+                    name: 'Start from Scratch',
+                    description: 'Browse the full catalogue without any pre-selected filters',
+                    params: {}
+                },
+                {
+                    id: 'historical',
+                    name: 'Historical Climate Data',
+                    description: 'Pre-configured access to HighResMIP historical climate simulations with IFS-NEMO model',
+                    params: {
+                        'class': 'd1',
+                        'dataset': 'climate-dt',
+                        'activity': 'highresmip',
+                        'experiment': 'cont',
+                        'generation': '1',
+                        'model': 'ifs-nemo',
+                        'realization': '1',
+                        'expver': '0001',
+                        'stream': 'clte',
+                        'resolution': 'high',
+                        'type': 'fc'
+                    }
+                }
+            ],
+            'extremes-dt': [
+                {
+                    id: 'blank',
+                    name: 'Start from Scratch',
+                    description: 'Browse the full catalogue without any pre-selected filters',
+                    params: {}
+                },
+                {
+                    id: 'default',
+                    name: 'Operational Forecast',
+                    description: 'Pre-configured access to the latest operational forecast data with IFS model',
+                    params: {
+                        "class": "d1",
+                        "dataset": "extremes-dt",
+                        "expver": "0001",
+                        "stream": "oper",
+                        "type": "fc",
+                    }
+                },
+                // {
+                //     id: 'flood-risk',
+                //     name: 'Flood Risk Assessment',
+                //     description: 'Precipitation and runoff data for flood analysis',
+                //     params: {
+                //         stream: 'oper',
+                //         type: 'fc',
+                //         levtype: 'sfc',
+                //         param: 'tp,ro'
+                //     }
+                // }
+            ]
+        };
+
+        function selectDataset(dataset) {
+            selectedDataset = dataset;
+
+            // Update UI
+            document.querySelectorAll('.option-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            document.querySelector(`[data-dataset="${dataset}"]`).classList.add('selected');
+
+            // Enable continue button
+            document.getElementById('continueBtn1').disabled = false;
+        }
+
+        function goToStep1() {
+            document.getElementById('step2').style.display = 'none';
+            document.getElementById('step1').style.display = 'block';
+        }
+
+        function goToStep2() {
+            if (!selectedDataset) return;
+
+            document.getElementById('step1').style.display = 'none';
+            document.getElementById('step2').style.display = 'block';
+
+            // Load templates for selected dataset
+            loadTemplates();
+        }
+
+        function loadTemplates() {
+            const templateList = document.getElementById('templateList');
+            const datasetTemplates = templates[selectedDataset] || [];
+
+            templateList.innerHTML = datasetTemplates.map(template => `
+                <div class="template-item ${template.id === 'blank' ? 'selected' : ''}"
+                     data-template="${template.id}"
+                     onclick="selectTemplate('${template.id}')">
+                    <input type="radio" name="template" class="template-radio"
+                           ${template.id === 'blank' ? 'checked' : ''}>
+                    <div class="template-content">
+                        <h4 class="template-name">${template.name}</h4>
+                        <p class="template-desc">${template.description}</p>
+                        ${Object.keys(template.params).length > 0 ?
+                            `<p class="template-params">Pre-filters: ${Object.entries(template.params).map(([k, v]) => `${k}=${v}`).join(', ')}</p>`
+                            : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            // Pre-select blank template
+            selectedTemplate = 'blank';
+        }
+
+        function selectTemplate(templateId) {
+            selectedTemplate = templateId;
+
+            // Update UI
+            document.querySelectorAll('.template-item').forEach(item => {
+                item.classList.remove('selected');
+                item.querySelector('input[type="radio"]').checked = false;
+            });
+
+            const selectedItem = document.querySelector(`[data-template="${templateId}"]`);
+            selectedItem.classList.add('selected');
+            selectedItem.querySelector('input[type="radio"]').checked = true;
+        }
+
+        function startBrowsing() {
+            if (!selectedDataset || !selectedTemplate) return;
+
+            const template = templates[selectedDataset].find(t => t.id === selectedTemplate);
+
+            // Build URL with dataset and template params
+            const params = new URLSearchParams();
+            params.set('dataset', selectedDataset);
+
+            if (template && Object.keys(template.params).length > 0) {
+                for (const [key, value] of Object.entries(template.params)) {
+                    params.set(key, value);
+                }
+            }
+
+            window.location.href = `/browse?${params.toString()}`;
+        }
+    </script>
+</body>
+
+</html>
