@@ -1,17 +1,22 @@
 from .key_ordering import dataset_key_orders
+import base64
 import json
 import logging
 import os
+import subprocess
+import sys
+from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Mapping
 
 import yaml
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 from qubed import Qube
 from qubed.formatters import node_tree_to_html
 
@@ -56,6 +61,43 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Install required packages on startup."""
+    required_packages = [
+        "covjsonkit",
+        "earthkit-plots",
+        "xarray",
+        "matplotlib",
+        "numpy",
+    ]
+    logger.info("Checking and installing required packages on startup...")
+
+    for package in required_packages:
+        try:
+            # Try to import to check if already installed
+            __import__(package.replace("-", "_"))
+            logger.info(f"{package} is already installed")
+        except ImportError:
+            logger.info(f"Installing {package}...")
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", package],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                if result.returncode == 0:
+                    logger.info(f"Successfully installed {package}")
+                else:
+                    logger.warning(f"Failed to install {package}: {result.stderr}")
+            except Exception as e:
+                logger.warning(f"Error installing {package}: {e}")
+
+    logger.info("Package installation check complete")
+
 
 app.mount(
     "/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static"
@@ -473,3 +515,184 @@ async def get_STAC(
     }
 
     return stac_collection
+
+
+# Pydantic models for notebook execution
+class ExecuteRequest(BaseModel):
+    code: str
+    data: dict | None = None
+
+
+class InstallPackageRequest(BaseModel):
+    packages: str  # Space or comma-separated package names
+
+
+@app.post("/api/v2/execute")
+async def execute_code(request: ExecuteRequest):
+    """
+    Execute Python code on the server with optional data context.
+    Allows installation of any Python package, including C extensions.
+    Captures matplotlib figures and returns them as base64 images.
+    """
+    try:
+        # Create a namespace with the data available
+        namespace = {}
+        if request.data:
+            namespace["polytope_data"] = request.data
+
+        # Capture stdout and stderr
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = StringIO()
+        sys.stderr = StringIO()
+
+        images = []
+
+        try:
+            # Set matplotlib to non-interactive backend before execution
+            try:
+                import matplotlib
+
+                matplotlib.use("Agg")  # Non-interactive backend
+            except ImportError:
+                pass
+
+            # Execute the code
+            exec(request.code, namespace)
+
+            # Capture matplotlib figures if any were created
+            try:
+                import matplotlib.pyplot as plt
+
+                figures = [plt.figure(num) for num in plt.get_fignums()]
+
+                for fig in figures:
+                    # Save figure to bytes
+                    buf = BytesIO()
+                    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+                    buf.seek(0)
+
+                    # Convert to base64
+                    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+                    images.append(img_base64)
+
+                    # Close the figure
+                    plt.close(fig)
+            except ImportError:
+                # matplotlib not available, skip figure capture
+                pass
+            except Exception as fig_error:
+                # Log but don't fail if figure capture fails
+                sys.stderr.write(f"\nWarning: Could not capture figures: {fig_error}\n")
+
+            # Get the output
+            stdout_output = sys.stdout.getvalue()
+            stderr_output = sys.stderr.getvalue()
+
+            return JSONResponse(
+                {
+                    "success": True,
+                    "stdout": stdout_output,
+                    "stderr": stderr_output,
+                    "images": images,
+                }
+            )
+        finally:
+            # Restore stdout and stderr
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+    except Exception as e:
+        return JSONResponse(
+            {
+                "success": False,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            },
+            status_code=400,
+        )
+
+
+@app.post("/api/v2/install_packages")
+async def install_packages(request: InstallPackageRequest):
+    """
+    Install Python packages using pip in the server environment.
+    """
+    try:
+        # Split packages by space or comma
+        packages = [
+            pkg.strip()
+            for pkg in request.packages.replace(",", " ").split()
+            if pkg.strip()
+        ]
+
+        if not packages:
+            return JSONResponse(
+                {
+                    "success": False,
+                    "error": "No packages specified",
+                },
+                status_code=400,
+            )
+
+        results = []
+        for package in packages:
+            try:
+                # Run pip install
+                result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", package],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,  # 2 minute timeout per package
+                )
+
+                if result.returncode == 0:
+                    results.append(
+                        {
+                            "package": package,
+                            "success": True,
+                            "message": f"Successfully installed {package}",
+                        }
+                    )
+                else:
+                    results.append(
+                        {
+                            "package": package,
+                            "success": False,
+                            "error": result.stderr,
+                        }
+                    )
+            except subprocess.TimeoutExpired:
+                results.append(
+                    {
+                        "package": package,
+                        "success": False,
+                        "error": "Installation timed out after 120 seconds",
+                    }
+                )
+            except Exception as e:
+                results.append(
+                    {
+                        "package": package,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
+
+        all_success = all(r["success"] for r in results)
+
+        return JSONResponse(
+            {
+                "success": all_success,
+                "results": results,
+            }
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            {
+                "success": False,
+                "error": str(e),
+            },
+            status_code=500,
+        )

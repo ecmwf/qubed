@@ -985,26 +985,11 @@ async function queryPolytope() {
 // JupyterLite Notebook Integration
 // ============================================
 
-let pyodideInstance = null;
 let codeEditor = null;
 let currentNotebookData = null;
 
-async function initPyodide() {
-  if (pyodideInstance) {
-    return pyodideInstance;
-  }
-
-  console.log('Initializing Pyodide...');
-  pyodideInstance = await loadPyodide({
-    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/"
-  });
-
-  // Load commonly used packages
-  await pyodideInstance.loadPackage(['numpy', 'matplotlib']);
-  console.log('Pyodide initialized successfully!');
-
-  return pyodideInstance;
-}
+// Server-side execution - no Pyodide initialization needed
+// Python code runs on the server with full package support
 
 function initCodeEditor() {
   if (codeEditor) {
@@ -1027,35 +1012,48 @@ function initCodeEditor() {
 }
 
 function getDefaultNotebookCode() {
-  return `# Polytope Data Visualization
+  return `# Polytope Data Visualization - Request 1
 # The data is available in the 'polytope_data' variable
 
 import json
+import numpy as np
+import covjsonkit
+import earthkit.plots
 
-# Print data structure
-print("Data type:", type(polytope_data))
-print("\\nData preview:")
-if isinstance(polytope_data, dict):
-    print("Keys:", list(polytope_data.keys()))
-    for key, value in list(polytope_data.items())[:3]:
-        print(f"  {key}: {type(value)}")
-elif isinstance(polytope_data, list):
-    print(f"List with {len(polytope_data)} items")
-    if len(polytope_data) > 0:
-        print("First item:", polytope_data[0])
+from covjsonkit.api import Covjsonkit
+
+decoder = Covjsonkit().decode(polytope_data)
+
+ds = decoder.to_xarray()
+
+print(ds)
+
+# Handle missing/masked values
+if '2t' in ds:
+    data = ds['2t']
+    # Replace NaN with a fill value or drop them
+    data_filled = data.where(~np.isnan(data), drop=True)
+
+    chart = earthkit.plots.Map(domain="Germany")
+    chart.point_cloud(
+        data_filled,
+        x="longitude",
+        y="latitude",
+        auto_style=True
+    )
+
+    chart.coastlines()
+    chart.borders()
+    chart.gridlines()
+
+    chart.title("{variable_name} (number={number})")
+
+    chart.legend()
 else:
-    print(polytope_data)
+    print("Variable '2t' not found in dataset")
+    print("Available variables:", list(ds.data_vars))
 
-# Check if this is COVJSON format
-if isinstance(polytope_data, dict) and 'domain' in polytope_data:
-    print("\\n✓ COVJSON format detected!")
-    domain = polytope_data.get('domain', {})
-    axes = domain.get('axes', {})
-    print(f"Available axes: {list(axes.keys())}")
-
-    if 'ranges' in polytope_data:
-        ranges = polytope_data.get('ranges', {})
-        print(f"Available parameters: {list(ranges.keys())}")
+# chart.show()  # Not needed - figure is captured automatically
 `;
 }
 
@@ -1080,34 +1078,44 @@ async function openInNotebook(jsonData, requestIdx) {
 # The data is available in the 'polytope_data' variable
 
 import json
+import numpy as np
+import covjsonkit
+import earthkit.plots
 
-# Print data structure
-print("Data type:", type(polytope_data))
-print("\\nData preview:")
-if isinstance(polytope_data, dict):
-    print("Keys:", list(polytope_data.keys()))
-    for key, value in list(polytope_data.items())[:5]:
-        if isinstance(value, (dict, list)):
-            print(f"  {key}: {type(value).__name__} (length: {len(value)})")
-        else:
-            print(f"  {key}: {value}")
-elif isinstance(polytope_data, list):
-    print(f"List with {len(polytope_data)} items")
-    if len(polytope_data) > 0:
-        print("First item:", polytope_data[0])
+from covjsonkit.api import Covjsonkit
+
+decoder = Covjsonkit().decode(polytope_data)
+
+ds = decoder.to_xarray()
+
+print(ds)
+
+# Handle missing/masked values
+if '2t' in ds:
+    data = ds['2t']
+    # Replace NaN with a fill value or drop them
+    data_filled = data.where(~np.isnan(data), drop=True)
+
+    chart = earthkit.plots.Map(domain="Germany")
+    chart.point_cloud(
+        data_filled,
+        x="longitude",
+        y="latitude",
+        auto_style=True
+    )
+
+    chart.coastlines()
+    chart.borders()
+    chart.gridlines()
+
+    chart.title("{variable_name} (number={number})")
+
+    chart.legend()
 else:
-    print(str(polytope_data)[:500])
+    print("Variable '2t' not found in dataset")
+    print("Available variables:", list(ds.data_vars))
 
-# Check if this is COVJSON format
-if isinstance(polytope_data, dict) and 'domain' in polytope_data:
-    print("\\n✓ COVJSON format detected!")
-    domain = polytope_data.get('domain', {})
-    axes = domain.get('axes', {})
-    print(f"Available axes: {list(axes.keys())}")
-
-    if 'ranges' in polytope_data:
-        ranges = polytope_data.get('ranges', {})
-        print(f"Available parameters: {list(ranges.keys())}")
+# chart.show()  # Not needed - figure is captured automatically
 `;
 
   codeEditor.setValue(defaultCode);
@@ -1118,6 +1126,7 @@ async function runPythonCode() {
   const runBtnText = document.getElementById('run-code-text');
   const outputDiv = document.getElementById('notebook-output');
   const outputContent = document.getElementById('output-content');
+  const outputImages = document.getElementById('output-images');
   const loadingDiv = document.getElementById('notebook-loading-exec');
 
   if (!currentNotebookData) {
@@ -1133,57 +1142,57 @@ async function runPythonCode() {
   outputDiv.style.display = 'none';
 
   try {
-    // Initialize Pyodide if not already done
-    if (!pyodideInstance) {
-      await initPyodide();
-    }
-
     // Get code from editor
     const code = codeEditor.getValue();
 
-    // Convert data to JSON string and inject into Python namespace
-    const dataJsonString = JSON.stringify(currentNotebookData);
-    pyodideInstance.globals.set('polytope_data_json', dataJsonString);
+    // Send code to server for execution
+    const response = await fetch('/api/v2/execute', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        code: code,
+        data: currentNotebookData
+      })
+    });
 
-    // Parse JSON in Python to get native Python object
-    await pyodideInstance.runPythonAsync(`
-import json
-polytope_data = json.loads(polytope_data_json)
-`);
+    const result = await response.json();
 
-    // Capture stdout
-    await pyodideInstance.runPythonAsync(`
-import sys
-from io import StringIO
-sys.stdout = StringIO()
-`);
+    if (result.success) {
+      // Display output from stdout and stderr
+      let output = result.stdout || '';
+      if (result.stderr) {
+        output += '\n\nErrors/Warnings:\n' + result.stderr;
+      }
+      outputContent.textContent = output || '(No output)';
 
-    // Run user code
-    try {
-      await pyodideInstance.runPythonAsync(code);
-    } catch (error) {
-      // Capture the error
-      await pyodideInstance.runPythonAsync(`
-import traceback
-sys.stdout.write("\\n\\nError:\\n")
-sys.stdout.write(traceback.format_exc())
-`);
+      // Display images if any
+      outputImages.innerHTML = '';
+      if (result.images && result.images.length > 0) {
+        result.images.forEach((imgBase64, idx) => {
+          const img = document.createElement('img');
+          img.src = `data:image/png;base64,${imgBase64}`;
+          img.alt = `Plot ${idx + 1}`;
+          img.className = 'output-image';
+          outputImages.appendChild(img);
+        });
+      }
+    } else {
+      // Display error
+      outputContent.textContent = `Error (${result.error_type || 'Error'}): ${result.error}`;
+      outputImages.innerHTML = '';
     }
 
-    // Get output
-    const output = await pyodideInstance.runPythonAsync('sys.stdout.getvalue()');
-
-    // Display output
-    outputContent.textContent = output || '(No output)';
     outputDiv.style.display = 'block';
     loadingDiv.style.display = 'none';
-
     runBtnText.textContent = 'Run Code';
     runBtn.disabled = false;
 
   } catch (error) {
     console.error('Python execution error:', error);
-    outputContent.textContent = `Error: ${error.message}`;
+    outputContent.textContent = `Error communicating with server: ${error.message}`;
+    outputImages.innerHTML = '';
     outputDiv.style.display = 'block';
     loadingDiv.style.display = 'none';
     runBtnText.textContent = 'Run Code';
@@ -1198,34 +1207,44 @@ function resetCode() {
 # The data is available in the 'polytope_data' variable
 
 import json
+import numpy as np
+import covjsonkit
+import earthkit.plots
 
-# Print data structure
-print("Data type:", type(polytope_data))
-print("\\nData preview:")
-if isinstance(polytope_data, dict):
-    print("Keys:", list(polytope_data.keys()))
-    for key, value in list(polytope_data.items())[:5]:
-        if isinstance(value, (dict, list)):
-            print(f"  {key}: {type(value).__name__} (length: {len(value)})")
-        else:
-            print(f"  {key}: {value}")
-elif isinstance(polytope_data, list):
-    print(f"List with {len(polytope_data)} items")
-    if len(polytope_data) > 0:
-        print("First item:", polytope_data[0])
+from covjsonkit.api import Covjsonkit
+
+decoder = Covjsonkit().decode(polytope_data)
+
+ds = decoder.to_xarray()
+
+print(ds)
+
+# Handle missing/masked values
+if '2t' in ds:
+    data = ds['2t']
+    # Replace NaN with a fill value or drop them
+    data_filled = data.where(~np.isnan(data), drop=True)
+
+    chart = earthkit.plots.Map(domain="Germany")
+    chart.point_cloud(
+        data_filled,
+        x="longitude",
+        y="latitude",
+        auto_style=True
+    )
+
+    chart.coastlines()
+    chart.borders()
+    chart.gridlines()
+
+    chart.title("{variable_name} (number={number})")
+
+    chart.legend()
 else:
-    print(str(polytope_data)[:500])
+    print("Variable '2t' not found in dataset")
+    print("Available variables:", list(ds.data_vars))
 
-# Check if this is COVJSON format
-if isinstance(polytope_data, dict) and 'domain' in polytope_data:
-    print("\\n✓ COVJSON format detected!")
-    domain = polytope_data.get('domain', {})
-    axes = domain.get('axes', {})
-    print(f"Available axes: {list(axes.keys())}")
-
-    if 'ranges' in polytope_data:
-        ranges = polytope_data.get('ranges', {})
-        print(f"Available parameters: {list(ranges.keys())}")
+# chart.show()  # Not needed - figure is captured automatically
 `;
     codeEditor.setValue(defaultCode);
   }

@@ -25,9 +25,6 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
     <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 
-    <!-- Pyodide for Python execution -->
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
-
     <!-- CodeMirror for code editing -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
@@ -247,7 +244,7 @@
                     </div>
                     <p class="notebook-description">
                         Write Python code to visualize and analyze the data. The data is available in the <code>polytope_data</code> variable.
-                        Click "Run Code" to execute (first run takes 10-15 seconds to load Python).
+                        Pre-installed packages: <strong>numpy</strong>, <strong>covjsonkit</strong>, <strong>earthkit-plots</strong>, <strong>xarray</strong>, <strong>matplotlib</strong>.
                     </p>
 
                     <div class="notebook-controls">
@@ -271,6 +268,7 @@
                     <div id="notebook-output" class="notebook-output" style="display: none;">
                         <h4 class="output-title">Output:</h4>
                         <pre id="output-content" class="output-content"></pre>
+                        <div id="output-images" class="output-images"></div>
                     </div>
 
                     <div id="notebook-loading-exec" class="notebook-loading-exec" style="display: none;">
