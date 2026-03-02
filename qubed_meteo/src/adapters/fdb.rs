@@ -13,6 +13,7 @@ pub trait FromFDBList {
 
 impl FromFDBList for Qube {
     fn from_fdb_list(items: &[String]) -> Result<Qube, String> {
+        // TODO: go from the FDB object
         let mut qube = Qube::new();
         let root = qube.root();
 
@@ -59,7 +60,7 @@ impl FromFDBList for Qube {
                         val.split('/').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
                     let coords = make_coords(&vals);
                     let child = qube
-                        .create_child(key.trim(), parent, coords)
+                        .create_child(key.trim(), parent, coords) // TODO: rename create_child to get_or_create_child
                         .map_err(|e| format!("create_child failed: {:?}", e))?;
                     parent = child;
                 } else {
