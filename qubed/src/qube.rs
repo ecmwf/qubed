@@ -117,7 +117,7 @@ impl Qube {
         Some(NodeRef { qube: self, node, id })
     }
 
-    pub fn check_if_new_child(
+    fn check_if_new_child(
         &mut self,
         key: &str,
         parent_id: NodeIdx,

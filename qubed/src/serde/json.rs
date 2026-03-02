@@ -78,6 +78,9 @@ impl Qube {
         for id in order.iter() {
             let nref = self.node(*id).expect("valid node");
             let dim = nref.dimension().unwrap_or("root").to_string();
+            // TODO: preserve type info of the coordinates and if they are mixed,
+            // then create a nested dict of the diff coord types
+            // TODO: create serde of the coords
             let coords = nref.coordinates().to_string();
 
             let parent_idx = nref.parent().map(|p| idx_map.get(&p).copied().unwrap());
