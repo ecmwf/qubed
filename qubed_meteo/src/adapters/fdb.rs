@@ -60,7 +60,7 @@ impl FromFDBList for Qube {
                         val.split('/').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
                     let coords = make_coords(&vals);
                     let child = qube
-                        .get_or_create_child(key.trim(), parent, coords) // TODO: rename create_child to get_or_create_child
+                        .get_or_create_child(key.trim(), parent, coords)
                         .map_err(|e| format!("create_child failed: {:?}", e))?;
                     parent = child;
                 } else {

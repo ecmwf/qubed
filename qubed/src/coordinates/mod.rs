@@ -252,4 +252,204 @@ impl Coordinates {
         let intersection_result = self.intersect(other_coords);
         Coordinates::from_intersection(intersection_result)
     }
+
+    /// Serialize coordinates into a serde_json::Value using native JSON types
+    pub fn to_json_value(&self) -> serde_json::Value {
+        use serde_json::{Number, Value};
+
+        match self {
+            Coordinates::Empty => Value::Array(vec![]),
+            Coordinates::Integers(ints) => match ints {
+                integers::IntegerCoordinates::Set(set) => {
+                    let vals: Vec<Value> =
+                        set.iter().map(|v| Value::Number(Number::from(*v as i64))).collect();
+                    Value::Array(vals)
+                }
+                integers::IntegerCoordinates::RangeSet(_) => Value::String(ints.to_string()),
+            },
+            Coordinates::Floats(floats) => match floats {
+                floats::FloatCoordinates::List(list) => {
+                    let vals: Vec<Value> = list
+                        .iter()
+                        .map(|f| {
+                            serde_json::Number::from_f64(*f)
+                                .map(Value::Number)
+                                .unwrap_or(Value::Null)
+                        })
+                        .collect();
+                    Value::Array(vals)
+                }
+            },
+            Coordinates::Strings(strings) => match strings {
+                strings::StringCoordinates::Set(list) => {
+                    let vals: Vec<Value> =
+                        list.iter().map(|s| Value::String(s.to_string())).collect();
+                    Value::Array(vals)
+                }
+            },
+            Coordinates::Mixed(boxed) => {
+                let mut map = serde_json::Map::new();
+
+                match &boxed.integers {
+                    integers::IntegerCoordinates::Set(set) => {
+                        if set.len() > 0 {
+                            let vals: Vec<Value> = set
+                                .iter()
+                                .map(|v| Value::Number(Number::from(*v as i64)))
+                                .collect();
+                            map.insert("ints".to_string(), Value::Array(vals));
+                        }
+                    }
+                    integers::IntegerCoordinates::RangeSet(_) => {
+                        // fallback to textual form
+                    }
+                }
+
+                match &boxed.floats {
+                    floats::FloatCoordinates::List(list) => {
+                        if list.len() > 0 {
+                            let vals: Vec<Value> = list
+                                .iter()
+                                .map(|f| {
+                                    serde_json::Number::from_f64(*f)
+                                        .map(Value::Number)
+                                        .unwrap_or(Value::Null)
+                                })
+                                .collect();
+                            map.insert("floats".to_string(), Value::Array(vals));
+                        }
+                    }
+                }
+
+                match &boxed.strings {
+                    strings::StringCoordinates::Set(list) => {
+                        if list.len() > 0 {
+                            let vals: Vec<Value> =
+                                list.iter().map(|s| Value::String(s.to_string())).collect();
+                            map.insert("strings".to_string(), Value::Array(vals));
+                        }
+                    }
+                }
+
+                Value::Object(map)
+            }
+        }
+    }
+
+    /// Deserialize coordinates from a serde_json::Value produced by `to_json_value`.
+    pub fn from_json_value(value: &serde_json::Value) -> Result<Coordinates, String> {
+        use serde_json::Value;
+
+        match value {
+            Value::Array(arr) => {
+                if arr.is_empty() {
+                    return Ok(Coordinates::Empty);
+                }
+
+                // Check element types: integers, floats, or strings
+                let mut all_int = true;
+                let mut any_float = false;
+                let mut all_string = true;
+
+                for v in arr.iter() {
+                    match v {
+                        Value::Number(n) => {
+                            all_string = false;
+                            if n.as_i64().is_none() {
+                                all_int = false;
+                                any_float = true;
+                            }
+                        }
+                        Value::String(_) => {
+                            all_int = false;
+                            all_string = all_string && true;
+                        }
+                        _ => return Err("Unsupported coord element type".to_string()),
+                    }
+                }
+
+                if all_int && !any_float {
+                    let mut coords = integers::IntegerCoordinates::default();
+                    for v in arr.iter() {
+                        if let Value::Number(n) = v {
+                            if let Some(i) = n.as_i64() {
+                                coords.append(i as i32);
+                            }
+                        }
+                    }
+                    return Ok(Coordinates::Integers(coords));
+                }
+
+                if any_float {
+                    let mut vec = floats::FloatCoordinates::default();
+                    if let floats::FloatCoordinates::List(list) = &mut vec {
+                        for v in arr.iter() {
+                            if let Value::Number(n) = v {
+                                if let Some(f) = n.as_f64() {
+                                    list.push(f);
+                                }
+                            }
+                        }
+                    }
+                    return Ok(Coordinates::Floats(vec));
+                }
+
+                if all_string {
+                    let mut sc = strings::StringCoordinates::default();
+                    for v in arr.iter() {
+                        if let Value::String(s) = v {
+                            sc.append(s.to_string());
+                        }
+                    }
+                    return Ok(Coordinates::Strings(sc));
+                }
+
+                Err("Could not determine coord array element types".to_string())
+            }
+            Value::Object(map) => {
+                let mut mixed = MixedCoordinates::default();
+
+                if let Some(v) = map.get("ints") {
+                    if let Value::Array(arr) = v {
+                        for val in arr.iter() {
+                            if let Value::Number(n) = val {
+                                if let Some(i) = n.as_i64() {
+                                    mixed.integers.append(i as i32);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let Some(v) = map.get("floats") {
+                    if let Value::Array(arr) = v {
+                        if let floats::FloatCoordinates::List(list) = &mut mixed.floats {
+                            for val in arr.iter() {
+                                if let Value::Number(n) = val {
+                                    if let Some(f) = n.as_f64() {
+                                        list.push(f);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let Some(v) = map.get("strings") {
+                    if let Value::Array(arr) = v {
+                        for val in arr.iter() {
+                            if let Value::String(s) = val {
+                                mixed.strings.append(s.to_string());
+                            }
+                        }
+                    }
+                }
+
+                Ok(Coordinates::Mixed(Box::new(mixed)))
+            }
+            Value::Null => Ok(Coordinates::Empty),
+            Value::String(s) => Ok(Coordinates::from_string(s)),
+            _ => Err("Unsupported coords JSON value".to_string()),
+        }
+    }
 }

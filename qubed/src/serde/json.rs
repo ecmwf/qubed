@@ -78,10 +78,8 @@ impl Qube {
         for id in order.iter() {
             let nref = self.node(*id).expect("valid node");
             let dim = nref.dimension().unwrap_or("root").to_string();
-            // TODO: preserve type info of the coordinates and if they are mixed,
-            // then create a nested dict of the diff coord types
-            // TODO: create serde of the coords
-            let coords = nref.coordinates().to_string();
+            // Preserve native types for coordinates using Coordinates -> JSON helpers
+            let coords_value = nref.coordinates().to_json_value();
 
             let parent_idx = nref.parent().map(|p| idx_map.get(&p).copied().unwrap());
 
@@ -92,7 +90,7 @@ impl Qube {
 
             let mut map = Map::new();
             map.insert("dim".to_string(), Value::String(dim));
-            map.insert("coords".to_string(), Value::String(coords));
+            map.insert("coords".to_string(), coords_value);
             match parent_idx {
                 Some(pi) => map.insert(
                     "parent".to_string(),
@@ -129,10 +127,8 @@ impl Qube {
                 .get("dim")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| format!("Arena entry {} missing dim", i))?;
-            let coords = obj
-                .get("coords")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| format!("Arena entry {} missing coords", i))?;
+            let coords_value =
+                obj.get("coords").ok_or_else(|| format!("Arena entry {} missing coords", i))?;
 
             // Determine parent: if null or 0 -> root
             let parent_idx_opt = match obj.get("parent") {
@@ -148,18 +144,9 @@ impl Qube {
             };
 
             // create child under parent
-            // Parse coords conservatively: preserve tokens exactly as strings
-            // so values like "0001" are not interpreted as integers.
-            let coords_parsed = {
-                let mut c = Coordinates::Empty;
-                if !coords.is_empty() {
-                    for tok in coords.split('/') {
-                        let t = tok.to_string();
-                        c.append(t);
-                    }
-                }
-                c
-            };
+            // Parse coords using Coordinates::from_json_value so native JSON types
+            // (numbers/strings/mixed) are preserved.
+            let coords_parsed = Coordinates::from_json_value(coords_value)?;
             let created = if i == 0 {
                 // first entry corresponds to root; update root coords if provided
                 // skip creating a new node; optionally set coords on root

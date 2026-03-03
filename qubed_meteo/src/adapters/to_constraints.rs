@@ -77,7 +77,7 @@ mod tests_constraints_json {
             c.append("od".to_string());
             c
         };
-        let class = qube.create_child("class", root, Some(class_coords)).unwrap();
+        let class = qube.get_or_create_child("class", root, Some(class_coords)).unwrap();
 
         // expver=0001/0002 (multiple coordinates on same node)
         let exp_coords = {
@@ -86,7 +86,7 @@ mod tests_constraints_json {
             c.append("0002".to_string());
             c
         };
-        let expver = qube.create_child("expver", class, Some(exp_coords)).unwrap();
+        let expver = qube.get_or_create_child("expver", class, Some(exp_coords)).unwrap();
 
         // param=1/2
         let param_coords = {
@@ -95,7 +95,7 @@ mod tests_constraints_json {
             c.append("2".to_string());
             c
         };
-        let _param = qube.create_child("param", expver, Some(param_coords)).unwrap();
+        let _param = qube.get_or_create_child("param", expver, Some(param_coords)).unwrap();
 
         // Add a second branch so we have two leaf paths
         // Second branch: class=rd / expver=0003 / param=3/4
@@ -104,14 +104,14 @@ mod tests_constraints_json {
             c.append("rd".to_string());
             c
         };
-        let class2 = qube.create_child("class", root, Some(class2_coords)).unwrap();
+        let class2 = qube.get_or_create_child("class", root, Some(class2_coords)).unwrap();
 
         let exp2_coords = {
             let mut c = Coordinates::Empty;
             c.append("0003".to_string());
             c
         };
-        let expver2 = qube.create_child("expver", class2, Some(exp2_coords)).unwrap();
+        let expver2 = qube.get_or_create_child("expver", class2, Some(exp2_coords)).unwrap();
 
         let param2_coords = {
             let mut c = Coordinates::Empty;
@@ -119,7 +119,7 @@ mod tests_constraints_json {
             c.append("4".to_string());
             c
         };
-        let _param2 = qube.create_child("param", expver2, Some(param2_coords)).unwrap();
+        let _param2 = qube.get_or_create_child("param", expver2, Some(param2_coords)).unwrap();
 
         let param3_coords = {
             let mut c = Coordinates::Empty;
@@ -127,7 +127,7 @@ mod tests_constraints_json {
             c.append("6".to_string());
             c
         };
-        let _param3 = qube.create_child("param", expver2, Some(param3_coords)).unwrap();
+        let _param3 = qube.get_or_create_child("param", expver2, Some(param3_coords)).unwrap();
 
         let json_out = qube.to_dss_constraints();
 
