@@ -1,0 +1,1430 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Qubed API Documentation</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-2459343d.css">
+        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-d3e54678.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-095c3f7b.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Qubed API Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="qubed"><a class="header" href="#qubed">Qubed</a></h1>
+<p><strong>Qubed</strong> is a Rust library (with Python bindings) for working with <strong>trees of datacubes</strong> — a compressed data structure that efficiently represents large, sparse collections of key-value identifiers.</p>
+<h2 id="what-is-a-qube"><a class="header" href="#what-is-a-qube">What is a Qube?</a></h2>
+<p>In many domains — particularly meteorological data — datasets are labelled by sets of key-value pairs called <em>identifiers</em>:</p>
+<pre><code>{ class: "od", expver: "0001", param: "1", levtype: "sfc" }
+</code></pre>
+<p>When datasets are dense (every combination of key values exists), they can be represented as a single datacube. In practice, however, datasets are <strong>sparse</strong> — not every combination is valid. A Qube represents these sparse datasets as a <strong>compressed tree of dense datacubes</strong>, achieving massive compression while still supporting efficient operations.</p>
+<p>For example, a dataset with over <strong>1 billion</strong> distinct identifiers can be stored in a Qube with just a <strong>few thousand nodes</strong>, fitting in a few megabytes of memory.</p>
+<h2 id="at-a-glance"><a class="header" href="#at-a-glance">At a Glance</a></h2>
+<pre><code>root
+├── class=od, expver=0001/0002, param=1/2
+└── class=rd
+    ├── expver=0001, param=1/2/3
+    └── expver=0002, param=1/2
+</code></pre>
+<p>This tree represents <strong>9 unique identifiers</strong> using only <strong>5 nodes</strong> instead of 9 leaf entries. Each path from root to leaf defines a dense datacube; the tree as a whole represents their union.</p>
+<h2 id="key-features"><a class="header" href="#key-features">Key Features</a></h2>
+<ul>
+<li><strong>Compression</strong> — automatically merges sibling nodes with identical subtree structure, reducing tree size dramatically.</li>
+<li><strong>Set operations</strong> — union, intersection, difference, and symmetric difference, all operating directly on the compressed form.</li>
+<li><strong>Selection &amp; filtering</strong> — query the tree by dimension and coordinate values.</li>
+<li><strong>Multiple serialization formats</strong> — ASCII tree, nested JSON, arena JSON (BFS flat array), and DSS constraints (array-of-maps).</li>
+<li><strong>Adapters</strong> — ingest from MARS list format, FDB path lists, and DSS constraint JSON.</li>
+<li><strong>Python bindings</strong> — full access to Qube construction, serialization, and adapter functionality from Python via PyO3.</li>
+</ul>
+<h2 id="crate-organization"><a class="header" href="#crate-organization">Crate Organization</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Crate</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>qubed</code></td><td>Core data structure: Qube, Coordinates, compression, selection, serialization</td></tr>
+<tr><td><code>qubed-meteo</code></td><td>Domain-specific adapters: MARS list parser, FDB list parser, DSS constraints</td></tr>
+<tr><td><code>py_qubed</code></td><td>Python bindings for the core <code>qubed</code> crate</td></tr>
+<tr><td><code>py_qubed_meteo</code></td><td>Python bindings for the <code>qubed-meteo</code> adapters</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h2>
+<ul>
+<li>For <strong>conceptual background</strong>, see <a href="#datacubes-trees-and-compressed-trees">Background: Datacubes, Trees and Compressed Trees</a>.</li>
+<li>For a <strong>hands-on tutorial</strong>, jump to the <a href="#quickstart">Quickstart</a>.</li>
+<li>For <strong>Rust API details</strong>, see <a href="#qubed--core-library">qubed</a> and <a href="#qubed-meteo--adapters">qubed-meteo</a>.</li>
+<li>For <strong>Python API details</strong>, see <a href="#py_qubed--python-bindings">py_qubed</a> and <a href="#py_qubed_meteo--python-adapters">py_qubed_meteo</a>.</li>
+</ul>
+<h2 id="building-the-book"><a class="header" href="#building-the-book">Building the Book</a></h2>
+<pre><code class="language-bash"># Install mdbook if needed
+cargo install mdbook
+
+# Build
+mdbook build docs
+
+# Serve locally with live-reload
+mdbook serve docs -o
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="datacubes-trees-and-compressed-trees"><a class="header" href="#datacubes-trees-and-compressed-trees">Datacubes, Trees and Compressed Trees</a></h1>
+<p>This chapter introduces the core concepts behind Qubed. Feel free to skip ahead to the <a href="#quickstart">Quickstart</a> if you’d rather learn by doing.</p>
+<h2 id="identifiers"><a class="header" href="#identifiers">Identifiers</a></h2>
+<p>Qubed is primarily geared towards dealing with data files uniquely labelled by sets of key-value pairs. We call such a set an <strong>identifier</strong>:</p>
+<pre><code class="language-json">{
+  "class": "d1",
+  "dataset": "climate-dt",
+  "generation": "1",
+  "date": "20241102",
+  "resolution": "high",
+  "time": "0000"
+}
+</code></pre>
+<p>Each identifier maps to exactly one dataset (a GRIB field, a file on disk, an API result, etc.). We’re interested in describing which identifiers currently exist and performing efficient operations over them.</p>
+<h2 id="dense-datacubes"><a class="header" href="#dense-datacubes">Dense Datacubes</a></h2>
+<p>If we’re lucky, the set of identifiers forms a <strong>dense datacube</strong> — every combination of key values is present:</p>
+<pre><code>class=d1/d2, dataset=climate-dt, generation=1/2/3,
+model=icon, date=20241102/20241103, resolution=high/low,
+time=0000/0600/1200/1800
+</code></pre>
+<p>This single object represents <code>2 × 1 × 3 × 1 × 2 × 2 × 4 = 96</code> distinct datasets. Dense datacubes are compact and efficient.</p>
+<h2 id="sparse-datacubes-as-trees"><a class="header" href="#sparse-datacubes-as-trees">Sparse Datacubes as Trees</a></h2>
+<p>In practice, datasets are rarely fully dense. For example, certain models may only produce data at certain resolutions or certain experiments may only cover a subset of parameters.</p>
+<p>We can represent which data exists as a <strong>tree</strong>, where each node carries a dimension name and a set of coordinate values:</p>
+<pre><code>root
+├── class=od
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=rd
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2
+</code></pre>
+<p>Each root-to-leaf path defines one identifier. This tree represents 9 identifiers. It can express sparsity that a flat datacube cannot — above, <code>class=rd, expver=0001</code> has an extra <code>param=3</code> that <code>class=od</code> doesn’t have.</p>
+<h2 id="compression-trees-of-dense-datacubes"><a class="header" href="#compression-trees-of-dense-datacubes">Compression: Trees of Dense Datacubes</a></h2>
+<p>The expanded tree above contains a lot of redundant information. Many subtrees are structurally identical. In practice, real-world data tends to be “nearly dense” — it’s composed of a modest number of dense datacubes.</p>
+<p>Qubed <strong>compresses</strong> the tree by merging sibling nodes that have identical subtree structure. The algorithm computes a <strong>structural hash</strong> of each node (covering its dimension, children’s keys, children’s values, and recursively their children) and merges siblings whose hashes match:</p>
+<pre><code>root
+├── class=od, expver=0001/0002, param=1/2
+└── class=rd
+    ├── expver=0001, param=1/2/3
+    └── expver=0002, param=1/2
+</code></pre>
+<p>The 16-node expanded tree is now just 5 nodes — and still represents exactly the same 9 identifiers. Each leaf-path in the compressed tree is a <strong>dense datacube</strong>.</p>
+<blockquote>
+<p><strong>Restriction:</strong> No identical <code>key=value</code> pairs may be adjacent siblings. For example, the following would <strong>not</strong> be allowed:</p>
+<pre><code>root
+├── class=od, expver=0001/0002, param=1/2
+└── class=rd
+    ├── expver=0001, param=3
+    └── expver=0001/0002, param=1/2
+</code></pre>
+<p>This restriction ensures that looking up a particular <code>expver</code> value in a branch never requires following multiple children — each value appears under at most one child per dimension.</p>
+</blockquote>
+<h2 id="scale"><a class="header" href="#scale">Scale</a></h2>
+<p>At real-world scale these properties are dramatic. For example, the ECMWF Climate DT dataset contains over <strong>1 billion</strong> distinct identifiers but can be represented by a Qube with approximately <strong>3,000 nodes</strong> in about <strong>11 MB</strong> of memory.</p>
+<h2 id="whats-next"><a class="header" href="#whats-next">What’s Next</a></h2>
+<ul>
+<li><a href="#under-the-hood-algorithms">Under the Hood: Algorithms</a> — how set operations and compression work internally.</li>
+<li><a href="#quickstart">Quickstart</a> — build and manipulate Qubes hands-on.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="under-the-hood-algorithms"><a class="header" href="#under-the-hood-algorithms">Under the Hood: Algorithms</a></h1>
+<p>This chapter explains the key algorithms that power Qubed: <strong>set operations</strong> on compressed trees and <strong>compression</strong> itself.</p>
+<h2 id="set-operations"><a class="header" href="#set-operations">Set Operations</a></h2>
+<p>Qubes represent sets of identifiers, so the familiar set operations are all defined:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operation</th><th>Rust method</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Union</strong></td><td><code>a.append(&amp;mut b)</code></td><td>All identifiers in A or B (or both)</td></tr>
+<tr><td><strong>Intersection</strong></td><td><code>select</code> with intersection logic</td><td>Identifiers in both A and B</td></tr>
+<tr><td><strong>Difference</strong></td><td>internal set operation</td><td>Identifiers in A but not B</td></tr>
+<tr><td><strong>Symmetric difference</strong></td><td>internal set operation</td><td>Identifiers in exactly one of A or B</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h3>
+<p>The algorithm traverses both trees in tandem, recursively:</p>
+<pre><code>for node_a in level_A:
+    for node_b in level_B:
+        just_A, intersection, just_B = fused_set_operation(
+            node_a.coordinates,
+            node_b.coordinates
+        )
+</code></pre>
+<p>At each level, nodes are grouped by dimension. For every pair of nodes sharing the same dimension, the algorithm computes three disjoint sets of coordinate values:</p>
+<ul>
+<li><strong>just_A</strong> — values only in node A</li>
+<li><strong>intersection</strong> — values in both nodes</li>
+<li><strong>just_B</strong> — values only in node B</li>
+</ul>
+<p>Depending on the operation:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operation</th><th>Keeps</th></tr>
+</thead>
+<tbody>
+<tr><td>Union</td><td>just_A + intersection + just_B</td></tr>
+<tr><td>Intersection</td><td>intersection only</td></tr>
+<tr><td>A − B</td><td>just_A only</td></tr>
+<tr><td>B − A</td><td>just_B only</td></tr>
+<tr><td>Symmetric difference</td><td>just_A + just_B</td></tr>
+</tbody>
+</table>
+</div>
+<p>The crucial insight is that each partition gets <strong>different children</strong>:</p>
+<ul>
+<li><strong>just_A</strong> inherits the children of node A</li>
+<li><strong>just_B</strong> inherits the children of node B</li>
+<li><strong>intersection</strong> gets children computed by recursively calling the set operation on the sub-trees of A and B</li>
+</ul>
+<p>This recursive decomposition ensures the result is still a valid compressed Qube.</p>
+<h3 id="performance-considerations"><a class="header" href="#performance-considerations">Performance Considerations</a></h3>
+<p>The pairwise comparison is quadratic in the number of matching nodes at each level: $O(N_A \times N_B)$ comparisons per dimension group. In practice this is manageable because:</p>
+<ol>
+<li>Once any of just_A, intersection, or just_B is determined to be empty, it can be discarded immediately.</li>
+<li>For sorted coordinate types (integers, ranges), the intersection can be computed in linear time by walking both sorted lists in tandem.</li>
+<li>After the operation, compression merges any resulting sibling nodes with identical structure, keeping the tree compact.</li>
+</ol>
+<h2 id="compression"><a class="header" href="#compression">Compression</a></h2>
+<p>Compression is the process of reducing tree size while preserving the set of identifiers. It works in three phases:</p>
+<h3 id="phase-1-recursive-coordinate-merging"><a class="header" href="#phase-1-recursive-coordinate-merging">Phase 1: Recursive Coordinate Merging</a></h3>
+<p>Starting from the leaves and working upward, the algorithm identifies sibling nodes (children of the same parent, sharing the same dimension) that have identical <strong>structural hashes</strong>.</p>
+<p>The <strong>structural hash</strong> of a node is computed from:</p>
+<ul>
+<li>The node’s dimension name</li>
+<li>The structural hashes of all its children (recursively)</li>
+<li>But <strong>not</strong> the node’s own coordinate values</li>
+</ul>
+<p>Two sibling nodes with the same structural hash have identical subtree shapes. Their coordinates can be merged into a single node without losing information:</p>
+<pre><code>Before:                          After:
+├── expver=0001                  └── expver=0001/0002
+│   ├── param=1                      ├── param=1
+│   └── param=2                      └── param=2
+└── expver=0002
+    ├── param=1
+    └── param=2
+</code></pre>
+<h3 id="phase-2-pruning-empty-nodes"><a class="header" href="#phase-2-pruning-empty-nodes">Phase 2: Pruning Empty Nodes</a></h3>
+<p>After merging, some nodes may have empty coordinate sets (their values were absorbed by a sibling). These empty nodes are pruned from the tree.</p>
+<h3 id="phase-3-deduplication"><a class="header" href="#phase-3-deduplication">Phase 3: Deduplication</a></h3>
+<p>A final pass deduplicates any nodes that became structurally identical after merging. This is done by recomputing structural hashes and collapsing identical siblings.</p>
+<h3 id="hash-caching"><a class="header" href="#hash-caching">Hash Caching</a></h3>
+<p>Structural hashes are cached in each node using an <code>AtomicU64</code>. The cache is invalidated (set to 0) whenever a node or any of its ancestors are modified. This ensures hashes are recomputed lazily only when needed, making repeated compression operations efficient.</p>
+<h2 id="the-append--union-workflow"><a class="header" href="#the-append--union-workflow">The <code>append</code> / Union Workflow</a></h2>
+<p>When two Qubes are merged via <code>append</code>:</p>
+<ol>
+<li>The two root nodes are paired and <code>node_merge</code> is called recursively.</li>
+<li>At each level, children are grouped by dimension and the internal set operation produces the three partitions (just_A, intersection, just_B).</li>
+<li>For the intersection partition, new nodes are created and children are recursively merged.</li>
+<li>For just_B partitions, subtrees are copied from the other Qube into self.</li>
+<li>After all merging is complete, <code>compress()</code> is called to re-compress the result.</li>
+</ol>
+<p>The <code>append_many</code> method optimizes merging many Qubes by batching: it performs intermediate compression every 500 Qubes to prevent unbounded tree growth.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="quickstart"><a class="header" href="#quickstart">Quickstart</a></h1>
+<p>This chapter walks through building, manipulating, and querying Qubes using the Rust API. For the equivalent Python API, see the <a href="#py_qubed--python-bindings">Python bindings</a> chapter.</p>
+<h2 id="creating-a-qube"><a class="header" href="#creating-a-qube">Creating a Qube</a></h2>
+<h3 id="from-ascii-representation"><a class="header" href="#from-ascii-representation">From ASCII Representation</a></h3>
+<p>The most readable way to build a Qube is from its ASCII tree representation:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use qubed::Qube;
+
+let q = Qube::from_ascii(r#"root
+├── class=od
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=rd
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"#).unwrap();
+
+println!("{}", q.to_ascii());
+<span class="boring">}</span></code></pre>
+<p>Each line takes the form <code>key=value</code> where multiple values are separated by <code>/</code>:</p>
+<pre><code>root
+├── class=od, expver=0001/0002, param=1/2
+</code></pre>
+<h3 id="from-nested-json"><a class="header" href="#from-nested-json">From Nested JSON</a></h3>
+<p>You can also build a Qube from a JSON object where keys are <code>"dimension=values"</code> strings:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use qubed::Qube;
+use serde_json::json;
+
+let q = Qube::from_json(json!({
+    "class=od": {
+        "expver=0001/0002": {
+            "param=1/2": {}
+        }
+    },
+    "class=rd": {
+        "expver=0001": { "param=1/2/3": {} },
+        "expver=0002": { "param=1/2": {} }
+    }
+})).unwrap();
+<span class="boring">}</span></code></pre>
+<h3 id="programmatically"><a class="header" href="#programmatically">Programmatically</a></h3>
+<p>Build a Qube node by node:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use qubed::{Qube, Coordinates};
+
+let mut q = Qube::new();
+let root = q.root();
+
+// Create coordinate values
+let class_coords = Coordinates::from_string("od");
+let child = q.create_child("class", root, Some(class_coords)).unwrap();
+
+let exp_coords = Coordinates::from_string("0001/0002");
+let exp = q.create_child("expver", child, Some(exp_coords)).unwrap();
+
+let param_coords = Coordinates::from_string("1/2");
+q.create_child("param", exp, Some(param_coords)).unwrap();
+<span class="boring">}</span></code></pre>
+<h3 id="from-a-datacube"><a class="header" href="#from-a-datacube">From a Datacube</a></h3>
+<p>Build a Qube from a <code>Datacube</code> (a flat map of dimensions to coordinates):</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use qubed::{Datacube, Qube, Coordinates};
+
+let mut dc = Datacube::new();
+dc.add_coordinate("class", Coordinates::from_string("od/rd"));
+dc.add_coordinate("expver", Coordinates::from_string("0001/0002"));
+dc.add_coordinate("param", Coordinates::from_string("1/2"));
+
+let order = vec!["class".to_string(), "expver".to_string(), "param".to_string()];
+let q = Qube::from_datacube(&amp;dc, Some(&amp;order));
+<span class="boring">}</span></code></pre>
+<h2 id="compression-1"><a class="header" href="#compression-1">Compression</a></h2>
+<p>Compression merges sibling nodes with identical subtree structure. This is the defining operation of Qubed — it keeps trees compact without losing information.</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mut q = Qube::from_ascii(r#"root
+├── class=od
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=rd
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"#).unwrap();
+
+q.compress();
+println!("{}", q.to_ascii());
+// root
+// └── class=od/rd, expver=0001/0002, param=1/2
+<span class="boring">}</span></code></pre>
+<p>After compression, the number of leaf identifiers is preserved but the tree has far fewer nodes.</p>
+<h2 id="selection"><a class="header" href="#selection">Selection</a></h2>
+<p>Select a subset of the tree by providing dimension constraints:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use qubed::Qube;
+use qubed::select::SelectMode;
+
+let q = Qube::from_ascii(r#"root
+├── class=od
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=rd
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"#).unwrap();
+
+// Select only class=od, param=1
+let selection = [("class", &amp;[1]), ("param", &amp;[1])];
+let result = q.select(&amp;selection, SelectMode::Default).unwrap();
+println!("{}", result.to_ascii());
+<span class="boring">}</span></code></pre>
+<p><strong>SelectMode::Prune</strong> additionally removes branches that don’t contain all selected dimensions.</p>
+<h2 id="union-append"><a class="header" href="#union-append">Union (Append)</a></h2>
+<p>Merge two Qubes together. The result contains all identifiers from both:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mut a = Qube::from_ascii(r#"root
+└── class=od, expver=0001, param=1/2"#).unwrap();
+
+let mut b = Qube::from_ascii(r#"root
+└── class=rd, expver=0002, param=3/4"#).unwrap();
+
+a.append(&amp;mut b);
+// b is now empty; a contains the union, automatically compressed
+println!("{}", a.to_ascii());
+<span class="boring">}</span></code></pre>
+<p>For merging many Qubes at once, <code>append_many</code> is more efficient — it performs intermediate compression every 500 merges:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mut base = Qube::new();
+let mut others: Vec&lt;Qube&gt; = vec![/* ... */];
+base.append_many(&amp;mut others);
+<span class="boring">}</span></code></pre>
+<h2 id="iteration"><a class="header" href="#iteration">Iteration</a></h2>
+<h3 id="datacubes"><a class="header" href="#datacubes">Datacubes</a></h3>
+<p>Decompose the Qube back into individual dense datacubes. Each datacube is a <code>HashMap&lt;String, Coordinates&gt;</code>:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let datacubes = q.to_datacubes();
+for dc in &amp;datacubes {
+    for (dim, coords) in dc.coordinates() {
+        println!("  {} = {}", dim, coords.to_string());
+    }
+}
+<span class="boring">}</span></code></pre>
+<h3 id="leaf-count"><a class="header" href="#leaf-count">Leaf Count</a></h3>
+<p>Get the number of individual identifiers without expanding:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let count = q.datacube_count();
+println!("This qube contains {} identifiers", count);
+<span class="boring">}</span></code></pre>
+<h2 id="serialization"><a class="header" href="#serialization">Serialization</a></h2>
+<h3 id="ascii"><a class="header" href="#ascii">ASCII</a></h3>
+<p>Human-readable tree format, useful for debugging and display:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let ascii = q.to_ascii();
+let roundtrip = Qube::from_ascii(&amp;ascii).unwrap();
+<span class="boring">}</span></code></pre>
+<h3 id="nested-json"><a class="header" href="#nested-json">Nested JSON</a></h3>
+<p>Keys are <code>"dimension=values"</code> strings, values are child objects:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let json_val = q.to_json();
+let json_str = serde_json::to_string_pretty(&amp;json_val).unwrap();
+let roundtrip = Qube::from_json(json_val).unwrap();
+<span class="boring">}</span></code></pre>
+<h3 id="arena-json"><a class="header" href="#arena-json">Arena JSON</a></h3>
+<p>A flat BFS array of node records — more suitable for programmatic consumption and web transport:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let arena = q.to_arena_json();
+// Each entry: { "dim": "class", "coords": "od/rd", "parent": 0, "children": [1, 2] }
+let restored = Qube::from_arena_json(arena).unwrap();
+<span class="boring">}</span></code></pre>
+<p>Each node in the array contains:</p>
+<ul>
+<li><code>dim</code> — dimension name (e.g. <code>"class"</code>)</li>
+<li><code>coords</code> — coordinate values as a <code>/</code>-separated string</li>
+<li><code>parent</code> — index of the parent node (or <code>null</code> for root)</li>
+<li><code>children</code> — array of child node indices</li>
+</ul>
+<h2 id="coordinate-types"><a class="header" href="#coordinate-types">Coordinate Types</a></h2>
+<p>The <code>Coordinates</code> enum supports multiple value types and automatically categorizes them:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Variant</th><th>Stores</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Empty</code></td><td>No values</td><td>(default for root)</td></tr>
+<tr><td><code>Integers</code></td><td>Sorted <code>i32</code> values</td><td><code>1/2/3</code></td></tr>
+<tr><td><code>Floats</code></td><td>Sorted <code>f64</code> values</td><td><code>0.1/0.5</code></td></tr>
+<tr><td><code>Strings</code></td><td>Sorted string values</td><td><code>od/rd</code></td></tr>
+<tr><td><code>Mixed</code></td><td>Combination of above</td><td><code>1/od/0.5</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="leading-zero-preservation"><a class="header" href="#leading-zero-preservation">Leading Zero Preservation</a></h3>
+<p>Values with leading zeros (like <code>"0001"</code>) are preserved as strings rather than parsed as integers. The detection logic: if a token has length &gt; 1, starts with <code>'0'</code>, and the second character is a digit, it’s stored as a <code>String</code>.</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let coords = Coordinates::from_string("0001/0002");
+assert_eq!(coords.to_string(), "0001/0002"); // NOT "1/2"
+<span class="boring">}</span></code></pre>
+<h3 id="operations-on-coordinates"><a class="header" href="#operations-on-coordinates">Operations on Coordinates</a></h3>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use qubed::Coordinates;
+
+// Append values
+let mut c = Coordinates::new();
+c.append(1_i32);
+c.append(2_i32);
+
+// Extend from another
+let other = Coordinates::from_string("3/4");
+c.extend(&amp;other);
+
+// Intersect
+let a = Coordinates::from_string("1/2/3");
+let b = Coordinates::from_string("2/3/4");
+let result = a.intersect(&amp;b);
+// result.intersection = [2, 3]
+// result.only_a = [1]
+// result.only_b = [4]
+<span class="boring">}</span></code></pre>
+<h2 id="tree-inspection"><a class="header" href="#tree-inspection">Tree Inspection</a></h2>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Check if a qube has any content
+let is_empty = q.is_empty();
+
+// Get the number of leaf datacubes
+let n = q.datacube_count();
+
+// Get all unique dimension→coordinates pairs across the entire tree
+let all = q.all_unique_dim_coords();
+for (dim, coords) in &amp;all {
+    println!("{}: {}", dim, coords.to_string());
+}
+<span class="boring">}</span></code></pre>
+<h2 id="node-navigation"><a class="header" href="#node-navigation">Node Navigation</a></h2>
+<p>Access individual nodes via <code>NodeRef</code>:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let root = q.root();
+let root_node = q.node(root).unwrap();
+
+// Dimension name
+let dim = root_node.dimension(); // Some("root")
+
+// Coordinates
+let coords = root_node.coordinates();
+
+// Iterate children
+for child_id in root_node.all_children() {
+    let child = q.node(child_id).unwrap();
+    println!("{} = {}", child.dimension().unwrap(), child.coordinates().to_string());
+}
+
+// Get all dimensions in subtree
+let dims = root_node.span();
+
+// Walk ancestors
+for ancestor_id in root_node.ancestors() {
+    // ...
+}
+<span class="boring">}</span></code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="qubed--core-library"><a class="header" href="#qubed--core-library">qubed — Core Library</a></h1>
+<p>The <code>qubed</code> crate provides the core <code>Qube</code> data structure, <code>Coordinates</code> types, compression, selection, serialization, and datacube conversion.</p>
+<p><strong>Cargo.toml:</strong></p>
+<pre><code class="language-toml">[dependencies]
+qubed = { path = "qubed" }
+</code></pre>
+<hr>
+<h2 id="qube"><a class="header" href="#qube">Qube</a></h2>
+<p>The central type. A Qube is a slot-map-backed tree where each node has a dimension name, a set of coordinate values, and children grouped by dimension.</p>
+<h3 id="construction"><a class="header" href="#construction">Construction</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Signature</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>new</code></td><td><code>fn new() -&gt; Qube</code></td><td>Create an empty Qube with just a root node</td></tr>
+<tr><td><code>from_ascii</code></td><td><code>fn from_ascii(input: &amp;str) -&gt; Result&lt;Qube, String&gt;</code></td><td>Parse an ASCII tree representation</td></tr>
+<tr><td><code>from_json</code></td><td><code>fn from_json(value: Value) -&gt; Result&lt;Qube, String&gt;</code></td><td>Parse a nested JSON object</td></tr>
+<tr><td><code>from_arena_json</code></td><td><code>fn from_arena_json(value: Value) -&gt; Result&lt;Qube, String&gt;</code></td><td>Parse a BFS flat-array JSON layout</td></tr>
+<tr><td><code>from_datacube</code></td><td><code>fn from_datacube(dc: &amp;Datacube, order: Option&lt;&amp;[String]&gt;) -&gt; Qube</code></td><td>Build from a flat datacube with optional dimension ordering</td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Example — from ASCII:</strong></p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use qubed::Qube;
+
+let q = Qube::from_ascii(r#"root
+├── class=od
+│   ├── expver=0001, param=1/2
+│   └── expver=0002, param=1/2
+└── class=rd
+    ├── expver=0001, param=1/2/3
+    └── expver=0002, param=1/2"#).unwrap();
+<span class="boring">}</span></code></pre>
+<p><strong>Example — from nested JSON:</strong></p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use qubed::Qube;
+use serde_json::json;
+
+let q = Qube::from_json(json!({
+    "class=od": {
+        "expver=0001/0002": { "param=1/2": {} }
+    },
+    "class=rd": {
+        "expver=0001": { "param=1/2/3": {} },
+        "expver=0002": { "param=1/2": {} }
+    }
+})).unwrap();
+<span class="boring">}</span></code></pre>
+<h3 id="tree-modification"><a class="header" href="#tree-modification">Tree Modification</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Signature</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>create_child</code></td><td><code>fn create_child(&amp;mut self, key: &amp;str, parent: NodeIdx, coords: Option&lt;Coordinates&gt;) -&gt; Result&lt;NodeIdx, String&gt;</code></td><td>Create a child node. Returns existing node if an identical child already exists.</td></tr>
+<tr><td><code>remove_node</code></td><td><code>fn remove_node(&amp;mut self, id: NodeIdx) -&gt; Result&lt;(), String&gt;</code></td><td>Remove a node and all its descendants</td></tr>
+<tr><td><code>append</code></td><td><code>fn append(&amp;mut self, other: &amp;mut Qube)</code></td><td>Union: merge <code>other</code> into <code>self</code>, compress, then clear <code>other</code></td></tr>
+<tr><td><code>append_many</code></td><td><code>fn append_many(&amp;mut self, others: &amp;mut Vec&lt;Qube&gt;)</code></td><td>Merge many Qubes with periodic compression (every 500)</td></tr>
+<tr><td><code>append_datacube</code></td><td><code>fn append_datacube(&amp;mut self, dc: Datacube, order: Option&lt;&amp;[String]&gt;, accept_existing_order: bool)</code></td><td>Append a single Datacube</td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Example — building programmatically:</strong></p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use qubed::{Qube, Coordinates};
+
+let mut q = Qube::new();
+let root = q.root();
+
+let class = q.create_child("class", root,
+    Some(Coordinates::from_string("od"))).unwrap();
+let expver = q.create_child("expver", class,
+    Some(Coordinates::from_string("0001/0002"))).unwrap();
+q.create_child("param", expver,
+    Some(Coordinates::from_string("1/2"))).unwrap();
+<span class="boring">}</span></code></pre>
+<p><strong>Example — union:</strong></p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mut a = Qube::from_ascii("root\n└── class=od, param=1").unwrap();
+let mut b = Qube::from_ascii("root\n└── class=rd, param=2").unwrap();
+a.append(&amp;mut b);
+// a now contains both branches, compressed; b is empty
+<span class="boring">}</span></code></pre>
+<h3 id="compression-2"><a class="header" href="#compression-2">Compression</a></h3>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn compress(&amp;mut self)
+<span class="boring">}</span></code></pre>
+<p>Compress the tree in-place. Three phases:</p>
+<ol>
+<li><strong>Recursive merge</strong> — bottom-up, siblings with the same structural hash have their coordinates merged.</li>
+<li><strong>Prune</strong> — nodes with <code>Coordinates::Empty</code> are removed.</li>
+<li><strong>Dedup</strong> — structurally identical siblings are collapsed.</li>
+</ol>
+<p>Called automatically by <code>append</code> and <code>append_many</code>.</p>
+<h3 id="selection-1"><a class="header" href="#selection-1">Selection</a></h3>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn select&lt;C&gt;(&amp;self, selection: &amp;[(&amp;str, C)], mode: SelectMode) -&gt; Result&lt;Qube, String&gt;
+where C: Into&lt;Coordinates&gt; + Clone
+<span class="boring">}</span></code></pre>
+<p>Returns a new Qube containing only identifiers matching the constraints. <code>C</code> can be <code>&amp;[i32]</code>, <code>Coordinates</code>, or other <code>Into&lt;Coordinates&gt;</code> types.</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn prune(&amp;mut self, node_id: NodeIdx, has_none_of: HashSet&lt;&amp;str&gt;)
+<span class="boring">}</span></code></pre>
+<p>Remove branches that don’t contain <strong>all</strong> of the specified dimensions.</p>
+<p><strong>SelectMode:</strong></p>
+<ul>
+<li><code>Default</code> — keep branches with at least one matching value per constrained dimension.</li>
+<li><code>Prune</code> — additionally remove branches missing any selected dimension entirely.</li>
+</ul>
+<h3 id="serialization-1"><a class="header" href="#serialization-1">Serialization</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Returns</th><th>Format</th></tr>
+</thead>
+<tbody>
+<tr><td><code>to_ascii()</code></td><td><code>String</code></td><td>Human-readable tree with <code>├──</code>/<code>└──</code> connectors</td></tr>
+<tr><td><code>to_json()</code></td><td><code>Value</code></td><td>Nested JSON: <code>{ "key=values": { children } }</code></td></tr>
+<tr><td><code>to_arena_json()</code></td><td><code>Value</code></td><td>BFS flat array: <code>[{ dim, coords, parent, children }]</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Arena JSON node record:</strong></p>
+<pre><code class="language-json">{ "dim": "class", "coords": "od/rd", "parent": null, "children": [1, 2] }
+</code></pre>
+<h3 id="iteration--inspection"><a class="header" href="#iteration--inspection">Iteration &amp; Inspection</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Signature</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>to_datacubes</code></td><td><code>fn to_datacubes(&amp;self) -&gt; Vec&lt;Datacube&gt;</code></td><td>Decompose into leaf-path datacubes</td></tr>
+<tr><td><code>datacube_count</code></td><td><code>fn datacube_count(&amp;self) -&gt; usize</code></td><td>Count leaf identifiers without expansion</td></tr>
+<tr><td><code>is_empty</code></td><td><code>fn is_empty(&amp;self) -&gt; bool</code></td><td>True if root has no children and no coordinates</td></tr>
+<tr><td><code>all_unique_dim_coords</code></td><td><code>fn all_unique_dim_coords(&amp;mut self) -&gt; BTreeMap&lt;String, Coordinates&gt;</code></td><td>Union of all coordinates per dimension</td></tr>
+<tr><td><code>root</code></td><td><code>fn root(&amp;self) -&gt; NodeIdx</code></td><td>Root node index</td></tr>
+<tr><td><code>node</code></td><td><code>fn node(&amp;self, id: NodeIdx) -&gt; Option&lt;NodeRef&gt;</code></td><td>Read-only reference to a node</td></tr>
+<tr><td><code>dimension</code></td><td><code>fn dimension(&amp;self, s: &amp;str) -&gt; Option&lt;Dimension&gt;</code></td><td>Look up dimension by name</td></tr>
+<tr><td><code>dimension_str</code></td><td><code>fn dimension_str(&amp;self, d: &amp;Dimension) -&gt; Option&lt;&amp;str&gt;</code></td><td>Get dimension name string</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="noderef"><a class="header" href="#noderef">NodeRef</a></h2>
+<p>Read-only reference to a node in the Qube tree.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Returns</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>id()</code></td><td><code>NodeIdx</code></td><td>Slot-map key</td></tr>
+<tr><td><code>dimension()</code></td><td><code>Option&lt;&amp;str&gt;</code></td><td>Dimension name (e.g. <code>"class"</code>)</td></tr>
+<tr><td><code>coordinates()</code></td><td><code>&amp;Coordinates</code></td><td>Coordinate values</td></tr>
+<tr><td><code>child_dimensions()</code></td><td><code>impl Iterator&lt;Item = &amp;Dimension&gt;</code></td><td>Distinct child dimension keys</td></tr>
+<tr><td><code>children(key)</code></td><td><code>Option&lt;impl Iterator&lt;Item = NodeIdx&gt;&gt;</code></td><td>Children under a specific dimension</td></tr>
+<tr><td><code>all_children()</code></td><td><code>impl Iterator&lt;Item = NodeIdx&gt;</code></td><td>All children across all dimensions</td></tr>
+<tr><td><code>children_count()</code></td><td><code>usize</code></td><td>Total direct children</td></tr>
+<tr><td><code>coordinates_count()</code></td><td><code>usize</code></td><td>Number of coordinate values</td></tr>
+<tr><td><code>parent()</code></td><td><code>Option&lt;NodeIdx&gt;</code></td><td>Parent index</td></tr>
+<tr><td><code>parent_node()</code></td><td><code>Option&lt;NodeRef&gt;</code></td><td>Parent as NodeRef</td></tr>
+<tr><td><code>ancestors()</code></td><td><code>impl Iterator&lt;Item = NodeIdx&gt;</code></td><td>Walk up to root</td></tr>
+<tr><td><code>span()</code></td><td><code>HashSet&lt;Dimension&gt;</code></td><td>All unique dimensions in subtree</td></tr>
+<tr><td><code>structural_hash()</code></td><td><code>Option&lt;u64&gt;</code></td><td>Cached structural hash</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="coordinates"><a class="header" href="#coordinates">Coordinates</a></h2>
+<p>A typed, ordered set of coordinate values.</p>
+<h3 id="variants"><a class="header" href="#variants">Variants</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Variant</th><th>Storage</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Empty</code></td><td>—</td><td>Default for root</td></tr>
+<tr><td><code>Integers</code></td><td>Sorted <code>i32</code></td><td><code>1/2/3</code></td></tr>
+<tr><td><code>Floats</code></td><td>Sorted <code>f64</code></td><td><code>0.1/0.5</code></td></tr>
+<tr><td><code>Strings</code></td><td>Sorted <code>String</code></td><td><code>od/rd</code></td></tr>
+<tr><td><code>Mixed</code></td><td>All three</td><td><code>1/od/0.5</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="construction-1"><a class="header" href="#construction-1">Construction</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Coordinates::new()</code></td><td>Empty coordinates</td></tr>
+<tr><td><code>Coordinates::from_string(s)</code></td><td>Parse <code>|</code>-separated string (also handles <code>/</code> in ASCII context)</td></tr>
+<tr><td><code>From&lt;i32&gt;</code>, <code>From&lt;f64&gt;</code>, <code>From&lt;String&gt;</code></td><td>Single-value construction</td></tr>
+<tr><td><code>FromIterator&lt;i32&gt;</code>, <code>FromIterator&lt;f64&gt;</code>, <code>FromIterator&lt;String&gt;</code></td><td>Build from iterators</td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Leading zero preservation:</strong> tokens with length &gt; 1 that start with <code>'0'</code> followed by a digit are stored as <code>String</code> to preserve formatting (e.g. <code>"0001"</code> stays <code>"0001"</code>, not <code>1</code>).</p>
+<h3 id="modification"><a class="header" href="#modification">Modification</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>append(value)</code></td><td>Add a single value; auto-promotes to <code>Mixed</code> if types differ</td></tr>
+<tr><td><code>extend(&amp;other)</code></td><td>Merge values from another <code>Coordinates</code></td></tr>
+<tr><td><code>extend_from_iter(iter)</code></td><td>Extend from an iterator</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="query"><a class="header" href="#query">Query</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>to_string()</code></td><td><code>/</code>-separated string</td></tr>
+<tr><td><code>len()</code></td><td>Value count</td></tr>
+<tr><td><code>is_empty()</code></td><td>True if no values</td></tr>
+<tr><td><code>contains(value)</code></td><td>Membership check (integers only currently)</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="set-operations-1"><a class="header" href="#set-operations-1">Set Operations</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>intersect(&amp;other)</code></td><td>Returns <code>IntersectionResult { intersection, only_a, only_b }</code></td></tr>
+<tr><td><code>merge_coords(&amp;other)</code></td><td>Union (intersection + only_a + only_b combined)</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="datacube"><a class="header" href="#datacube">Datacube</a></h2>
+<p>A flat <code>HashMap&lt;String, Coordinates&gt;</code> representing one dense datacube.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>new()</code></td><td>Create empty</td></tr>
+<tr><td><code>add_coordinate(dim, coords)</code></td><td>Add a dimension</td></tr>
+<tr><td><code>coordinates()</code></td><td>Access the map</td></tr>
+<tr><td><code>is_empty()</code> / <code>len()</code></td><td>Check dimensions</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="key-types-summary"><a class="header" href="#key-types-summary">Key Types Summary</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>NodeIdx</code></td><td>SlotMap key for node identity</td></tr>
+<tr><td><code>Dimension</code></td><td>Interned string key (<code>MiniSpur</code> from <code>lasso</code>)</td></tr>
+<tr><td><code>IntersectionResult&lt;T&gt;</code></td><td><code>{ intersection, only_a, only_b }</code></td></tr>
+<tr><td><code>SelectMode</code></td><td><code>Default</code> or <code>Prune</code></td></tr>
+<tr><td><code>CoordinateTypes</code></td><td><code>Integer(i32)</code>, <code>Float(f64)</code>, <code>String(String)</code></td></tr>
+</tbody>
+</table>
+</div>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="qubed-meteo--adapters"><a class="header" href="#qubed-meteo--adapters">qubed-meteo — Adapters</a></h1>
+<p>The <code>qubed-meteo</code> crate provides domain-specific adapters for ingesting meteorological metadata into Qubes and exporting them to external formats.</p>
+<p><strong>Cargo.toml:</strong></p>
+<pre><code class="language-toml">[dependencies]
+qubed-meteo = { path = "qubed-meteo" }
+</code></pre>
+<hr>
+<h2 id="frommarslist--mars-list-parser"><a class="header" href="#frommarslist--mars-list-parser">FromMARSList — MARS List Parser</a></h2>
+<p><strong>Trait:</strong> <code>qubed_meteo::adapters::mars_list::FromMARSList</code></p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn from_mars_list(mars_list: &amp;str) -&gt; Result&lt;Qube, String&gt;
+<span class="boring">}</span></code></pre>
+<p>Parses indentation-based MARS list text into a Qube. This is the format produced by ECMWF’s MARS listing tools, where indentation indicates parent-child relationships.</p>
+<h3 id="input-format"><a class="header" href="#input-format">Input Format</a></h3>
+<pre><code>class=od, expver=0001
+  param=1/2
+  param=3
+class=rd, expver=0002
+  param=4
+</code></pre>
+<ul>
+<li><strong>Lines</strong> are split by commas into tokens of the form <code>key=value</code>.</li>
+<li><strong>Indentation</strong> determines hierarchy: indented lines are children of the preceding less-indented line.</li>
+<li><strong>Slash-separated values</strong> (e.g. <code>param=1/2</code>) become multiple coordinate values.</li>
+<li>The resulting tree is automatically compressed.</li>
+</ul>
+<h3 id="parsing-rules"><a class="header" href="#parsing-rules">Parsing Rules</a></h3>
+<ol>
+<li>If a line has deeper indentation than the previous line, its tokens become a chain under the last node of the previous line.</li>
+<li>If a line has equal or shallower indentation, it chains under the nearest ancestor in the indentation stack.</li>
+<li>Values with leading zeros (e.g. <code>0001</code>) are preserved as strings.</li>
+</ol>
+<h3 id="example"><a class="header" href="#example">Example</a></h3>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use qubed::Qube;
+use qubed_meteo::adapters::mars_list::FromMARSList;
+
+let mars_text = "class=od, expver=0001\n  param=1/2\nclass=rd, expver=0002\n  param=3/4";
+let qube = Qube::from_mars_list(mars_text).unwrap();
+println!("{}", qube.to_ascii());
+<span class="boring">}</span></code></pre>
+<hr>
+<h2 id="fromfdblist--fdb-path-parser"><a class="header" href="#fromfdblist--fdb-path-parser">FromFDBList — FDB Path Parser</a></h2>
+<p><strong>Trait:</strong> <code>qubed_meteo::adapters::fdb::FromFDBList</code></p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn from_fdb_list(items: &amp;[String]) -&gt; Result&lt;Qube, String&gt;
+<span class="boring">}</span></code></pre>
+<p>Builds a Qube from FDB-style comma-separated path strings, as produced by the <code>rsfdb</code> listing tools.</p>
+<h3 id="input-format-1"><a class="header" href="#input-format-1">Input Format</a></h3>
+<p>Each item is a comma-separated sequence of <code>key=value</code> segments:</p>
+<pre><code>class=od,expver=0001,param=1/2
+class=rd,expver=0003,param=3/4
+</code></pre>
+<ul>
+<li>Each segment’s values can be slash-separated for multiple coordinates.</li>
+<li>Segments without <code>=</code> become dimension-only nodes (no coordinates).</li>
+<li>Values with leading zeros are preserved as strings.</li>
+<li>The resulting tree is automatically compressed.</li>
+</ul>
+<h3 id="example-1"><a class="header" href="#example-1">Example</a></h3>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use qubed::Qube;
+use qubed_meteo::adapters::fdb::FromFDBList;
+
+let items = vec![
+    "class=od,expver=0001,param=1/2".to_string(),
+    "class=rd,expver=0003,param=3/4".to_string(),
+];
+let qube = Qube::from_fdb_list(&amp;items).unwrap();
+println!("{}", qube.to_ascii());
+<span class="boring">}</span></code></pre>
+<hr>
+<h2 id="todssconstraints--dss-constraints-exporter"><a class="header" href="#todssconstraints--dss-constraints-exporter">ToDssConstraints — DSS Constraints Exporter</a></h2>
+<p><strong>Trait:</strong> <code>qubed_meteo::adapters::to_constraints::ToDssConstraints</code></p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn to_dss_constraints(&amp;self) -&gt; serde_json::Value
+<span class="boring">}</span></code></pre>
+<p>Converts a Qube into a JSON array of constraint objects, one per leaf-path datacube. Every object contains the same set of dimension keys (the union across all datacubes); dimensions not present in a particular datacube get an empty array.</p>
+<h3 id="output-format"><a class="header" href="#output-format">Output Format</a></h3>
+<pre><code class="language-json">[
+  {
+    "class": ["od"],
+    "expver": ["0001", "0002"],
+    "param": ["1", "2"]
+  },
+  {
+    "class": ["rd"],
+    "expver": ["0003"],
+    "param": ["3", "4"]
+  }
+]
+</code></pre>
+<ul>
+<li>The <code>"root"</code> dimension is excluded from the output.</li>
+<li>Coordinate values are serialized as string arrays (split on <code>/</code>).</li>
+</ul>
+<h3 id="example-2"><a class="header" href="#example-2">Example</a></h3>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use qubed::Qube;
+use qubed_meteo::adapters::to_constraints::ToDssConstraints;
+
+let q = Qube::from_ascii(r#"root
+├── class=od, expver=0001/0002, param=1/2
+└── class=rd, expver=0003, param=3/4"#).unwrap();
+
+let constraints = q.to_dss_constraints();
+println!("{}", serde_json::to_string_pretty(&amp;constraints).unwrap());
+<span class="boring">}</span></code></pre>
+<hr>
+<h2 id="fromdssconstraints--dss-constraints-importer"><a class="header" href="#fromdssconstraints--dss-constraints-importer">FromDssConstraints — DSS Constraints Importer</a></h2>
+<p><strong>Trait:</strong> <code>qubed_meteo::adapters::dss_constraints::FromDssConstraints</code></p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn from_dss_constraints(dss_constraints: &amp;serde_json::Value) -&gt; Result&lt;Qube, String&gt;
+<span class="boring">}</span></code></pre>
+<p>Rebuilds a Qube from DSS-style constraint JSON (array of maps). Each map in the array is parsed as a <code>Datacube</code>, then all datacubes are merged with <code>append_many</code>.</p>
+<p>A built-in dimension ordering is applied (origin, forecast_type, hday, day, hmonth, hyear, year, month, time, leadtime_hour, level_type, variable) to produce a consistent tree structure.</p>
+<h3 id="example-3"><a class="header" href="#example-3">Example</a></h3>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use qubed::Qube;
+use qubed_meteo::adapters::dss_constraints::FromDssConstraints;
+use serde_json::json;
+
+let constraints = json!([
+    { "class": ["od"], "expver": ["0001"], "param": ["1", "2"] },
+    { "class": ["rd"], "expver": ["0002"], "param": ["3"] }
+]);
+
+let qube = Qube::from_dss_constraints(&amp;constraints).unwrap();
+println!("{}", qube.to_ascii());
+<span class="boring">}</span></code></pre>
+<hr>
+<h2 id="leading-zero-preservation-1"><a class="header" href="#leading-zero-preservation-1">Leading Zero Preservation</a></h2>
+<p>All adapters use the same detection logic for preserving leading zeros:</p>
+<pre><code>if token.len() &gt; 1
+   &amp;&amp; token.starts_with('0')
+   &amp;&amp; token[1].is_ascii_digit()
+then
+   → store as String (e.g. "0001")
+else
+   → try parse as i32, then f64, then String
+</code></pre>
+<p>This ensures values like <code>"0001"</code> or <code>"0042"</code> round-trip correctly through serialization, while plain numbers like <code>"1"</code> or <code>"42"</code> are stored as integers.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="py_qubed--python-bindings"><a class="header" href="#py_qubed--python-bindings">py_qubed — Python Bindings</a></h1>
+<p>The <code>py_qubed</code> package exposes the core <code>qubed</code> Rust library to Python via PyO3. It provides the <code>PyQube</code> class (importable as <code>qubed.PyQube</code>) for building, manipulating, and serializing Qubes from Python.</p>
+<h2 id="installation"><a class="header" href="#installation">Installation</a></h2>
+<pre><code class="language-bash">cd py_qubed
+maturin develop --release
+</code></pre>
+<p>Then in Python:</p>
+<pre><code class="language-python">from qubed import PyQube
+</code></pre>
+<hr>
+<h2 id="pyqube-class"><a class="header" href="#pyqube-class">PyQube Class</a></h2>
+<h3 id="construction-2"><a class="header" href="#construction-2">Construction</a></h3>
+<h4 id="pyqube"><a class="header" href="#pyqube"><code>PyQube()</code></a></h4>
+<p>Create an empty Qube.</p>
+<pre><code class="language-python">q = PyQube()
+</code></pre>
+<h4 id="pyqubefrom_asciitext-str---pyqube"><a class="header" href="#pyqubefrom_asciitext-str---pyqube"><code>PyQube.from_ascii(text: str) -&gt; PyQube</code></a></h4>
+<p>Parse an ASCII tree representation:</p>
+<pre><code class="language-python">q = PyQube.from_ascii("""root
+├── class=od
+│   └── expver=0001/0002, param=1/2
+└── class=rd
+    ├── expver=0001, param=1/2/3
+    └── expver=0002, param=1/2""")
+</code></pre>
+<h4 id="pyqubefrom_arena_jsonjson_str-str---pyqube"><a class="header" href="#pyqubefrom_arena_jsonjson_str-str---pyqube"><code>PyQube.from_arena_json(json_str: str) -&gt; PyQube</code></a></h4>
+<p>Reconstruct a Qube from arena JSON (a flat BFS array produced by <code>to_arena_json</code>):</p>
+<pre><code class="language-python">import json
+
+arena_str = q.to_arena_json()
+restored = PyQube.from_arena_json(arena_str)
+</code></pre>
+<hr>
+<h3 id="serialization-2"><a class="header" href="#serialization-2">Serialization</a></h3>
+<h4 id="to_ascii---str"><a class="header" href="#to_ascii---str"><code>to_ascii() -&gt; str</code></a></h4>
+<p>Return the human-readable ASCII tree representation:</p>
+<pre><code class="language-python">print(q.to_ascii())
+# root
+# ├── class=od, expver=0001/0002, param=1/2
+# └── class=rd
+#     ├── expver=0001, param=1/2/3
+#     └── expver=0002, param=1/2
+</code></pre>
+<p>Also available as <code>str(q)</code> (via <code>__str__</code>).</p>
+<h4 id="to_arena_json---str"><a class="header" href="#to_arena_json---str"><code>to_arena_json() -&gt; str</code></a></h4>
+<p>Return a JSON string containing a flat BFS array of node records:</p>
+<pre><code class="language-python">import json
+
+arena = json.loads(q.to_arena_json())
+for node in arena:
+    print(node["dim"], node["coords"])
+</code></pre>
+<p>Each record: <code>{ "dim": "class", "coords": "od/rd", "parent": 0, "children": [1, 2] }</code></p>
+<h4 id="to_datacubes---listdict"><a class="header" href="#to_datacubes---listdict"><code>to_datacubes() -&gt; list[dict]</code></a></h4>
+<p>Decompose into a list of datacube dictionaries. Each dict maps dimension names to coordinate strings:</p>
+<pre><code class="language-python">for dc in q.to_datacubes():
+    print(dc)
+# {'class': 'od', 'expver': '0001/0002', 'param': '1/2'}
+# {'class': 'rd', 'expver': '0001', 'param': '1/2/3'}
+# ...
+</code></pre>
+<hr>
+<h3 id="merging"><a class="header" href="#merging">Merging</a></h3>
+<h4 id="appendother-pyqube---none"><a class="header" href="#appendother-pyqube---none"><code>append(other: PyQube) -&gt; None</code></a></h4>
+<p>Merge another Qube into this one. The result is automatically compressed. <code>other</code> becomes empty.</p>
+<pre><code class="language-python">a = PyQube.from_ascii("root\n└── class=od, param=1")
+b = PyQube.from_ascii("root\n└── class=rd, param=2")
+a.append(b)
+print(a)
+</code></pre>
+<h4 id="append_manyothers-listpyqube---none"><a class="header" href="#append_manyothers-listpyqube---none"><code>append_many(others: list[PyQube]) -&gt; None</code></a></h4>
+<p>Merge multiple Qubes at once:</p>
+<pre><code class="language-python">base = PyQube()
+qubes = [PyQube.from_ascii(f"root\n└── class=c{i}, param=1") for i in range(100)]
+base.append_many(qubes)
+</code></pre>
+<hr>
+<h3 id="special-methods"><a class="header" href="#special-methods">Special Methods</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>__str__()</code></td><td>Same as <code>to_ascii()</code></td></tr>
+<tr><td><code>__repr__()</code></td><td>Returns <code>PyQube(root_id=...)</code></td></tr>
+<tr><td><code>__len__()</code></td><td>Returns <code>datacube_count()</code> — the number of leaf identifiers</td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-python">q = PyQube.from_ascii("root\n├── class=od, param=1/2\n└── class=rd, param=3")
+print(len(q))  # 3
+</code></pre>
+<hr>
+<h2 id="complete-example"><a class="header" href="#complete-example">Complete Example</a></h2>
+<pre><code class="language-python">from qubed import PyQube
+import json
+
+# Build from ASCII
+q = PyQube.from_ascii("""root
+├── class=od
+│   └── expver=0001/0002, param=1/2
+└── class=rd
+    ├── expver=0001, param=1/2/3
+    └── expver=0002, param=1/2""")
+
+# Inspect
+print(f"Identifiers: {len(q)}")
+print(q)
+
+# Decompose to datacubes
+for dc in q.to_datacubes():
+    print(dc)
+
+# Roundtrip through arena JSON
+arena = q.to_arena_json()
+restored = PyQube.from_arena_json(arena)
+assert str(q) == str(restored)
+
+# Merge two qubes
+other = PyQube.from_ascii("root\n└── class=xd, expver=0001, param=99")
+q.append(other)
+print(q)
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="py_qubed_meteo--python-adapters"><a class="header" href="#py_qubed_meteo--python-adapters">py_qubed_meteo — Python Adapters</a></h1>
+<p>The <code>py_qubed_meteo</code> package exposes the <code>qubed-meteo</code> adapter crate to Python via PyO3. It provides standalone functions for parsing MARS lists, FDB path lists, and converting Qubes to DSS constraint format.</p>
+<h2 id="installation-1"><a class="header" href="#installation-1">Installation</a></h2>
+<pre><code class="language-bash">cd py_qubed_meteo
+maturin develop --release
+</code></pre>
+<p>Then in Python:</p>
+<pre><code class="language-python">from qubed_meteo import from_mars_list_py, from_fdb_list_py, to_dss_constraints_py
+</code></pre>
+<hr>
+<h2 id="functions"><a class="header" href="#functions">Functions</a></h2>
+<h3 id="from_mars_list_pytext-str---str"><a class="header" href="#from_mars_list_pytext-str---str"><code>from_mars_list_py(text: str) -&gt; str</code></a></h3>
+<p>Parse MARS list text and return the resulting Qube as an ASCII string. The returned string can be passed to <code>PyQube.from_ascii()</code> to get a <code>PyQube</code> object.</p>
+<p><strong>Input format:</strong> Indentation-based MARS listing where indented lines are children of preceding less-indented lines. Tokens are comma-separated <code>key=value</code> pairs; values can be slash-separated.</p>
+<pre><code class="language-python">from qubed_meteo import from_mars_list_py
+from qubed import PyQube
+
+mars_text = """class=od, expver=0001
+  param=1/2
+  param=3
+class=rd, expver=0002
+  param=4"""
+
+ascii = from_mars_list_py(mars_text)
+q = PyQube.from_ascii(ascii)
+print(q)
+</code></pre>
+<hr>
+<h3 id="from_fdb_list_pyitems-liststr---str"><a class="header" href="#from_fdb_list_pyitems-liststr---str"><code>from_fdb_list_py(items: list[str]) -&gt; str</code></a></h3>
+<p>Build a Qube from a list of FDB-style comma-separated path strings. Returns an ASCII Qube string.</p>
+<p>Each string is a comma-separated sequence of <code>key=value</code> segments (e.g. <code>"class=od,expver=0001,param=1/2"</code>).</p>
+<pre><code class="language-python">from qubed_meteo import from_fdb_list_py
+from qubed import PyQube
+
+items = [
+    "class=od,expver=0001,param=1/2",
+    "class=rd,expver=0003,param=3/4",
+    "class=rd,expver=0002,param=3/4",
+]
+
+ascii = from_fdb_list_py(items)
+q = PyQube.from_ascii(ascii)
+print(q)
+# root
+# ├── class=od
+# │   └── expver=0001
+# │       └── param=1/2
+# └── class=rd
+#     └── expver=0002/0003
+#         └── param=3/4
+</code></pre>
+<hr>
+<h3 id="to_dss_constraints_pyascii-str---str"><a class="header" href="#to_dss_constraints_pyascii-str---str"><code>to_dss_constraints_py(ascii: str) -&gt; str</code></a></h3>
+<p>Convert an ASCII Qube string to DSS-style constraints JSON. Returns a JSON string (array of maps).</p>
+<pre><code class="language-python">from qubed_meteo import to_dss_constraints_py
+import json
+
+ascii = """root
+├── class=od, expver=0001/0002, param=1/2
+└── class=rd, expver=0003, param=3/4"""
+
+constraints_json = to_dss_constraints_py(ascii)
+constraints = json.loads(constraints_json)
+
+for c in constraints:
+    print(c)
+# {"class": ["od"], "expver": ["0001", "0002"], "param": ["1", "2"]}
+# {"class": ["rd"], "expver": ["0003"], "param": ["3", "4"]}
+</code></pre>
+<p>Each object in the array has the same set of dimension keys. Dimensions not present in a particular datacube get an empty array <code>[]</code>.</p>
+<hr>
+<h2 id="complete-workflow-example"><a class="header" href="#complete-workflow-example">Complete Workflow Example</a></h2>
+<pre><code class="language-python">from qubed import PyQube
+from qubed_meteo import from_fdb_list_py, to_dss_constraints_py
+import json
+
+# 1. Ingest from FDB listing
+fdb_items = [
+    "class=od,expver=0001,param=1/2",
+    "class=od,expver=0002,param=1/2",
+    "class=rd,expver=0001,param=1/2/3",
+]
+
+qube = PyQube.from_ascii(from_fdb_list_py(fdb_items))
+print(f"Built qube with {len(qube)} identifiers")
+print(qube)
+
+# 2. Export to DSS constraints
+constraints = json.loads(to_dss_constraints_py(str(qube)))
+print(json.dumps(constraints, indent=2))
+
+# 3. Merge with another qube
+extra = PyQube.from_ascii("root\n└── class=xd, expver=0001, param=99")
+qube.append(extra)
+print(qube)
+</code></pre>
+<hr>
+<h2 id="notes"><a class="header" href="#notes">Notes</a></h2>
+<ul>
+<li>All adapter functions return ASCII strings as a lightweight bridge format. Use <code>PyQube.from_ascii()</code> to convert to a full <code>PyQube</code> object.</li>
+<li>Leading zeros in coordinate values (e.g. <code>"0001"</code>) are preserved through all adapter functions.</li>
+<li>The functions raise <code>ValueError</code> on parse failures.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-c2a407aa.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+
+    </div>
+    </body>
+</html>

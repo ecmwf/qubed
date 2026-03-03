@@ -59,7 +59,7 @@ println!("{}", qube.to_ascii());
 **Trait:** `qubed_meteo::adapters::fdb::FromFDBList`
 
 ```rust
-fn from_fdb_list(items: &[String]) -> Result<Qube, String>
+fn from_fdb_list(request_map: &serde_json::Value) -> Result<Qube, String>
 ```
 
 Builds a Qube from FDB-style comma-separated path strings, as produced by the `rsfdb` listing tools.
@@ -83,12 +83,18 @@ class=rd,expver=0003,param=3/4
 ```rust
 use qubed::Qube;
 use qubed_meteo::adapters::fdb::FromFDBList;
+use serde_json::json;
 
-let items = vec![
-    "class=od,expver=0001,param=1/2".to_string(),
-    "class=rd,expver=0003,param=3/4".to_string(),
-];
-let qube = Qube::from_fdb_list(&items).unwrap();
+let request_map = json!({
+  "class" : "od",
+  "expver" : "0001",
+  "stream" : "oper",
+  "time" : "0000",
+  "domain" : "g",
+  "levtype" : "sfc",
+});
+
+let qube = Qube::from_fdb_list(&request_map).unwrap();
 println!("{}", qube.to_ascii());
 ```
 

@@ -26,8 +26,10 @@ fn py_qubed_meteo_module(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<(
 }
 
 #[pyfunction]
-pub fn from_fdb_list_py(items: Vec<String>) -> PyResult<String> {
-    match Qube::from_fdb_list(&items) {
+pub fn from_fdb_list_py(request_json: &str) -> PyResult<String> {
+    let v: serde_json::Value =
+        serde_json::from_str(request_json).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    match Qube::from_fdb_list(&v) {
         Ok(qube) => Ok(qube.to_ascii()),
         Err(e) => Err(PyValueError::new_err(e)),
     }

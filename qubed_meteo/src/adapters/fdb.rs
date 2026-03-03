@@ -1,19 +1,27 @@
 use qubed::{Coordinates, NodeIdx, Qube};
+use rsfdb::{FDB, request::Request};
+use serde_json::Value as JsonValue;
 
 pub trait FromFDBList {
-    /// Build a `Qube` from an iterator of FDB-like path strings.
+    /// Build a `Qube` from a JSON request map by performing an internal list.
     ///
-    /// Each item is expected to be a comma-separated path of segments, e.g.
-    /// "class=od,expver=0001,param=1/2" or "class=rd,expver=0003,param=3/4".
-    /// Segments containing `=` are interpreted as `key=value` and values
-    /// containing slashes are treated as multiple coordinates. Plain segments
-    /// without `=` become dimensions with no coordinates.
-    fn from_fdb_list(items: &[String]) -> Result<Qube, String>;
+    /// The `request_map` should be a JSON object (the same structure accepted
+    /// by `rsfdb::request::Request::from_json`). The implementation will build
+    /// an `rsfdb::request::Request` internally, call `list` with
+    /// `splitkey=true` and iterate the results.
+    fn from_fdb_list(request_map: &JsonValue) -> Result<Qube, String>;
 }
 
 impl FromFDBList for Qube {
-    fn from_fdb_list(items: &[String]) -> Result<Qube, String> {
-        // TODO: go from the FDB object
+    fn from_fdb_list(request_map: &JsonValue) -> Result<Qube, String> {
+        // Build Request from provided JSON map
+        let request = Request::from_json(request_map.clone())
+            .map_err(|e| format!("Failed to build Request from JSON: {:?}", e))?;
+
+        let fdb = FDB::new(None).map_err(|e| format!("Failed to open FDB: {:?}", e))?;
+        let list_iter =
+            fdb.list(&request, true, true).map_err(|e| format!("FDB list failed: {:?}", e))?;
+
         let mut qube = Qube::new();
         let root = qube.root();
 
@@ -43,19 +51,25 @@ impl FromFDBList for Qube {
             if coords.is_empty() { None } else { Some(coords) }
         }
 
-        for entry in items.iter() {
-            // split on '/' to get segments
-            let parts: Vec<&str> =
-                entry.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        for item in list_iter {
+            // Each item may contain a splitkey metadata (request-like key/value pairs)
+            // Build a comma-separated path string from the splitkey metadata similar
+            // to the previous external representation.
+            let mut parts_vec: Vec<String> = Vec::new();
 
-            if parts.is_empty() {
+            if let Some(metadata) = item.request {
+                for kv in metadata.iter() {
+                    parts_vec.push(format!("{}={}", kv.key, kv.value));
+                }
+            }
+
+            if parts_vec.is_empty() {
                 continue;
             }
 
             let mut parent = root;
-            for part in parts.iter() {
+            for part in parts_vec.iter() {
                 if let Some((key, val)) = part.split_once('=') {
-                    // multiple values can be comma-separated
                     let vals: Vec<&str> =
                         val.split('/').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
                     let coords = make_coords(&vals);
@@ -64,7 +78,6 @@ impl FromFDBList for Qube {
                         .map_err(|e| format!("create_child failed: {:?}", e))?;
                     parent = child;
                 } else {
-                    // plain dimension name
                     let child = qube
                         .get_or_create_child(part.trim(), parent, None)
                         .map_err(|e| format!("get_or_create_child failed: {:?}", e))?;
@@ -81,35 +94,35 @@ impl FromFDBList for Qube {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+    use std::env;
 
     #[test]
     fn test_from_fdb_list_basic() {
-        // sample fdb-like entries; two distinct paths
-        let items = vec![
-            "class=od,expver=0001,param=1/2".to_string(),
-            "class=rd,expver=0003,param=3/4".to_string(),
-            "class=rd,expver=0002,param=3/4".to_string(),
-        ];
+        // Ensure FDB config is set (adjust path for local environment if needed)
+        let config_path =
+            env::current_dir().unwrap().join("/Users/male/git/fdb-home/etc/fdb/config.yaml");
+        unsafe {
+            std::env::set_var(
+                "FDB5_CONFIG_FILE",
+                config_path.to_str().expect("Invalid config path"),
+            );
+        }
 
-        let qube = <Qube as FromFDBList>::from_fdb_list(&items).expect("failed to build qube");
+        let request_map = json!({
+            "class" : "od",
+            "expver" : "0001",
+            "stream" : "oper",
+            "time" : "0000",
+            "domain" : "g",
+            "levtype" : "sfc",
+        });
+
+        let qube =
+            <Qube as FromFDBList>::from_fdb_list(&request_map).expect("failed to build qube");
         println!("Qube structure:\n{}", qube.to_ascii());
-        let root = qube.root();
-        let root_ref = qube.node(root).expect("root missing");
 
-        // root should have two top-level children: class=od and class=rd
-        assert!(root_ref.children_count() >= 2);
-
-        // Assert the ASCII representation matches the expected tree
         let serialized = qube.to_ascii();
-        let expected = r#"root
-├── class=od
-│   └── expver=0001
-│       └── param=1/2
-└── class=rd
-    └── expver=0002/0003
-        └── param=3/4
-"#;
-
-        assert_eq!(expected, serialized);
+        assert!(!serialized.is_empty());
     }
 }

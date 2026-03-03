@@ -6,53 +6,25 @@ use std::env;
 use std::time::Instant;
 
 fn main() {
-    // Create FDB handle
+    // Ensure FDB config is set so the internal listing can open the DB
     let config_path =
         env::current_dir().unwrap().join("/Users/male/git/fdb-home/etc/fdb/config.yaml");
     unsafe {
         std::env::set_var("FDB5_CONFIG_FILE", config_path.to_str().expect("Invalid config path"));
     }
-    let fdb = FDB::new(None).unwrap();
 
-    let list_request = Request::from_json(json!({
+    let request_map = json!({
         "class" : "od",
         "expver" : "0001",
         "stream" : "oper",
         "time" : "0000",
         "domain" : "g",
         "levtype" : "sfc",
-    }))
-    .expect("Failed to create request from JSON");
-
-    // Create a list iterator with splitkey enabled
-    let list_iter = fdb.list(&list_request, true, true).expect("Failed to create list iterator");
-
-    println!("FDB list iterator created successfully. Processing entries...");
-
-    let items: Vec<String> = list_iter
-        .map(|item| {
-            // Start with an empty base string (do not include the uri)
-            let mut s = String::new();
-
-            // If splitkey metadata (request) is present, append key=value pairs
-            if let Some(metadata) = item.request {
-                for kv in metadata.iter() {
-                    if !s.is_empty() {
-                        s.push(',');
-                    }
-                    s.push_str(&format!("{}={}", kv.key, kv.value));
-                }
-            }
-
-            s
-        })
-        .collect();
-
-    println!("{}", items.join("\n"));
-
+    });
     let start_time = Instant::now();
 
-    let qube = Qube::from_fdb_list(&items).expect("Failed to build Qube from FDB list");
+    // Build the Qube directly from the request; the adapter will open FDB and list.
+    let qube = Qube::from_fdb_list(&request_map).expect("Failed to build Qube from FDB list");
 
     println!("Qube structure:\n{}", qube.to_ascii());
 
