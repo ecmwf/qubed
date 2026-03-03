@@ -8,9 +8,7 @@ members = [
     "py_qubed_meteo",
 ]
 
-[patch.'https://github.com/ecmwf/rsfdb']
-rsfdb = { path = "/Users/male/git/rsfdb" }
-
-[patch.'https://github.com/ecmwf-projects/rsfindlibs']
-rsfindlibs = { path = "/Users/male/git/rsfindlibs" }
+[patch.crates-io]
+rsfdb = { git = "https://github.com/ecmwf/rsfdb.git", branch = "main" }
+rsfindlibs = { git = "https://github.com/ecmwf-projects/rsfindlibs.git", branch = "main" }
 
