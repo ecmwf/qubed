@@ -7,8 +7,3 @@ members = [
     "py_qubed",
     "py_qubed_meteo",
 ]
-
-[patch.crates-io]
-rsfdb = { git = "https://github.com/ecmwf/rsfdb.git", branch = "main" }
-rsfindlibs = { git = "https://github.com/ecmwf-projects/rsfindlibs.git", branch = "main" }
-

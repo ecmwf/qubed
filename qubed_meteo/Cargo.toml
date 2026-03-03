@@ -7,10 +7,15 @@ edition = "2024"
 qubed = { path = "../qubed" }
 serde = "1.0.228"
 serde_json = "1.0.145"
-rsfdb = { git = "https://github.com/ecmwf/rsfdb.git", branch = "main" }
 
 [lib]
 path = "src/lib.rs"
 crate-type = ["rlib"]
+
+[patch.'https://github.com/ecmwf/rsfdb']
+rsfdb = { path = "../rsfdb" }
+
+[patch.'https://github.com/ecmwf-projects/rsfindlibs']
+rsfindlibs = { path = "../rsfindlibs" }
 
 
