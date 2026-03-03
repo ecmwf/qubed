@@ -42,7 +42,7 @@ impl FromDssConstraints for Qube {
             other_qubes.push(qube_part);
         }
 
-        // Use union_many to merge all Qubes together
+        // Use append_many to merge all Qubes together
         qube.append_many(&mut other_qubes);
 
         Ok(qube)

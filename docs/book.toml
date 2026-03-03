@@ -1,0 +1,8 @@
+[book]
+title = "Qubed API Documentation"
+authors = ["ECMWF"]
+
+[build]
+create-missing = true
+
+[preprocessor.links]

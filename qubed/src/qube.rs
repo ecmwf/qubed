@@ -146,7 +146,7 @@ impl Qube {
         Ok(true)
     }
 
-    pub fn create_child(
+    pub fn get_or_create_child(
         &mut self,
         key: &str,
         parent_id: NodeIdx,
@@ -385,9 +385,10 @@ impl Qube {
                 let child_coords = other.node_ref(child_id).unwrap().coords().clone();
 
                 // Create a new child node in `self` with the same dimension and coordinates
-                // let new_child = self.create_child(&self.dimension_str(&dim).unwrap(), new_node, Some(child_coords)).unwrap();
+                // let new_child = self.get_or_create_child(&self.dimension_str(&dim).unwrap(), new_node, Some(child_coords)).unwrap();
                 let dim_str = other.dimension_str(&dim).unwrap().to_owned(); // Immutable borrow ends here
-                let new_child = self.create_child(&dim_str, new_node, Some(child_coords)).unwrap(); // Mutable borrow starts here
+                let new_child =
+                    self.get_or_create_child(&dim_str, new_node, Some(child_coords)).unwrap(); // Mutable borrow starts here
 
                 // Recursively copy the subtree of the child
                 self.copy_subtree(other, child_id, new_child);
@@ -407,7 +408,7 @@ impl Qube {
                 // Create a new child node in `target_node` with the same dimension and coordinates
                 let dim_str = self.dimension_str(&dim).unwrap().to_owned();
                 let new_child = self
-                    .create_child(&dim_str, target_node, Some(child_coords))
+                    .get_or_create_child(&dim_str, target_node, Some(child_coords))
                     .expect("Failed to create child node");
 
                 // Recursively copy the subtree of the child
@@ -538,8 +539,8 @@ mod tests {
         let mut qube = Qube::new();
         let root = qube.root();
 
-        let child1 = qube.create_child("dim1", root, Some(1.into())).unwrap();
-        let child2 = qube.create_child("dim2", root, Some(2.into())).unwrap();
+        let child1 = qube.get_or_create_child("dim1", root, Some(1.into())).unwrap();
+        let child2 = qube.get_or_create_child("dim2", root, Some(2.into())).unwrap();
 
         let hash_root = qube.node(root).unwrap().structural_hash().unwrap();
         let hash_child1 = qube.node(child1).unwrap().structural_hash().unwrap();
@@ -554,7 +555,7 @@ mod tests {
     fn test_node_ref() {
         let mut qube = Qube::new();
         let root = qube.root();
-        let child = qube.create_child("test", root, Some(42.into())).unwrap();
+        let child = qube.get_or_create_child("test", root, Some(42.into())).unwrap();
 
         let node = qube.node(child).unwrap();
         assert_eq!(node.dimension(), Some("test"));
@@ -568,13 +569,14 @@ mod tests {
         let root = qube.root();
 
         // create two distinct coordinate nodes under same dimension, and a duplicate
-        let child1 = qube.create_child("dim1", root, Some(1.into())).unwrap();
-        let _child2 = qube.create_child("dim1", root, Some(2.into())).unwrap();
+        let child1 = qube.get_or_create_child("dim1", root, Some(1.into())).unwrap();
+        let _child2 = qube.get_or_create_child("dim1", root, Some(2.into())).unwrap();
         // creating the same coords again should return the existing node
-        let child1_dup = qube.create_child("dim1", root, Some(1.into())).unwrap();
+        let child1_dup = qube.get_or_create_child("dim1", root, Some(1.into())).unwrap();
         assert_eq!(child1, child1_dup);
 
-        let _grandchild1_dup = qube.create_child("dim3", child1_dup, Some(4.into())).unwrap();
+        let _grandchild1_dup =
+            qube.get_or_create_child("dim3", child1_dup, Some(4.into())).unwrap();
 
         // collect unique coordinates per dimension
         let map = qube.all_unique_dim_coords();
@@ -585,7 +587,7 @@ mod tests {
         assert_eq!(coords.len(), 2);
 
         // add another dimension to ensure multiple keys are handled
-        qube.create_child("dim2", root, Some(3.into())).unwrap();
+        qube.get_or_create_child("dim2", root, Some(3.into())).unwrap();
         let map2 = qube.all_unique_dim_coords();
         assert_eq!(map2.len(), 3);
     }

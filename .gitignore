@@ -9,6 +9,7 @@ raw_list
 deps/
 docs/_build/
 docs/jupyter_execute
+docs/book/
 target/
 *.so
 _build/
@@ -29,6 +30,8 @@ test_scripts
 tests/example_qubes
 **/*venv*
 .idea/
+*.grib
+fdb
 
 
 # Added by cargo

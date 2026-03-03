@@ -29,7 +29,7 @@ fn parse_json_object(
             .ok_or_else(|| format!("Invalid node format: '{}', expected 'key=value'", key_value))?;
 
         let values = Coordinates::from_string(values_str);
-        let child = qube.create_child(key, parent, Some(values))?;
+        let child = qube.get_or_create_child(key, parent, Some(values))?;
 
         if let Value::Object(child_map) = child_value {
             parse_json_object(qube, child, child_map)?;
@@ -45,6 +45,127 @@ impl Qube {
         let mut root_map = Map::new();
         serialize_children_json(self, self.root(), &mut root_map);
         Value::Object(root_map)
+    }
+}
+
+impl Qube {
+    /// Serialize the Qube into an "arena" JSON layout: a flat array of node
+    /// records. Each record contains the dimension name, the coordinates as a
+    /// string, and the index of the parent node (or null for the root). The
+    /// nodes are emitted in BFS order so parents always precede children.
+    pub fn to_arena_json(&self) -> Value {
+        use std::collections::{HashMap, VecDeque};
+
+        let mut order: Vec<NodeIdx> = Vec::new();
+        let mut q: VecDeque<NodeIdx> = VecDeque::new();
+        q.push_back(self.root());
+
+        while let Some(id) = q.pop_front() {
+            order.push(id);
+            if let Some(nref) = self.node(id) {
+                for child in nref.all_children() {
+                    q.push_back(child);
+                }
+            }
+        }
+
+        let mut idx_map: HashMap<NodeIdx, usize> = HashMap::new();
+        for (i, id) in order.iter().enumerate() {
+            idx_map.insert(*id, i);
+        }
+
+        let mut nodes_json: Vec<Value> = Vec::with_capacity(order.len());
+        for id in order.iter() {
+            let nref = self.node(*id).expect("valid node");
+            let dim = nref.dimension().unwrap_or("root").to_string();
+            // Preserve native types for coordinates using Coordinates -> JSON helpers
+            let coords_value = nref.coordinates().to_json_value();
+
+            let parent_idx = nref.parent().map(|p| idx_map.get(&p).copied().unwrap());
+
+            let children_indices: Vec<Value> = nref
+                .all_children()
+                .map(|c| Value::Number(serde_json::Number::from(*idx_map.get(&c).unwrap() as u64)))
+                .collect();
+
+            let mut map = Map::new();
+            map.insert("dim".to_string(), Value::String(dim));
+            map.insert("coords".to_string(), coords_value);
+            match parent_idx {
+                Some(pi) => map.insert(
+                    "parent".to_string(),
+                    Value::Number(serde_json::Number::from(pi as u64)),
+                ),
+                None => map.insert("parent".to_string(), Value::Null),
+            };
+            map.insert("children".to_string(), Value::Array(children_indices));
+
+            nodes_json.push(Value::Object(map));
+        }
+
+        Value::Array(nodes_json)
+    }
+
+    /// Reconstruct a Qube from an arena JSON layout created by `to_arena_json`.
+    pub fn from_arena_json(value: Value) -> Result<Qube, String> {
+        use std::collections::HashMap;
+
+        let arr = match value {
+            Value::Array(a) => a,
+            _ => return Err("Expected JSON array for arena layout".to_string()),
+        };
+
+        // We will create nodes in the same order. Start with a fresh Qube which
+        // already contains a root node.
+        let mut qube = Qube::new();
+        let mut index_to_node: HashMap<usize, NodeIdx> = HashMap::new();
+
+        for (i, item) in arr.into_iter().enumerate() {
+            let obj =
+                item.as_object().ok_or_else(|| format!("Arena entry {} is not an object", i))?;
+            let dim = obj
+                .get("dim")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| format!("Arena entry {} missing dim", i))?;
+            let coords_value =
+                obj.get("coords").ok_or_else(|| format!("Arena entry {} missing coords", i))?;
+
+            // Determine parent: if null or 0 -> root
+            let parent_idx_opt = match obj.get("parent") {
+                Some(Value::Null) | None => None,
+                Some(v) => v.as_u64().map(|n| n as usize),
+            };
+
+            let parent_node = if let Some(pi) = parent_idx_opt {
+                // parent should have been created earlier
+                *index_to_node.get(&pi).ok_or_else(|| format!("Parent index {} not found", pi))?
+            } else {
+                qube.root()
+            };
+
+            // create child under parent
+            // Parse coords using Coordinates::from_json_value so native JSON types
+            // (numbers/strings/mixed) are preserved.
+            let coords_parsed = Coordinates::from_json_value(coords_value)?;
+            let created = if i == 0 {
+                // first entry corresponds to root; update root coords if provided
+                // skip creating a new node; optionally set coords on root
+                index_to_node.insert(0, qube.root());
+                if !coords_parsed.is_empty() {
+                    // mutate root node coords
+                    if let Some(root_node) = qube.node_mut(qube.root()) {
+                        *root_node.coords_mut() = coords_parsed.clone();
+                    }
+                }
+                qube.root()
+            } else {
+                qube.get_or_create_child(dim, parent_node, Some(coords_parsed))?
+            };
+
+            index_to_node.insert(i, created);
+        }
+
+        Ok(qube)
     }
 }
 
@@ -153,4 +274,52 @@ mod json_tests {
 
     #[test]
     fn test_from_json_large() {}
+
+    #[test]
+    fn test_arena_roundtrip() {
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        // branch 1: class=od / expver=0001 / param=1
+        let class1 = {
+            let mut c = Coordinates::Empty;
+            c.append("od".to_string());
+            qube.get_or_create_child("class", root, Some(c)).unwrap()
+        };
+        let exp1 = {
+            let mut c = Coordinates::Empty;
+            c.append("0001".to_string());
+            qube.get_or_create_child("expver", class1, Some(c)).unwrap()
+        };
+        let _p1 = {
+            let mut c = Coordinates::Empty;
+            c.append("1".to_string());
+            qube.get_or_create_child("param", exp1, Some(c)).unwrap()
+        };
+
+        // branch 2: class=rd / expver=0003 / param=3
+        let class2 = {
+            let mut c = Coordinates::Empty;
+            c.append("rd".to_string());
+            qube.get_or_create_child("class", root, Some(c)).unwrap()
+        };
+        let exp2 = {
+            let mut c = Coordinates::Empty;
+            c.append("0003".to_string());
+            qube.get_or_create_child("expver", class2, Some(c)).unwrap()
+        };
+        let _p2 = {
+            let mut c = Coordinates::Empty;
+            c.append("3".to_string());
+            qube.get_or_create_child("param", exp2, Some(c)).unwrap()
+        };
+
+        // Serialize arena JSON and print
+        let arena = qube.to_arena_json();
+        println!("{}", serde_json::to_string_pretty(&arena).unwrap());
+
+        // Reconstruct and verify structure equality via to_json()
+        let reconstructed = Qube::from_arena_json(arena).expect("from_arena_json");
+        assert_eq!(qube.to_json(), reconstructed.to_json());
+    }
 }

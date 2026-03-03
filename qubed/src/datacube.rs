@@ -58,7 +58,7 @@ impl Qube {
             for dim in order_iter {
                 if let Some(coords) = datacube.coordinates.get(dim) {
                     parent = qube
-                        .create_child(&dim, parent, Some(coords.clone()))
+                        .get_or_create_child(&dim, parent, Some(coords.clone()))
                         .expect("Failed to create dimension");
                 }
             }
@@ -70,7 +70,7 @@ impl Qube {
                 continue;
             }
             parent = qube
-                .create_child(&dim, parent, Some(coords.clone()))
+                .get_or_create_child(&dim, parent, Some(coords.clone()))
                 .expect("Failed to create dimension");
         }
 
@@ -123,7 +123,7 @@ impl Qube {
 
         //     if let Some(dim) = next_dim {
         //         if let Some(coords) = datacube.coordinates.remove(&dim) {
-        //             parent = self.create_child(&dim, parent, Some(coords)).expect("Failed to create dimension");
+        //             parent = self.get_or_create_child(&dim, parent, Some(coords)).expect("Failed to create dimension");
         //             used_dimensions.push(dim);
         //         }
         //     } else {

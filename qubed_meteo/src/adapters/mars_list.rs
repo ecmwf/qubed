@@ -23,7 +23,15 @@ impl FromMARSList for Qube {
                 if s.is_empty() {
                     continue;
                 }
-                if let Ok(i) = s.parse::<i32>() {
+                // Check for leading zeros to preserve formatting (e.g., "0001")
+                let has_leading_zero = s.len() > 1
+                    && s.starts_with('0')
+                    && s.chars().nth(1).map_or(false, |c| c.is_ascii_digit());
+
+                if has_leading_zero {
+                    // Preserve as string to keep formatting
+                    coords.append(s.to_string());
+                } else if let Ok(i) = s.parse::<i32>() {
                     coords.append(i);
                 } else if let Ok(f) = s.parse::<f64>() {
                     coords.append(f);
@@ -82,14 +90,14 @@ impl FromMARSList for Qube {
                                 .collect();
                             let coords = make_coords(&vals);
                             let child = qube
-                                .create_child(key.trim(), parent, coords)
+                                .get_or_create_child(key.trim(), parent, coords)
                                 .map_err(|e| format!("create_child failed: {:?}", e))?;
                             parent = child;
                             last_created = Some(child);
                         } else {
                             let child = qube
-                                .create_child(tok, parent, None)
-                                .map_err(|e| format!("create_child failed: {:?}", e))?;
+                                .get_or_create_child(tok, parent, None)
+                                .map_err(|e| format!("get_or_create_child failed: {:?}", e))?;
                             parent = child;
                             last_created = Some(child);
                         }
@@ -107,13 +115,13 @@ impl FromMARSList for Qube {
                                 .collect();
                             let coords = make_coords(&vals);
                             let child = qube
-                                .create_child(key.trim(), stack_parent, coords)
-                                .map_err(|e| format!("create_child failed: {:?}", e))?;
+                                .get_or_create_child(key.trim(), stack_parent, coords)
+                                .map_err(|e| format!("get_or_create_child failed: {:?}", e))?;
                             last_created = Some(child);
                         } else {
                             let child = qube
-                                .create_child(tok, stack_parent, None)
-                                .map_err(|e| format!("create_child failed: {:?}", e))?;
+                                .get_or_create_child(tok, stack_parent, None)
+                                .map_err(|e| format!("get_or_create_child failed: {:?}", e))?;
                             last_created = Some(child);
                         }
                     }
@@ -127,14 +135,14 @@ impl FromMARSList for Qube {
                             val.split('/').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
                         let coords = make_coords(&vals);
                         let child = qube
-                            .create_child(key.trim(), current_parent, coords)
-                            .map_err(|e| format!("create_child failed: {:?}", e))?;
+                            .get_or_create_child(key.trim(), current_parent, coords)
+                            .map_err(|e| format!("get_or_create_child failed: {:?}", e))?;
                         current_parent = child;
                         last_created = Some(child);
                     } else {
                         let child = qube
-                            .create_child(tok, current_parent, None)
-                            .map_err(|e| format!("create_child failed: {:?}", e))?;
+                            .get_or_create_child(tok, current_parent, None)
+                            .map_err(|e| format!("get_or_create_child failed: {:?}", e))?;
                         current_parent = child;
                         last_created = Some(child);
                     }

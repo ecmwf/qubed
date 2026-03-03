@@ -33,12 +33,12 @@ fn compress_uncompressed_tree() {
 
     let compressed_input_a = r#"root
 ├── class=1
-│   └── expver=1/2
+│   └── expver=0001/0002
 │       └── param=1/2
 └── class=2
-    ├── expver=1
+    ├── expver=0001
     │   └── param=1/2/3
-    └── expver=2
+    └── expver=0002
         └── param=1/2
 "#;
 

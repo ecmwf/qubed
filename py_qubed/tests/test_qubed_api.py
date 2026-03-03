@@ -72,3 +72,37 @@ def test_str_and_len_dunder_methods() -> None:
 """)
     assert str(qube) == qube.to_ascii()
     assert len(qube) == 1
+
+
+def test_to_from_arena_json_roundtrip() -> None:
+    qube = PyQube.from_ascii("""root
+└── class=5
+    └── param=42
+""")
+
+    arena_json = qube.to_arena_json()
+    # should be valid JSON representing an array
+    import json
+
+    parsed = json.loads(arena_json)
+    assert isinstance(parsed, list)
+    # expect at least one node entry with dim and coords
+    assert any(isinstance(item, dict) and "dim" in item and "coords" in item for item in parsed)
+
+    # Reconstruct and verify ascii equality
+    reconstructed = PyQube.from_arena_json(arena_json)
+    assert reconstructed.to_ascii() == qube.to_ascii()
+
+
+def test_arena_preserves_leading_zeros() -> None:
+    qube = PyQube.from_ascii("""root
+└── class=od
+    └── expver=0001
+        └── param=1
+""")
+
+    arena_json = qube.to_arena_json()
+    assert "0001" in arena_json
+
+    reconstructed = PyQube.from_arena_json(arena_json)
+    assert "expver=0001" in reconstructed.to_ascii()

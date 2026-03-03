@@ -89,8 +89,11 @@ impl Qube {
                         continue;
                     }
 
-                    let new_child =
-                        result.create_child(dimension_str, parents.right, Some(intersection))?;
+                    let new_child = result.get_or_create_child(
+                        dimension_str,
+                        parents.right,
+                        Some(intersection),
+                    )?;
 
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
@@ -110,7 +113,7 @@ impl Qube {
 
                     let coordinates = child_node.coordinates();
 
-                    let new_child = result.create_child(
+                    let new_child = result.get_or_create_child(
                         dimension_str,
                         parents.right,
                         Some(coordinates.clone()),
@@ -301,7 +304,7 @@ mod tests {
     ├── expver=1
     │   ├── param=1
     │   └── param=2
-    └── expver=2
+    └── expver=0002
         ├── param=1
         └── param=2
 "#;

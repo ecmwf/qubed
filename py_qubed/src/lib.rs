@@ -2,6 +2,7 @@ use ::qubed::Qube;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyModule};
+use serde_json::Value as JsonValue;
 
 #[pyclass(unsendable)]
 pub struct PyQube {
@@ -43,6 +44,11 @@ impl PyQube {
         Ok(py_list.into_any().unbind())
     }
 
+    pub fn to_arena_json(&self) -> PyResult<String> {
+        let v = self.inner.to_arena_json();
+        serde_json::to_string(&v).map_err(|e| PyTypeError::new_err(e.to_string()))
+    }
+
     #[pyo3(name = "__str__")]
     pub fn py_str(&self) -> PyResult<String> {
         self.to_ascii()
@@ -51,6 +57,16 @@ impl PyQube {
     #[pyo3(name = "__len__")]
     pub fn py_len(&self) -> PyResult<usize> {
         Ok(self.inner.datacube_count())
+    }
+
+    #[staticmethod]
+    pub fn from_arena_json(input: &str) -> PyResult<Self> {
+        let v: JsonValue =
+            serde_json::from_str(input).map_err(|e| PyTypeError::new_err(e.to_string()))?;
+        match Qube::from_arena_json(v) {
+            Ok(qube) => Ok(PyQube { inner: qube }),
+            Err(e) => Err(PyTypeError::new_err(e)),
+        }
     }
 
     pub fn append(&mut self, other: &Bound<'_, PyQube>) -> PyResult<()> {
