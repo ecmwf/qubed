@@ -92,11 +92,11 @@ impl Qube {
                         Some(actual_intersection.clone()),
                     );
                     let new_node_a = self
-                        .create_child(&dim_str, parent_a, Some(actual_intersection.clone()))
+                        .get_or_create_child(&dim_str, parent_a, Some(actual_intersection.clone()))
                         .unwrap();
 
                     let new_node_b = other
-                        .create_child(&other_dim_str, parent_b, Some(actual_intersection))
+                        .get_or_create_child(&other_dim_str, parent_b, Some(actual_intersection))
                         .unwrap();
 
                     if check_new_child_a.unwrap() {
@@ -118,7 +118,7 @@ impl Qube {
                 // If there are values only in other, create a new node for those values.
                 if only_other.len() != 0 {
                     let new_node_only_b = self
-                        .create_child(&other_dim_str, parent_a, Some(only_other.clone()))
+                        .get_or_create_child(&other_dim_str, parent_a, Some(only_other.clone()))
                         .unwrap();
 
                     self.copy_subtree(other, *other_node, new_node_only_b);

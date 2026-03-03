@@ -73,7 +73,7 @@ fn parse_children(
 
         let coordinates = Coordinates::from_string(values);
 
-        let child = qube.create_child(key, parent, Some(coordinates))?;
+        let child = qube.get_or_create_child(key, parent, Some(coordinates))?;
 
         // Consume the input line, we've used it now
         lines.next();

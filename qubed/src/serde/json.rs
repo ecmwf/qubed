@@ -29,7 +29,7 @@ fn parse_json_object(
             .ok_or_else(|| format!("Invalid node format: '{}', expected 'key=value'", key_value))?;
 
         let values = Coordinates::from_string(values_str);
-        let child = qube.create_child(key, parent, Some(values))?;
+        let child = qube.get_or_create_child(key, parent, Some(values))?;
 
         if let Value::Object(child_map) = child_value {
             parse_json_object(qube, child, child_map)?;
@@ -172,7 +172,7 @@ impl Qube {
                 }
                 qube.root()
             } else {
-                qube.create_child(dim, parent_node, Some(coords_parsed))?
+                qube.get_or_create_child(dim, parent_node, Some(coords_parsed))?
             };
 
             index_to_node.insert(i, created);
@@ -297,34 +297,34 @@ mod json_tests {
         let class1 = {
             let mut c = Coordinates::Empty;
             c.append("od".to_string());
-            qube.create_child("class", root, Some(c)).unwrap()
+            qube.get_or_create_child("class", root, Some(c)).unwrap()
         };
         let exp1 = {
             let mut c = Coordinates::Empty;
             c.append("0001".to_string());
-            qube.create_child("expver", class1, Some(c)).unwrap()
+            qube.get_or_create_child("expver", class1, Some(c)).unwrap()
         };
         let _p1 = {
             let mut c = Coordinates::Empty;
             c.append("1".to_string());
-            qube.create_child("param", exp1, Some(c)).unwrap()
+            qube.get_or_create_child("param", exp1, Some(c)).unwrap()
         };
 
         // branch 2: class=rd / expver=0003 / param=3
         let class2 = {
             let mut c = Coordinates::Empty;
             c.append("rd".to_string());
-            qube.create_child("class", root, Some(c)).unwrap()
+            qube.get_or_create_child("class", root, Some(c)).unwrap()
         };
         let exp2 = {
             let mut c = Coordinates::Empty;
             c.append("0003".to_string());
-            qube.create_child("expver", class2, Some(c)).unwrap()
+            qube.get_or_create_child("expver", class2, Some(c)).unwrap()
         };
         let _p2 = {
             let mut c = Coordinates::Empty;
             c.append("3".to_string());
-            qube.create_child("param", exp2, Some(c)).unwrap()
+            qube.get_or_create_child("param", exp2, Some(c)).unwrap()
         };
 
         // Serialize arena JSON and print
