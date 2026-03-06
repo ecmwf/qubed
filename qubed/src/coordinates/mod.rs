@@ -1,9 +1,12 @@
+pub mod datetime;
 pub mod floats;
 pub mod integers;
 pub mod ops;
 pub mod strings;
 use std::hash::Hash;
 
+use chrono::NaiveDateTime;
+use datetime::DateTimeCoordinates;
 use floats::FloatCoordinates;
 use integers::IntegerCoordinates;
 use strings::StringCoordinates;
@@ -20,6 +23,7 @@ pub enum Coordinates {
     Integers(IntegerCoordinates),
     Floats(FloatCoordinates),
     Strings(StringCoordinates),
+    DateTimes(DateTimeCoordinates),
     Mixed(Box<MixedCoordinates>),
 }
 
@@ -27,6 +31,7 @@ pub enum CoordinateTypes {
     Integer(i32),
     Float(f64),
     String(String),
+    DateTime(NaiveDateTime),
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -34,6 +39,7 @@ pub struct MixedCoordinates {
     integers: integers::IntegerCoordinates,
     floats: FloatCoordinates,
     strings: StringCoordinates,
+    datetimes: DateTimeCoordinates,
 }
 
 impl Coordinates {
@@ -73,6 +79,7 @@ impl Coordinates {
             Coordinates::Empty => "".to_string(),
             Coordinates::Integers(ints) => ints.to_string(),
             Coordinates::Floats(floats) => floats.to_string(),
+            Coordinates::DateTimes(datetimes) => datetimes.to_string(),
             Coordinates::Strings(strings) => strings.to_string(),
             Coordinates::Mixed(_) => {
                 todo!()
@@ -86,6 +93,7 @@ impl Coordinates {
             Coordinates::Integers(ints) => ints.len(),
             Coordinates::Floats(floats) => floats.len(),
             Coordinates::Strings(strings) => strings.len(),
+            Coordinates::DateTimes(datetimes) => datetimes.len(),
             Coordinates::Mixed(mixed) => {
                 mixed.integers.len() + mixed.floats.len() + mixed.strings.len()
             }
@@ -104,6 +112,7 @@ impl Coordinates {
         match (self, coord_type) {
             (Coordinates::Empty, _) => false,
             (Coordinates::Integers(ints), CoordinateTypes::Integer(val)) => ints.contains(val),
+            (Coordinates::DateTimes(_), _) => unimplemented!(),
             (Coordinates::Floats(_), _) => unimplemented!(),
             (Coordinates::Strings(_), _) => unimplemented!(),
             (Coordinates::Mixed(_), _) => unimplemented!(),
@@ -121,6 +130,9 @@ impl Coordinates {
             }
             Coordinates::Strings(strings) => {
                 Box::new(MixedCoordinates { strings: strings.to_owned(), ..Default::default() })
+            }
+            Coordinates::DateTimes(datetimes) => {
+                Box::new(MixedCoordinates { datetimes: datetimes.to_owned(), ..Default::default() })
             }
             Coordinates::Empty => Box::new(MixedCoordinates::default()),
             Coordinates::Mixed(_) => {
@@ -175,6 +187,9 @@ impl Coordinates {
                 mixed.integers.hash(hasher);
                 mixed.floats.hash(hasher);
                 mixed.strings.hash(hasher);
+            }
+            Coordinates::DateTimes(datetimes) => {
+                datetimes.hash(hasher);
             }
         }
     }
@@ -333,6 +348,7 @@ impl Coordinates {
 
                 Value::Object(map)
             }
+            Coordinates::DateTimes(_) => todo!(),
         }
     }
 

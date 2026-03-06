@@ -1,5 +1,6 @@
 use crate::Coordinates;
 use crate::coordinates::CoordinateTypes;
+use chrono::NaiveDateTime;
 
 impl Coordinates {
     pub fn extend(&mut self, new_coords: &Coordinates) {
@@ -47,6 +48,20 @@ impl Coordinates {
                 }
             },
             Coordinates::Empty => {}
+            Coordinates::DateTimes(new_datetimes) => match self {
+                Coordinates::DateTimes(datetimes) => {
+                    datetimes.extend(new_datetimes);
+                }
+                Coordinates::Mixed(mixed) => {
+                    mixed.datetimes.extend(new_datetimes);
+                }
+                Coordinates::Empty => {
+                    let _ = std::mem::replace(self, new_coords.clone());
+                }
+                _ => {
+                    self.convert_to_mixed().extend(new_coords);
+                }
+            },
             Coordinates::Mixed(mixed) => match self {
                 Coordinates::Mixed(self_mixed) => {
                     self_mixed.integers.extend(&mixed.integers);
@@ -83,6 +98,9 @@ impl Coordinates {
             }
             CoordinateTypes::String(val) => {
                 self.append_string(val);
+            }
+            CoordinateTypes::DateTime(val) => {
+                self.append_datetime(val);
             }
         }
     }
@@ -137,6 +155,24 @@ impl Coordinates {
             _ => {
                 self.convert_to_mixed();
                 self.append_integer(value);
+            }
+        }
+    }
+
+    fn append_datetime(&mut self, value: NaiveDateTime) {
+        match self {
+            Coordinates::DateTimes(datetimes) => {
+                datetimes.append(value);
+            }
+            Coordinates::Mixed(mixed) => {
+                mixed.datetimes.append(value);
+            }
+            Coordinates::Empty => {
+                *self = Coordinates::from(value);
+            }
+            _ => {
+                self.convert_to_mixed();
+                self.append_datetime(value);
             }
         }
     }
