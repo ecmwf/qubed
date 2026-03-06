@@ -20,7 +20,7 @@ impl FromFDBList for Qube {
 
         let fdb = FDB::new(None).map_err(|e| format!("Failed to open FDB: {:?}", e))?;
         let list_iter =
-            fdb.list(&request, true, true).map_err(|e| format!("FDB list failed: {:?}", e))?;
+            fdb.list(&request, true, false).map_err(|e| format!("FDB list failed: {:?}", e))?;
 
         let mut qube = Qube::new();
         let root = qube.root();
