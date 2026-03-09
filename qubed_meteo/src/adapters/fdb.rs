@@ -72,6 +72,11 @@ impl FromFDBList for Qube {
                 if let Some((key, val)) = part.split_once('=') {
                     let vals: Vec<&str> =
                         val.split('/').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+
+                    // If there are no value parts (e.g. "key=") skip creating an empty child
+                    if vals.is_empty() {
+                        continue;
+                    }
                     let coords = make_coords(&vals);
                     let child = qube
                         .get_or_create_child(key.trim(), parent, coords)
