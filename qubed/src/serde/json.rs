@@ -166,16 +166,41 @@ impl Qube {
             nodes_json.push(Value::Object(map));
         }
 
-        Value::Array(nodes_json)
+        // Wrap the arena array with a versioned envelope so format changes
+        // can be detected by consumers.
+        let mut root_map = Map::new();
+        root_map.insert("version".to_string(), Value::String("1".to_string()));
+        root_map.insert("qube".to_string(), Value::Array(nodes_json));
+        Value::Object(root_map)
     }
 
     /// Reconstruct a Qube from an arena JSON layout created by `to_arena_json`.
     pub fn from_arena_json(value: Value) -> Result<Qube, String> {
         use std::collections::HashMap;
 
+        // Expect a versioned envelope with structure { "version": "1", "qube": [ ... ] }
         let arr = match value {
-            Value::Array(a) => a,
-            _ => return Err("Expected JSON array for arena layout".to_string()),
+            Value::Object(map) => {
+                // check version
+                let version_val = map
+                    .get("version")
+                    .ok_or_else(|| "Arena JSON missing 'version' field".to_string())?;
+                let ok = match version_val {
+                    Value::String(s) => s == "1",
+                    Value::Number(n) => n.as_u64().map(|v| v == 1).unwrap_or(false),
+                    _ => false,
+                };
+                if !ok {
+                    return Err(format!("Unsupported arena JSON version: {:?}", version_val));
+                }
+
+                // extract qube array
+                match map.get("qube") {
+                    Some(Value::Array(a)) => a.clone(),
+                    _ => return Err("Arena JSON missing 'qube' array".to_string()),
+                }
+            }
+            _ => return Err("Expected JSON object envelope for arena layout".to_string()),
         };
 
         // We will create nodes in the same order. Start with a fresh Qube which
