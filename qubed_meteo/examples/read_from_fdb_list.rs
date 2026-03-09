@@ -26,7 +26,9 @@ fn main() {
     // Build the Qube directly from the request; the adapter will open FDB and list.
     let qube = Qube::from_fdb_list(&request_map).expect("Failed to build Qube from FDB list");
 
-    println!("Qube structure:\n{}", qube.to_ascii());
+    // println!("Qube structure:\n{}", qube.to_ascii());
+
+    println!("Qube in arena json format:\n{}", qube.to_arena_json());
 
     // Stop the timer
     let duration = start_time.elapsed();
