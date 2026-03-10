@@ -154,6 +154,11 @@ impl PyQube {
         Ok(py_dict.into_any().unbind())
     }
 
+    pub fn compress(&mut self) -> PyResult<()> {
+        self.inner.compress();
+        Ok(())
+    }
+
     pub fn __repr__(&self) -> PyResult<String> {
         Ok(format!("PyQube(root_id={:?})", self.inner.root()))
     }
