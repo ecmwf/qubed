@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 pub enum SelectMode {
     Default,
     Prune,
+    FollowSelection, // Only shows tree up to where selection values are, doesn't expand deeper
 }
 
 pub(crate) struct WalkPair {
@@ -17,6 +18,11 @@ pub(crate) struct WalkPair {
 impl Qube {
     // Select takes a dictionary of key-vecvalues pairs and returns a QubeView
     // It does not matter which order the keys are specified
+    //
+    // SelectMode:
+    // - Default: Returns full subtree from selected values downward
+    // - Prune: Removes branches that don't have all selected dimensions
+    // - FollowSelection: Only shows nodes up to the selected values, doesn't expand deeper
 
     pub fn select<C>(&self, selection: &[(&str, C)], mode: SelectMode) -> Result<Qube, String>
     where
@@ -30,7 +36,7 @@ impl Qube {
 
         let parents = WalkPair { left: root, right: result.root() };
 
-        self.select_recurse(&selection, &mut result, parents)?;
+        self.select_recurse(&selection, &mut result, parents, &mode, false)?;
 
         // Prune any nodes which do not have all selected dimensions
         if mode == SelectMode::Prune {
@@ -51,6 +57,8 @@ impl Qube {
         selection: &HashMap<&str, Coordinates>,
         result: &mut Qube,
         parents: WalkPair,
+        mode: &SelectMode,
+        selected_at_this_level: bool,
     ) -> Result<(), String> {
         let source_node =
             self.node(parents.left).ok_or_else(|| format!("Node {:?} not found", parents.left))?;
@@ -58,13 +66,18 @@ impl Qube {
         // For each child in the source Qube, find the values which overlap and create a child in the result Qube
         // We ignore values only_in_a and only_in_b, we only want the intersection
 
-        // Get the dimension of each chil
+        // Get the dimension of each child
         let span = source_node.child_dimensions();
 
         for dimension in span {
             let dimension_str = self.dimension_str(dimension).ok_or_else(|| {
                 format!("Dimension {:?} not found in key store. Should not happen.", dimension)
             })?;
+
+            // For FollowSelection mode, if we selected at a previous level, don't recurse deeper
+            if *mode == SelectMode::FollowSelection && selected_at_this_level {
+                continue;
+            }
 
             if selection.contains_key(dimension_str) {
                 let selection_coordinates = selection.get(dimension_str).unwrap();
@@ -97,7 +110,8 @@ impl Qube {
 
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
-                    self.select_recurse(selection, result, new_parents)?;
+                    // We selected at this level, so mark it for FollowSelection mode
+                    self.select_recurse(selection, result, new_parents, mode, true)?;
                 }
             } else {
                 // Dimension not in selection, so we take all children
@@ -121,7 +135,14 @@ impl Qube {
 
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
-                    self.select_recurse(selection, result, new_parents)?;
+                    // Pass along the selected_at_this_level flag
+                    self.select_recurse(
+                        selection,
+                        result,
+                        new_parents,
+                        mode,
+                        selected_at_this_level,
+                    )?;
                 }
             }
         }
@@ -402,6 +423,133 @@ mod tests {
 "#;
 
         assert_eq!(qube.to_ascii(), result);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_follow_selection() -> Result<(), String> {
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        // Select class=1 and expver=0001 with FollowSelection mode
+        // Should only show the path to these selections, not the param children
+        let selection = [("class", &["1"]), ("expver", &["0001"])];
+        let selected_qube = qube.select(&selection, SelectMode::FollowSelection)?;
+
+        println!("FollowSelection Result:\n{}", selected_qube.to_ascii());
+
+        // With FollowSelection, we stop at the deepest selected dimension
+        // So we get class=1 and expver=0001, but no further children
+        let result = r#"root
+└── class=1
+    └── expver=0001"#;
+
+        let result = Qube::from_ascii(result).unwrap();
+        assert_eq!(selected_qube.to_ascii(), result.to_ascii());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_follow_selection_vs_default() -> Result<(), String> {
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        let selection = [("class", &[1])];
+
+        // Default mode: shows full subtree
+        let default_result = qube.select(&selection, SelectMode::Default)?;
+        println!("Default Mode:\n{}", default_result.to_ascii());
+
+        let expected_default = r#"root
+└── class=1
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+        assert_eq!(default_result.to_ascii(), Qube::from_ascii(expected_default)?.to_ascii());
+
+        // FollowSelection mode: stops at selected dimension
+        let follow_result = qube.select(&selection, SelectMode::FollowSelection)?;
+        println!("FollowSelection Mode:\n{}", follow_result.to_ascii());
+
+        let expected_follow = r#"root
+└── class=1"#;
+        assert_eq!(follow_result.to_ascii(), Qube::from_ascii(expected_follow)?.to_ascii());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_follow_selection_with_unselected_dimensions() -> Result<(), String> {
+        // Test FollowSelection with mixed selected and unselected dimensions
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        // Only select class=1 (expver is NOT selected)
+        // With FollowSelection, we should get class=1 and ALL its expver children,
+        // but stop before param
+        let selection = [("class", &[1])];
+        let result_qube = qube.select(&selection, SelectMode::FollowSelection)?;
+
+        println!("FollowSelection with partial selection:\n{}", result_qube.to_ascii());
+
+        // Should have class=1 with all expver variants (not selected, so included)
+        // But no param children (dimensions after the selected one)
+        let expected = r#"root
+└── class=1"#;
+
+        assert_eq!(result_qube.to_ascii(), Qube::from_ascii(expected)?.to_ascii());
 
         Ok(())
     }
