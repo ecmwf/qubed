@@ -1,4 +1,6 @@
+use ::qubed::Coordinates;
 use ::qubed::Qube;
+use ::qubed::select::SelectMode;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyModule};
@@ -91,6 +93,54 @@ impl PyQube {
             self.inner.append(&mut other_mut.inner);
         }
         Ok(())
+    }
+
+    pub fn select(
+        &self,
+        request: Bound<'_, PyDict>,
+        mode: Option<String>,
+        _consume: Option<bool>,
+    ) -> PyResult<PyQube> {
+        // Collect selection data with owned Strings and Coordinates
+        let mut selection_data: Vec<(String, Coordinates)> = Vec::new();
+
+        for (k, v) in request.iter() {
+            let key: String =
+                k.extract().map_err(|_| PyTypeError::new_err("select keys must be strings"))?;
+
+            let coords = if v.is_instance_of::<PyList>() {
+                let lst = v.cast_into::<PyList>()?;
+                let mut parts: Vec<String> = Vec::with_capacity(lst.len());
+                for item in lst.iter() {
+                    // Convert any value to string representation (handles int, float, str)
+                    let py_str = item.str()?;
+                    let s: String = py_str.extract()?;
+                    parts.push(s);
+                }
+                Coordinates::from_string(&parts.join("|"))
+            } else {
+                // Convert any value to string representation (handles int, float, str)
+                let py_str = v.str()?;
+                let s: String = py_str.extract()?;
+                Coordinates::from_string(&s)
+            };
+
+            selection_data.push((key, coords));
+        }
+
+        let select_mode = match mode.as_deref() {
+            Some(m) if m.eq_ignore_ascii_case("prune") => SelectMode::Prune,
+            _ => SelectMode::Default,
+        };
+
+        // Convert to references for the select call
+        let pairs: Vec<(&str, Coordinates)> =
+            selection_data.iter().map(|(k, c)| (k.as_str(), c.clone())).collect();
+
+        match self.inner.select(&pairs, select_mode) {
+            Ok(q) => Ok(PyQube { inner: q }),
+            Err(e) => Err(PyTypeError::new_err(e)),
+        }
     }
 
     pub fn __repr__(&self) -> PyResult<String> {
