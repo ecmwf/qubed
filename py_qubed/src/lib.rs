@@ -143,6 +143,17 @@ impl PyQube {
         }
     }
 
+    pub fn all_unique_dim_coords(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let dim_coords = self.inner.all_unique_dim_coords();
+        let py_dict = PyDict::new(py);
+
+        for (dimension, coordinates) in dim_coords {
+            py_dict.set_item(dimension, coordinates.to_string())?;
+        }
+
+        Ok(py_dict.into_any().unbind())
+    }
+
     pub fn __repr__(&self) -> PyResult<String> {
         Ok(format!("PyQube(root_id={:?})", self.inner.root()))
     }
