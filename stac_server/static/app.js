@@ -494,15 +494,72 @@ function renderRequestBreakdown(request, descriptions) {
 
 function renderMARSRequest(request, descriptions) {
   const container = document.getElementById("final_req");
+  
+  console.log("=== renderMARSRequest START ===");
+  console.log("request:", request);
+  console.log("request type:", typeof request);
+  console.log("is array?", Array.isArray(request));
+  console.log("descriptions:", descriptions);
+  
+  if (!Array.isArray(request)) {
+    console.error("ERROR: request is not an array!", request);
+    container.innerHTML = `<p style="color: red;">ERROR: request is not an array. Got: ${typeof request}</p><pre>${JSON.stringify(request, null, 2)}</pre>`;
+    return;
+  }
+  
+  if (request.length === 0) {
+    console.warn("WARNING: request array is empty");
+    container.innerHTML = `<p style="color: orange;">No MARS requests generated</p>`;
+    return;
+  }
+  
+  console.log("First request item:", request[0]);
+  console.log("First item entries:", Object.entries(request[0]));
+  
   const format_value = (key, value) => {
-    return `<span class="punct">"</span><span class="value" title="${descriptions[key]["value_descriptions"][value]}">${value}</span><span class="punct">"</span>`;
+    // Convert value to string if it's not already
+    const stringValue = String(value);
+    const desc = descriptions?.[key]?.["value_descriptions"]?.[stringValue];
+    return `<span class="punct">"</span><span class="value" title="${desc || ''}">${stringValue}</span><span class="punct">"</span>`;
   };
 
   const format_values = (key, values) => {
-    if (values.length === 1) {
-      return format_value(key, values[0]);
+    console.log(`format_values called: key=${key}, values=${values}, type=${typeof values}`);
+    
+    // Handle different types of values
+    if (values === null || values === undefined) {
+      return `<span class="punct">null</span>`;
     }
-    return `<span class="punct">[</span>${values.map((v) => format_value(key, v)).join(`<span class="punct">,</span> `)}<span class="punct">]</span>`;
+    
+    // Check if it's an array-like structure
+    let valueArray;
+    if (Array.isArray(values)) {
+      console.log(`  -> is array, length ${values.length}`);
+      valueArray = values;
+    } else if (typeof values === 'object') {
+      console.log(`  -> is object, stringify`);
+      // If it's an object, just JSON stringify it
+      return `<span class="value">${JSON.stringify(values)}</span>`;
+    } else {
+      console.log(`  -> is scalar (${typeof values}), wrapping in array`);
+      // Scalar value - wrap in array
+      valueArray = [values];
+    }
+    
+    // If array is empty, return empty array repr
+    if (valueArray.length === 0) {
+      return `<span class="punct">[]</span>`;
+    }
+    
+    // If array has single element, just return that
+    if (valueArray.length === 1) {
+      const result = format_value(key, valueArray[0]);
+      console.log(`  -> returning single value: ${result}`);
+      return result;
+    }
+    
+    // Multiple values - return as array
+    return `<span class="punct">[</span>${valueArray.map((v) => format_value(key, v)).join(`<span class="punct">,</span> `)}<span class="punct">]</span>`;
   };
 
   // Add feature object to each request if polygon is selected
@@ -517,11 +574,12 @@ function renderMARSRequest(request, descriptions) {
   // Store for copying
   currentMARSRequests = requestsWithFeature;
 
-  let html =
-  `<span class="punct">[</span>\n` +
-  requestsWithFeature
-    .map(
-      obj => {
+  try {
+    let html =
+    `<span class="punct">[</span>\n` +
+    requestsWithFeature
+      .map((obj, objIdx) => {
+        console.log(`Rendering object ${objIdx}:`, obj);
         const entries = Object.entries(obj);
         return `  <span class="punct">{</span>\n` +
         entries
@@ -536,16 +594,23 @@ function renderMARSRequest(request, descriptions) {
                        `      <span class="punct">"</span><span class="key">shape</span><span class="punct">"</span><span class="punct">:</span> <span class="value">${shapeStr}</span>\n` +
                        `    <span class="punct">}</span>${isLast ? '' : '<span class="punct">,</span>'}`;
               }
-              return `    <span class="punct">"</span><span class="key" title="${descriptions[key]?.description || ""}">${key}</span><span class="punct">"</span><span class="punct">:</span> ${format_values(key, values)}${isLast ? '' : '<span class="punct">,</span>'}`;
+              const formattedValue = format_values(key, values);
+              return `    <span class="punct">"</span><span class="key" title="${descriptions?.[key]?.description || ""}">${key}</span><span class="punct">"</span><span class="punct">:</span> ${formattedValue}${isLast ? '' : '<span class="punct">,</span>'}`;
             }
           )
           .join("\n") +
         `\n  <span class="punct">}</span>`;
-      }
-    )
-    .join(`<span class="punct">,</span>\n`) +
-  `\n<span class="punct">]</span>`;
-  container.innerHTML = html;
+      })
+      .join(`<span class="punct">,</span>\n`) +
+    `\n<span class="punct">]</span>`;
+    container.innerHTML = html;
+    console.log("=== renderMARSRequest COMPLETED SUCCESSFULLY ===");
+  } catch (error) {
+    console.error("=== ERROR in renderMARSRequest ===", error);
+    console.error("Stack trace:", error.stack);
+    const container = document.getElementById("final_req");
+    container.innerHTML = `<p style="color: red;">Error rendering MARS requests: ${error.message}</p><pre>${JSON.stringify(request, null, 2)}</pre><pre>${error.stack}</pre>`;
+  }
 }
 
 function renderRawSTACResponse(catalog) {
@@ -568,8 +633,12 @@ async function fetchCatalog(request, stacUrl) {
     const response = await fetch(stacUrl);
     const catalog = await response.json();
 
+    console.log("Fetched catalog:", catalog);
+
     // Check if we've reached the end of the catalogue (final_object has data)
     const hasReachedEnd = catalog.final_object && catalog.final_object.length > 0;
+
+    console.log("Has reached end:", hasReachedEnd, "final_object:", catalog.final_object);
 
     // Get section elements
     const currentSelectionSection = document.getElementById("current-selection-section");
@@ -578,10 +647,12 @@ async function fetchCatalog(request, stacUrl) {
 
     if (hasReachedEnd) {
       // At the end: show MARS requests, hide current selection and next button
+      console.log("At end of traversal, rendering MARS requests");
       currentSelectionSection.style.display = "none";
       marsRequestsSection.style.display = "block";
       nextButton.style.display = "none";
       catalogCache = catalog; // Store catalog for re-rendering with features
+      console.log("Descriptions available:", catalog.debug.descriptions);
       renderMARSRequest(catalog.final_object, catalog.debug.descriptions);
     } else {
       // Not at the end: show current selection, hide MARS requests, show next button

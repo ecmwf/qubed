@@ -335,6 +335,7 @@ async def query_polytope(
 
 
 def follow_query(request: dict[str, str | list[str]], qube: PyQube):
+    # TODO: implement a selection mode that only shows the pruned tree with the selected request keys
     rel_qube = qube.select(request, None, None)
 
     # full_axes = rel_qube.axes_info()
@@ -347,10 +348,10 @@ def follow_query(request: dict[str, str | list[str]], qube: PyQube):
     # Also compute the selected tree just to the point where our selection ends
     s = qube.select(request, "prune", None)
     s.compress()
-    print("WHAT IS THE QUBE HERE")
-    print("LOOK NOW HERE")
+    # print("WHAT IS THE QUBE HERE")
+    # print("LOOK NOW HERE")
 
-    print(s.to_ascii())
+    # print(s.to_ascii())
 
     if seen_keys and "dataset" in seen_keys:
         if (
@@ -379,9 +380,9 @@ def follow_query(request: dict[str, str | list[str]], qube: PyQube):
             # "dtype": list(info.dtypes)[0],
             "on_frontier": (key in frontier_keys) and (key not in seen_keys),
         }
-        print("WHAT IS INFO HERE")
-        print(info)
-        print(full_axes)
+        # print("WHAT IS INFO HERE")
+        # print(info)
+        # print(full_axes)
         if isinstance(list(info)[0], str):
             try:
                 int(list(info)[0])
@@ -508,8 +509,13 @@ async def get_STAC(
     end_of_traversal = not any(a["on_frontier"] for a in axes)
 
     final_object = []
+
+    print("ARE WE AT THE END OF THE TRAVERSAL??")
+    print(end_of_traversal)
     if end_of_traversal:
         final_object = list(q.to_datacubes())
+        print("WHAT IS THE FINAL OBJECT??")
+        print(final_object)
 
     kvs = [
         f"{k}={','.join(v)}" if isinstance(v, list) else f"{k}={v}"
@@ -517,15 +523,30 @@ async def get_STAC(
     ]
     request_params = "&".join(kvs)
 
+    # Get all possible keys from axes to ensure complete descriptions
+    all_axes_keys = {axis["key"] for axis in axes}
+    request_keys = set(request.keys())
+    all_description_keys = all_axes_keys | request_keys
+
     descriptions = {
         key: {
             "key": key,
-            "values": values,
+            "values": values if isinstance(values, list) else [values] if isinstance(values, str) else [],
             "description": mars_language.get(key, {}).get("description", ""),
             "value_descriptions": mars_language.get(key, {}).get("values", {}),
         }
         for key, values in request.items()
     }
+    
+    # Add descriptions for axes keys that might not be in request
+    for key in all_description_keys:
+        if key not in descriptions:
+            descriptions[key] = {
+                "key": key,
+                "values": [],
+                "description": mars_language.get(key, {}).get("description", ""),
+                "value_descriptions": mars_language.get(key, {}).get("values", {}),
+            }
 
     # Format the response as a STAC collection
     stac_collection = {
