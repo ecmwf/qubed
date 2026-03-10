@@ -17,8 +17,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from qubed import Qube
-from qubed.formatters import node_tree_to_html
+from qubed import PyQube
+# from qubed.formatters import node_tree_to_html
 
 logger = logging.getLogger("uvicorn.error")
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -40,7 +40,7 @@ with open(config_path, "r") as f:
 
 prefix = Path(
     os.environ.get(
-        "QUBED_DATA_PREFIX", Path(__file__).parents[1] / "tests/example_qubes/"
+        "QUBED_DATA_PREFIX", Path(__file__).parents[1] / "qubed_meteo/qube_examples/"
     )
 )
 
@@ -104,20 +104,33 @@ app.mount(
 )
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
-qube = Qube.empty()
+# qube = Qube.empty()
+qube = PyQube()
 mars_language = {}
 
-for data_file in config.get("data_files", []):
+for i, data_file in enumerate(config.get("data_files", [])):
     data_path = prefix / data_file
     if not data_path.exists():
         logger.warning(f"Data file {data_path} does not exist, skipping")
         continue
     logger.info(f"Loading data from {data_path}")
     with open(data_path, "r") as f:
-        qube = qube | Qube.from_json(json.load(f))
-    logger.info(
-        f"Loaded {data_path}. Now have {qube.n_nodes} nodes and {qube.n_leaves} leaves."
-    )
+        # PyQube.from_arena_json expects a JSON string, not a Python dict
+        new_qube = PyQube.from_arena_json(json.dumps(json.load(f)))
+        print(new_qube.to_ascii())
+
+    if i==0:
+        print("WENT HERE??")
+        qube = new_qube
+        print(qube.to_ascii())
+        logger.info(f"Initialized qube from {data_path}")
+    else:
+        qube.append(new_qube)
+        logger.info(f"Appended data from {data_path}")
+    logger.info(f"Loaded {data_path}. Now have {len(qube)} nodes.")
+
+print("WHAT'S THE FINAL QUBE???")
+print(qube.to_ascii())
 
 with open(Path(__file__).parents[1] / "config/language/language.yaml", "r") as f:
     mars_language = yaml.safe_load(f)
@@ -194,7 +207,8 @@ async def union(
     body_json=Depends(get_body_json),
 ):
     global qube
-    qube = qube | Qube.from_json(body_json)
+    # body_json is a parsed dict; pass a JSON string to the Rust binding
+    qube = qube | PyQube.from_arena_json(json.dumps(body_json))
     return qube.to_json()
 
 
@@ -312,7 +326,7 @@ async def query_polytope(
     }
 
 
-def follow_query(request: dict[str, str | list[str]], qube: Qube):
+def follow_query(request: dict[str, str | list[str]], qube: PyQube):
     rel_qube = qube.select(request, consume=False)
 
     full_axes = rel_qube.axes_info()
