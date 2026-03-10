@@ -1,0 +1,3 @@
+data_files:
+  - small_climate_eg.json
+  - medium_extremes_eg.json

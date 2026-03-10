@@ -108,6 +108,9 @@ templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 qube = PyQube()
 mars_language = {}
 
+print("HERE WHAT")
+print(config.get("data_files", []))
+
 for i, data_file in enumerate(config.get("data_files", [])):
     data_path = prefix / data_file
     if not data_path.exists():
@@ -118,6 +121,9 @@ for i, data_file in enumerate(config.get("data_files", [])):
         # PyQube.from_arena_json expects a JSON string, not a Python dict
         new_qube = PyQube.from_arena_json(json.dumps(json.load(f)))
         print(new_qube.to_ascii())
+    
+    print("WHAT IS i")
+    print(i)
 
     if i==0:
         print("WENT HERE??")
@@ -125,7 +131,9 @@ for i, data_file in enumerate(config.get("data_files", [])):
         print(qube.to_ascii())
         logger.info(f"Initialized qube from {data_path}")
     else:
+        print("WHAT DID WE DO HERE??")
         qube.append(new_qube)
+        print(qube.to_ascii())
         logger.info(f"Appended data from {data_path}")
     logger.info(f"Loaded {data_path}. Now have {len(qube)} nodes.")
 
@@ -327,16 +335,22 @@ async def query_polytope(
 
 
 def follow_query(request: dict[str, str | list[str]], qube: PyQube):
-    rel_qube = qube.select(request, consume=False)
+    rel_qube = qube.select(request, None, None)
 
-    full_axes = rel_qube.axes_info()
+    # full_axes = rel_qube.axes_info()
+    full_axes = rel_qube.all_unique_dim_coords()
 
     seen_keys = list(request.keys())
 
     dataset_key_ordering = None
 
     # Also compute the selected tree just to the point where our selection ends
-    s = qube.select(request, mode=Qube.select_modes.NextLevel, consume=False).compress()
+    s = qube.select(request, "prune", None)
+    s.compress()
+    print("WHAT IS THE QUBE HERE")
+    print("LOOK NOW HERE")
+
+    print(s.to_ascii())
 
     if seen_keys and "dataset" in seen_keys:
         if (
@@ -362,17 +376,20 @@ def follow_query(request: dict[str, str | list[str]], qube: PyQube):
     for key, info in full_axes.items():
         return_axes_key = {
             "key": key,
-            "dtype": list(info.dtypes)[0],
+            # "dtype": list(info.dtypes)[0],
             "on_frontier": (key in frontier_keys) and (key not in seen_keys),
         }
-        if isinstance(list(info.values)[0], str):
+        print("WHAT IS INFO HERE")
+        print(info)
+        print(full_axes)
+        if isinstance(list(info)[0], str):
             try:
-                int(list(info.values)[0])
-                sorted_vals = sorted(info.values, key=int)
+                int(list(info)[0])
+                sorted_vals = sorted(info, key=int)
             except ValueError:
-                sorted_vals = sorted(info.values)
+                sorted_vals = sorted(info)
         else:
-            sorted_vals = sorted(info.values)
+            sorted_vals = sorted(info)
         return_axes_key["values"] = sorted_vals
         return_axes.append(return_axes_key)
 
@@ -468,7 +485,7 @@ def make_link(axis, request_params):
         "type": "application/json",
         "variables": {
             key_name: {
-                "type": axis["dtype"],
+                # "type": axis["dtype"],
                 "description": mars_language.get(key_name, {}).get("description", ""),
                 "enum": axis["values"],
                 "value_descriptions": value_descriptions,
@@ -483,12 +500,16 @@ async def get_STAC(
     request: dict[str, str | list[str]] = Depends(parse_request),
 ):
     q, axes = follow_query(request, qube)
+    print("WHAT IS THE QUBE HERE")
+    print(qube)
+    print(request)
+    print(q)
 
     end_of_traversal = not any(a["on_frontier"] for a in axes)
 
     final_object = []
     if end_of_traversal:
-        final_object = list(q.datacubes())
+        final_object = list(q.to_datacubes())
 
     kvs = [
         f"{k}={','.join(v)}" if isinstance(v, list) else f"{k}={v}"
@@ -516,15 +537,16 @@ async def get_STAC(
         "final_object": final_object,
         "debug": {
             "descriptions": descriptions,
-            "qube": node_tree_to_html(
-                q,
-                collapse=True,
-                depth=10,
-                include_css=False,
-                include_js=False,
-                max_summary_length=200,
-                css_id="qube",
-            ),
+            # "qube": node_tree_to_html(
+            #     q,
+            #     collapse=True,
+            #     depth=10,
+            #     include_css=False,
+            #     include_js=False,
+            #     max_summary_length=200,
+            #     css_id="qube",
+            # ),
+            "qube": q.to_ascii(),
         },
     }
 
