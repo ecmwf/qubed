@@ -66,6 +66,43 @@ def test_select_2():
 
     assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
 
+def test_select_3():
+    input_qube = r"""root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"""
+
+    q = qubed.PyQube.from_ascii(input_qube)
+
+    selected = q.select({"expver": ["0001"]}, None, None)
+
+    print(selected.to_ascii())
+
+    expected = r"""root
+├── class=1
+│   └── expver=0001
+│       ├── param=1
+│       └── param=2
+└── class=2
+    └── expver=0001
+        ├── param=1
+        ├── param=2
+        └── param=3"""
+
+    assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
+
 
 def test_all_unique_dim_coords():
     input_qube = r"""root
@@ -140,6 +177,34 @@ def test_compress():
     
     # The qube should still be valid and have the same structure
     ascii_after = q.to_ascii()
+
+    print(ascii_after)
+    
+    # Verify the structure is preserved or optimized (may change due to deduplication)
+    assert len(ascii_before) > 0
+    assert len(ascii_after) > 0
+    
+    # Verify datacube count is preserved
+    assert len(q) > 0
+
+def test_compress_2():
+    input_qube = r"""root
+└── class=2
+    └── expver=0002
+        └── param=2"""
+
+    q = qubed.PyQube.from_ascii(input_qube)
+    
+    # Get the ASCII representation before compression
+    ascii_before = q.to_ascii()
+    
+    # Compress the qube
+    q.compress()
+    
+    # The qube should still be valid and have the same structure
+    ascii_after = q.to_ascii()
+
+    print(ascii_after)
     
     # Verify the structure is preserved or optimized (may change due to deduplication)
     assert len(ascii_before) > 0

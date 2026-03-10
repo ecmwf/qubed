@@ -117,7 +117,7 @@ impl PyQube {
                     let s: String = py_str.extract()?;
                     parts.push(s);
                 }
-                Coordinates::from_string(&parts.join("|"))
+                Coordinates::from_string(&parts.join("/"))
             } else {
                 // Convert any value to string representation (handles int, float, str)
                 let py_str = v.str()?;

@@ -274,6 +274,98 @@ mod tests {
     }
 
     #[test]
+    fn test_select_3() -> Result<(), String> {
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        // let mut selection = std::collections::HashMap::new();
+        // // selection.insert("class".to_string(), Coordinates::from(1));
+        // selection.insert("param".to_string(), Coordinates::from(1));
+
+        let selection = [("expver", &["0001"])];
+
+        let selected_qube = qube.select(&selection, SelectMode::Default)?;
+
+        println!("Selected Qube:\n{}", selected_qube.to_ascii());
+
+        let result = r#"root
+├── class=1
+│   └── expver=0001
+│       ├── param=1
+│       └── param=2
+└── class=2
+    └── expver=0001
+        ├── param=1
+        ├── param=2
+        └── param=3"#;
+
+        let result = Qube::from_ascii(result).unwrap();
+        assert_eq!(selected_qube.to_ascii(), result.to_ascii());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_4() -> Result<(), String> {
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0003
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        // let mut selection = std::collections::HashMap::new();
+        // // selection.insert("class".to_string(), Coordinates::from(1));
+        // selection.insert("param".to_string(), Coordinates::from(1));
+
+        let selection = [("expver", &["0003"])];
+
+        let selected_qube = qube.select(&selection, SelectMode::Prune)?;
+
+        println!("Selected Qube:\n{}", selected_qube.to_ascii());
+
+        let result = r#"root
+└── class=2
+    └── expver=0003
+        ├── param=1
+        ├── param=2
+        └── param=3"#;
+
+        let result = Qube::from_ascii(result).unwrap();
+        assert_eq!(selected_qube.to_ascii(), result.to_ascii());
+
+        Ok(())
+    }
+
+    #[test]
     fn test_prune() -> Result<(), String> {
         let input = r#"root
 ├── class=1
