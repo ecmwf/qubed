@@ -148,7 +148,22 @@ impl PyQube {
         let py_dict = PyDict::new(py);
 
         for (dimension, coordinates) in dim_coords {
-            py_dict.set_item(dimension, coordinates.to_string())?;
+            let coord_str = coordinates.to_string();
+            // Split on slash if present, otherwise treat as single value
+            let values: Vec<&str> = if coord_str.is_empty() {
+                vec![]
+            } else if coord_str.contains('/') {
+                coord_str.split('/').collect()
+            } else {
+                vec![&coord_str]
+            };
+
+            let py_list = PyList::empty(py);
+            for value in values {
+                py_list.append(value)?;
+            }
+
+            py_dict.set_item(dimension, py_list)?;
         }
 
         Ok(py_dict.into_any().unbind())

@@ -89,7 +89,7 @@ def test_all_unique_dim_coords():
     
     dim_coords = q.all_unique_dim_coords()
     
-    # Should have 3 dimensions
+    # Should have 3 dimensions (class, expver, param)
     assert len(dim_coords) == 3
     
     # Check that expected dimensions are present
@@ -97,16 +97,19 @@ def test_all_unique_dim_coords():
     assert "expver" in dim_coords
     assert "param" in dim_coords
     
-    # Check coordinate values are strings
-    assert isinstance(dim_coords["class"], str)
-    assert isinstance(dim_coords["expver"], str)
-    assert isinstance(dim_coords["param"], str)
+    # Check coordinate values are lists
+    assert isinstance(dim_coords["class"], list)
+    assert isinstance(dim_coords["expver"], list)
+    assert isinstance(dim_coords["param"], list)
     
     # Check that coordinates contain expected values
     assert "1" in dim_coords["class"]
     assert "2" in dim_coords["class"]
     assert "0001" in dim_coords["expver"]
     assert "0002" in dim_coords["expver"]
+    assert "1" in dim_coords["param"]
+    assert "2" in dim_coords["param"]
+    assert "3" in dim_coords["param"]
 
 
 def test_compress():
