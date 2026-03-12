@@ -104,11 +104,15 @@ impl PyQube {
         // Collect selection data with owned Strings and Coordinates
         let mut selection_data: Vec<(String, Coordinates)> = Vec::new();
 
+        println!("WHAT IS THE REQ IN PYTHON?");
+        println!("{:?}", request);
+
         for (k, v) in request.iter() {
             let key: String =
                 k.extract().map_err(|_| PyTypeError::new_err("select keys must be strings"))?;
 
             let coords = if v.is_instance_of::<PyList>() {
+                println!("WE ACTUALLY DEALT WITH A LIST HERE??");
                 let lst = v.cast_into::<PyList>()?;
                 let mut parts: Vec<String> = Vec::with_capacity(lst.len());
                 for item in lst.iter() {
@@ -117,11 +121,16 @@ impl PyQube {
                     let s: String = py_str.extract()?;
                     parts.push(s);
                 }
+                println!("WHAT ARE THE PARTS HERE??");
+                println!("{:?}", parts);
                 Coordinates::from_string(&parts.join("/"))
             } else {
+                println!("WE DID NOT DEAL WITH A LIST HERE??");
                 // Convert any value to string representation (handles int, float, str)
                 let py_str = v.str()?;
                 let s: String = py_str.extract()?;
+                println!("WHAT IS THE STRING VALUE HERE??");
+                println!("{:?}", s);
                 Coordinates::from_string(&s)
             };
 
