@@ -1,4 +1,5 @@
 from .key_ordering import dataset_key_orders
+from . import stac_router as _stac_router
 import json
 import logging
 import os
@@ -82,6 +83,10 @@ mars_language = {}
 with open(Path(__file__).parents[1] / "config/language/language.yaml", "r") as f:
     mars_language = yaml.safe_load(f)
 
+# Register STAC API router
+_stac_router.setup(qube, mars_language)
+app.include_router(_stac_router.router)
+
 logger.info("Ready to serve requests!")
 
 
@@ -127,6 +132,14 @@ async def browse_catalogue(request: Request):
         "title": os.environ.get("TITLE", "Qubed Catalogue Browser"),
         "message": "",
         "last_database_update": "",
+    })
+
+
+@app.get("/stac-browse", response_class=HTMLResponse)
+async def stac_browse(request: Request):
+    """STAC Catalogue Browser — visual explorer for the STAC API at /api/stac/v1."""
+    return templates.TemplateResponse(request, "stac_browse.html", {
+        "title": os.environ.get("TITLE", "Qubed Catalogue Browser"),
     })
 
 

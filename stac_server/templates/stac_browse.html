@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ title }} — STAC Browser</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗂️</text></svg>">
+  <style>
+    /* ── Layout ─────────────────────────────────────────────────── */
+    body { margin: 0; font-family: var(--font-family, system-ui, sans-serif); background: var(--bg-secondary, #f4f6fb); color: var(--text-primary, #1a1a2e); }
+
+    .sb-header {
+      background: linear-gradient(135deg, var(--primary-color, #2563eb) 0%, var(--primary-dark, #1d4ed8) 100%);
+      color: #fff;
+      padding: 1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.18);
+    }
+    .sb-header h1 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+    .sb-header a { color: rgba(255,255,255,.85); text-decoration: none; font-size: .9rem; }
+    .sb-header a:hover { color: #fff; text-decoration: underline; }
+
+    .sb-main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+
+    /* ── Breadcrumb ─────────────────────────────────────────────── */
+    .breadcrumb {
+      display: flex; align-items: center; gap: .4rem;
+      font-size: .9rem; margin-bottom: 1.25rem;
+      background: var(--bg-primary, #fff);
+      border-radius: 8px;
+      padding: .55rem 1rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    }
+    .breadcrumb span { color: var(--text-secondary, #888); }
+    .breadcrumb a { color: var(--primary-color, #2563eb); text-decoration: none; font-weight: 500; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    .breadcrumb .current { color: var(--text-primary, #1a1a2e); font-weight: 600; }
+
+    /* ── Cards ──────────────────────────────────────────────────── */
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+
+    .card {
+      background: var(--bg-primary, #fff);
+      border-radius: 10px;
+      padding: 1.1rem 1.25rem;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+      cursor: pointer;
+      transition: box-shadow .15s, transform .15s;
+      border: 1.5px solid transparent;
+    }
+    .card:hover { box-shadow: 0 4px 16px rgba(37,99,235,.15); transform: translateY(-2px); border-color: var(--primary-color, #2563eb); }
+
+    .card-title { font-weight: 700; font-size: 1rem; margin-bottom: .35rem; }
+    .card-meta { font-size: .82rem; color: var(--text-secondary, #666); line-height: 1.5; }
+    .card-badge {
+      display: inline-block; font-size: .72rem; font-weight: 600;
+      background: var(--primary-color, #2563eb); color: #fff;
+      border-radius: 5px; padding: .15rem .5rem; margin-bottom: .4rem;
+    }
+
+    /* ── Item table ─────────────────────────────────────────────── */
+    .item-table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .87rem; background: var(--bg-primary, #fff); border-radius: 10px; box-shadow: 0 1px 6px rgba(0,0,0,.08); overflow: hidden; }
+    thead { background: var(--primary-color, #2563eb); color: #fff; }
+    th { padding: .6rem .85rem; text-align: left; font-weight: 600; white-space: nowrap; }
+    td { padding: .5rem .85rem; border-bottom: 1px solid var(--border-color, #e8eaf0); vertical-align: top; word-break: break-all; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--bg-secondary, #f4f6fb); cursor: pointer; }
+
+    /* ── Item detail panel ──────────────────────────────────────── */
+    .item-detail {
+      background: var(--bg-primary, #fff);
+      border-radius: 10px;
+      padding: 1.25rem;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    }
+    .item-detail h2 { margin: 0 0 .75rem; font-size: 1.1rem; }
+    .prop-grid { display: grid; grid-template-columns: minmax(120px, auto) 1fr; gap: .3rem .75rem; font-size: .88rem; }
+    .prop-key { font-weight: 600; color: var(--text-secondary, #555); padding: .2rem 0; }
+    .prop-val { padding: .2rem 0; word-break: break-all; }
+    .prop-val.highlight { color: var(--primary-color, #2563eb); font-weight: 500; }
+
+    /* ── Summaries (collection detail) ─────────────────────────── */
+    .summary-grid { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .3rem; }
+    .summary-chip {
+      font-size: .78rem; background: var(--bg-secondary, #f0f2fa);
+      border-radius: 5px; padding: .2rem .55rem;
+      color: var(--text-secondary, #555);
+      border: 1px solid var(--border-color, #e0e4f0);
+    }
+
+    /* ── Pagination ─────────────────────────────────────────────── */
+    .pagination { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; font-size: .9rem; }
+    .btn {
+      background: var(--primary-color, #2563eb); color: #fff;
+      border: none; border-radius: 6px; padding: .4rem .9rem;
+      cursor: pointer; font-size: .88rem; font-weight: 500;
+      transition: background .15s;
+    }
+    .btn:disabled { background: var(--text-secondary, #aaa); cursor: default; }
+    .btn.secondary { background: var(--bg-primary, #fff); color: var(--primary-color, #2563eb); border: 1.5px solid var(--primary-color, #2563eb); }
+    .btn.secondary:hover { background: var(--primary-color, #2563eb); color: #fff; }
+
+    /* ── Helpers ────────────────────────────────────────────────── */
+    .section-title { font-size: 1.15rem; font-weight: 700; margin: 0 0 1rem; }
+    .empty { color: var(--text-secondary, #888); font-style: italic; padding: 2rem 0; text-align: center; }
+    .loading { color: var(--text-secondary, #888); padding: 2rem 0; text-align: center; }
+    .error-msg { background: #fef2f2; border: 1.5px solid #fca5a5; color: #b91c1c; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; }
+    .ext-link { color: var(--primary-color, #2563eb); font-size: .8rem; text-decoration: none; }
+    .ext-link:hover { text-decoration: underline; }
+
+    /* ── Filter bar ─────────────────────────────────────────────── */
+    .filter-bar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+    .filter-bar input {
+      border: 1.5px solid var(--border-color, #d1d5db);
+      border-radius: 6px; padding: .35rem .65rem;
+      font-size: .87rem; background: var(--bg-primary, #fff);
+      color: var(--text-primary, #1a1a2e);
+      min-width: 180px;
+    }
+    .filter-bar label { font-size: .87rem; font-weight: 500; }
+
+    /* ── Tabs ───────────────────────────────────────────────────── */
+    .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 2px solid var(--border-color, #e0e4f0); }
+    .tab {
+      padding: .5rem 1.1rem; font-size: .9rem; font-weight: 500;
+      cursor: pointer; border: none; background: none;
+      color: var(--text-secondary, #666);
+      border-bottom: 2.5px solid transparent; margin-bottom: -2px;
+      transition: color .15s, border-color .15s;
+    }
+    .tab.active { color: var(--primary-color, #2563eb); border-bottom-color: var(--primary-color, #2563eb); }
+  </style>
+</head>
+<body>
+
+<header class="sb-header">
+  <h1>🗂️ {{ title }} — STAC Browser</h1>
+  <a href="/browse">← Qubed Browser</a>
+  <span style="flex:1"></span>
+  <a id="ext-stac-link" href="#" target="_blank" title="Open in external STAC browser">External viewer ↗</a>
+</header>
+
+<main class="sb-main">
+  <nav class="breadcrumb" id="breadcrumb"></nav>
+  <div id="view"></div>
+</main>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────
+const STAC_ROOT = '/api/stac/v1';
+const PAGE_SIZE = 50;
+
+// ── State ─────────────────────────────────────────────────────────────────
+let state = { view: 'collections', collectionId: null, itemId: null, offset: 0, filters: {} };
+
+// ── External browser link ─────────────────────────────────────────────────
+const extLink = document.getElementById('ext-stac-link');
+const catalogueUrl = encodeURIComponent(window.location.origin + STAC_ROOT + '/');
+extLink.href = `https://radiantearth.github.io/stac-browser/#/external/${catalogueUrl}`;
+
+// ── Router ────────────────────────────────────────────────────────────────
+function navigate(newState) {
+  Object.assign(state, { offset: 0, filters: {} }, newState);
+  render();
+}
+
+// ── API helpers ───────────────────────────────────────────────────────────
+async function fetchJson(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} — ${await res.text()}`);
+  return res.json();
+}
+
+function qs(params) {
+  const p = new URLSearchParams(params);
+  return p.toString() ? '?' + p.toString() : '';
+}
+
+// ── Render dispatcher ─────────────────────────────────────────────────────
+async function render() {
+  renderBreadcrumb();
+  const el = document.getElementById('view');
+  el.innerHTML = '<p class="loading">Loading…</p>';
+  try {
+    if (state.view === 'collections') await renderCollections(el);
+    else if (state.view === 'collection') await renderCollection(el);
+    else if (state.view === 'items') await renderItems(el);
+    else if (state.view === 'item') await renderItem(el);
+  } catch (e) {
+    el.innerHTML = `<div class="error-msg">⚠️ ${e.message}</div>`;
+  }
+}
+
+// ── Breadcrumb ────────────────────────────────────────────────────────────
+function renderBreadcrumb() {
+  const bc = document.getElementById('breadcrumb');
+  const parts = [{ label: 'Collections', onclick: () => navigate({ view: 'collections' }) }];
+  if (state.collectionId) {
+    parts.push({ label: state.collectionId, onclick: () => navigate({ view: 'collection', collectionId: state.collectionId }) });
+  }
+  if (state.view === 'items') {
+    parts.push({ label: 'Items', onclick: null });
+  }
+  if (state.itemId) {
+    parts.push({ label: state.view === 'items' ? 'Items' : state.itemId, onclick: null });
+  }
+  bc.innerHTML = parts.map((p, i) => {
+    const isLast = i === parts.length - 1;
+    const sep = i ? '<span>›</span>' : '';
+    if (isLast) return `${sep}<span class="current">${p.label}</span>`;
+    return `${sep}<a href="#" onclick="(${p.onclick.toString()})();return false">${p.label}</a>`;
+  }).join(' ');
+}
+
+// ── Collections list ──────────────────────────────────────────────────────
+async function renderCollections(el) {
+  const data = await fetchJson(`${STAC_ROOT}/collections`);
+  const cols = data.collections || [];
+  if (!cols.length) { el.innerHTML = '<p class="empty">No collections found.</p>'; return; }
+
+  el.innerHTML = `<p class="section-title">Collections (${cols.length})</p><div class="card-grid" id="cg"></div>`;
+  const grid = el.querySelector('#cg');
+  for (const c of cols) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const dates = (c.extent?.temporal?.interval?.[0] || [null, null]);
+    const d0 = dates[0] ? dates[0].slice(0, 10) : '—';
+    const d1 = dates[1] ? dates[1].slice(0, 10) : '—';
+    const itemCount = (c.links || []).find(l => l.rel === 'items') ? '' : '';
+    card.innerHTML = `
+      <div class="card-badge">Collection</div>
+      <div class="card-title">${esc(c.title || c.id)}</div>
+      <div class="card-meta">${esc(c.description || '')}</div>
+      <div class="card-meta" style="margin-top:.45rem">📅 ${d0} → ${d1}</div>`;
+    card.onclick = () => navigate({ view: 'collection', collectionId: c.id });
+    grid.appendChild(card);
+  }
+}
+
+// ── Single collection detail ──────────────────────────────────────────────
+async function renderCollection(el) {
+  const cid = state.collectionId;
+  const [col] = await Promise.all([fetchJson(`${STAC_ROOT}/collections/${cid}`)]);
+  const interval = col.extent?.temporal?.interval?.[0] || [];
+  const d0 = interval[0] ? interval[0].slice(0, 10) : '—';
+  const d1 = interval[1] ? interval[1].slice(0, 10) : '—';
+
+  const summaryHtml = Object.entries(col.summaries || {}).map(([k, vals]) => {
+    const chips = vals.slice(0, 20).map(v => `<span class="summary-chip">${esc(String(v))}</span>`).join('');
+    const more = vals.length > 20 ? `<span class="summary-chip">+${vals.length - 20} more</span>` : '';
+    return `<div style="margin-bottom:.65rem"><strong style="font-size:.85rem">${esc(k)}</strong><div class="summary-grid">${chips}${more}</div></div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="item-detail" style="margin-bottom:1rem">
+      <div class="card-badge">Collection</div>
+      <h2 style="margin:.3rem 0 .5rem">${esc(col.title || col.id)}</h2>
+      <p style="margin:0 0 .75rem;font-size:.9rem;color:var(--text-secondary,#555)">${esc(col.description || '')}</p>
+      <div class="prop-grid">
+        <span class="prop-key">ID</span><span class="prop-val">${esc(col.id)}</span>
+        <span class="prop-key">License</span><span class="prop-val">${esc(col.license || '—')}</span>
+        <span class="prop-key">Temporal</span><span class="prop-val">${d0} → ${d1}</span>
+        <span class="prop-key">Spatial</span><span class="prop-val">global (−180°,−90° → 180°,90°)</span>
+      </div>
+      ${summaryHtml ? `<div style="margin-top:.9rem"><strong style="font-size:.9rem">Summaries</strong><div style="margin-top:.4rem">${summaryHtml}</div></div>` : ''}
+    </div>
+    <button class="btn" onclick="navigate({view:'items',collectionId:'${esc(cid)}',offset:0})">Browse Items →</button>`;
+}
+
+// ── Items list ────────────────────────────────────────────────────────────
+async function renderItems(el) {
+  const cid = state.collectionId;
+  const params = { limit: PAGE_SIZE, offset: state.offset, ...state.filters };
+  const data = await fetchJson(`${STAC_ROOT}/collections/${cid}/items${qs(params)}`);
+  const items = data.features || [];
+  const total = data.numberMatched ?? items.length;
+
+  // Collect all property keys from this page
+  const allKeys = new Set();
+  items.forEach(it => Object.keys(it.properties || {}).forEach(k => allKeys.add(k)));
+  // Bring important keys forward
+  const priorityKeys = ['datetime', 'date', 'time', 'type', 'stream', 'param', 'levtype', 'step'];
+  const keys = [...priorityKeys.filter(k => allKeys.has(k)), ...[...allKeys].filter(k => !priorityKeys.includes(k))];
+
+  // Filter bar
+  const filterEntries = Object.entries(state.filters || {}).filter(([k]) => !['limit','offset'].includes(k));
+  const filterBadges = filterEntries.map(([k, v]) =>
+    `<span class="summary-chip" style="cursor:pointer" onclick="removeFilter('${esc(k)}')">✕ ${esc(k)}=${esc(v)}</span>`
+  ).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem">
+      <p class="section-title" style="margin:0">Items — ${esc(cid)} <span style="font-weight:400;font-size:.9rem;color:var(--text-secondary,#666)">(${total.toLocaleString()} total)</span></p>
+      <button class="btn secondary" style="font-size:.82rem;padding:.3rem .75rem" onclick="navigate({view:'collection',collectionId:'${esc(cid)}'})">← Collection</button>
+    </div>
+    ${filterBadges ? `<div class="summary-grid" style="margin-bottom:.75rem">${filterBadges}</div>` : ''}
+    <div class="filter-bar">
+      <label>Filter:</label>
+      <input id="fk" placeholder="key (e.g. param)" />
+      <input id="fv" placeholder="value (e.g. 130)" />
+      <button class="btn" onclick="addFilter()">Add filter</button>
+    </div>
+    ${items.length === 0 ? '<p class="empty">No items match the current filters.</p>' : `
+    <div class="item-table-wrap">
+      <table>
+        <thead><tr><th>#</th>${keys.map(k => `<th>${esc(k)}</th>`).join('')}</tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <button class="btn" ${state.offset === 0 ? 'disabled' : ''} onclick="prevPage()">← Prev</button>
+      <span>${(state.offset + 1).toLocaleString()}–${Math.min(state.offset + PAGE_SIZE, total).toLocaleString()} of ${total.toLocaleString()}</span>
+      <button class="btn" ${state.offset + PAGE_SIZE >= total ? 'disabled' : ''} onclick="nextPage()">Next →</button>
+    </div>`}`;
+
+  const tbody = el.querySelector('#tbody');
+  if (tbody) {
+    items.forEach((it, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${state.offset + i + 1}</td>` +
+        keys.map(k => {
+          const v = it.properties[k];
+          return `<td>${v !== undefined && v !== null ? esc(String(v)) : '<span style="color:#bbb">—</span>'}</td>`;
+        }).join('');
+      tr.onclick = () => navigate({ view: 'item', collectionId: cid, itemId: it.id });
+      tbody.appendChild(tr);
+    });
+  }
+
+  // bind filter enter key
+  el.querySelector('#fv')?.addEventListener('keydown', e => { if (e.key === 'Enter') addFilter(); });
+}
+
+function addFilter() {
+  const k = document.getElementById('fk')?.value?.trim();
+  const v = document.getElementById('fv')?.value?.trim();
+  if (k && v) {
+    state.filters = { ...state.filters, [k]: v };
+    state.offset = 0;
+    render();
+  }
+}
+
+function removeFilter(k) {
+  const f = { ...state.filters };
+  delete f[k];
+  state.filters = f;
+  state.offset = 0;
+  render();
+}
+
+function prevPage() { state.offset = Math.max(0, state.offset - PAGE_SIZE); render(); }
+function nextPage() { state.offset += PAGE_SIZE; render(); }
+
+// ── Single item detail ────────────────────────────────────────────────────
+async function renderItem(el) {
+  const cid = state.collectionId;
+  const iid = state.itemId;
+  const item = await fetchJson(`${STAC_ROOT}/collections/${cid}/items/${iid}`);
+  const props = item.properties || {};
+
+  const propRows = Object.entries(props).map(([k, v]) => {
+    const val = v !== null && v !== undefined ? esc(JSON.stringify(v).replace(/^"|"$/g, '')) : '<span style="color:#bbb">null</span>';
+    const highlight = ['datetime', 'date', 'param', 'type'].includes(k) ? 'highlight' : '';
+    return `<span class="prop-key">${esc(k)}</span><span class="prop-val ${highlight}">${val}</span>`;
+  }).join('');
+
+  const linksHtml = (item.links || []).map(l =>
+    `<div><a href="${esc(l.href)}" target="_blank" class="ext-link">${esc(l.rel)}</a> — <span style="font-size:.8rem;color:var(--text-secondary,#666)">${esc(l.type || '')}</span></div>`
+  ).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.9rem">
+      <h2 style="margin:0;font-size:1.05rem;font-weight:700;word-break:break-all">${esc(iid)}</h2>
+      <button class="btn secondary" style="font-size:.82rem;padding:.3rem .75rem" onclick="navigate({view:'items',collectionId:'${esc(cid)}'})">← Items</button>
+    </div>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab(this,'tab-props')">Properties</button>
+      <button class="tab" onclick="switchTab(this,'tab-links')">Links</button>
+      <button class="tab" onclick="switchTab(this,'tab-raw')">Raw JSON</button>
+    </div>
+    <div id="tab-props" class="item-detail">
+      <div class="prop-grid">${propRows}</div>
+    </div>
+    <div id="tab-links" class="item-detail" style="display:none">
+      ${linksHtml || '<p class="empty">No links.</p>'}
+    </div>
+    <div id="tab-raw" class="item-detail" style="display:none">
+      <pre style="font-size:.8rem;overflow-x:auto;white-space:pre-wrap;margin:0">${esc(JSON.stringify(item, null, 2))}</pre>
+    </div>`;
+}
+
+function switchTab(btn, targetId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  ['tab-props', 'tab-links', 'tab-raw'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = id === targetId ? '' : 'none';
+  });
+}
+
+// ── Utility ────────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
