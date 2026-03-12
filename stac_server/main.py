@@ -337,6 +337,12 @@ async def query_polytope(
 def follow_query(request: dict[str, str | list[str]], qube: PyQube):
     # TODO: implement a selection mode that only shows the pruned tree with the selected request keys
     rel_qube = qube.select(request, None, None)
+    print("WHAT IS THE REQUEST HERE??")
+    print(request)
+    print("WHAT IS THE REL_QUBE HERE??")
+    print(rel_qube.to_ascii())
+    print("WHAT WAS THE ORIGINAL QUBE HERE??")
+    print(qube.to_ascii())
 
     # full_axes = rel_qube.axes_info()
     full_axes = rel_qube.all_unique_dim_coords()
@@ -346,7 +352,7 @@ def follow_query(request: dict[str, str | list[str]], qube: PyQube):
     dataset_key_ordering = None
 
     # Also compute the selected tree just to the point where our selection ends
-    s = qube.select(request, "prune", None)
+    s = qube.select(request, "follow_selection", None)
     s.compress()
     # print("WHAT IS THE QUBE HERE")
     # print("LOOK NOW HERE")

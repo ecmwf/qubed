@@ -212,3 +212,145 @@ def test_compress_2():
     
     # Verify datacube count is preserved
     assert len(q) > 0
+
+
+def test_follow_selection_single():
+    """Test FollowSelection mode with a single selected dimension"""
+    input_qube = r"""root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"""
+
+    q = qubed.PyQube.from_ascii(input_qube)
+
+    # Select class=1 with follow_selection mode
+    # Should get class=1 and all its expver children, but no param children
+    selected = q.select({"class": [1]}, "follow_selection", None)
+
+    expected = r"""root
+└── class=1"""
+
+    assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
+
+
+def test_follow_selection_multiple():
+    """Test FollowSelection mode with multiple selected dimensions"""
+    input_qube = r"""root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"""
+
+    q = qubed.PyQube.from_ascii(input_qube)
+
+    # Select class=1 and expver=0001 with follow_selection mode
+    # Should get class=1 and expver=0001, but no param children
+    selected = q.select({"class": [1], "expver": ["0001"]}, "follow_selection", None)
+
+    expected = r"""root
+└── class=1
+    └── expver=0001"""
+
+    assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
+
+def test_follow_selection_multiple_wrong_order():
+    """Test FollowSelection mode with multiple selected dimensions"""
+    input_qube = r"""root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"""
+
+    q = qubed.PyQube.from_ascii(input_qube)
+
+    # Select class=1 and expver=0001 with follow_selection mode
+    # Should get class=1 and expver=0001, but no param children
+    selected = q.select({"class": [1], "param": [1]}, "follow_selection", None)
+
+    expected = r"""root
+└── class=1
+    ├── expver=0001
+    │   └── param=1
+    └── expver=0002
+        └── param=1"""
+
+    assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
+
+
+def test_follow_selection_vs_default():
+    """Compare FollowSelection vs Default mode"""
+    input_qube = r"""root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"""
+
+    q = qubed.PyQube.from_ascii(input_qube)
+
+    # Default mode: shows full subtree
+    default_result = q.select({"class": [1]}, None, None)
+
+    default_expected = r"""root
+└── class=1
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"""
+
+    assert default_result.to_ascii() == qubed.PyQube.from_ascii(default_expected).to_ascii()
+
+    # FollowSelection mode: stops at selected dimension
+    follow_result = q.select({"class": [1]}, "follow_selection", None)
+
+    follow_expected = r"""root
+└── class=1"""
+
+    assert follow_result.to_ascii() == qubed.PyQube.from_ascii(follow_expected).to_ascii()
+

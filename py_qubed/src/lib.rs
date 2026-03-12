@@ -130,6 +130,7 @@ impl PyQube {
 
         let select_mode = match mode.as_deref() {
             Some(m) if m.eq_ignore_ascii_case("prune") => SelectMode::Prune,
+            Some(m) if m.eq_ignore_ascii_case("follow_selection") => SelectMode::FollowSelection,
             _ => SelectMode::Default,
         };
 

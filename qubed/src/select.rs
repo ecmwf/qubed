@@ -23,6 +23,7 @@ impl Qube {
     // - Default: Returns full subtree from selected values downward
     // - Prune: Removes branches that don't have all selected dimensions
     // - FollowSelection: Only shows nodes up to the selected values, doesn't expand deeper
+    //   Works regardless of key order - continues through all selected dimensions and stops after
 
     pub fn select(
         &self,
@@ -37,10 +38,17 @@ impl Qube {
 
         let parents = WalkPair { left: root, right: result.root() };
 
-        self.select_recurse(&selection, &mut result, parents, &mode, false)?;
+        // For FollowSelection mode, track which selected keys we still need to encounter
+        let remaining_selected_keys = if mode == SelectMode::FollowSelection {
+            selection.keys().cloned().collect::<HashSet<_>>()
+        } else {
+            HashSet::new()
+        };
+
+        self.select_recurse(&selection, &mut result, parents, &mode, remaining_selected_keys)?;
 
         // Prune any nodes which do not have all selected dimensions
-        if mode == SelectMode::Prune {
+        if mode == SelectMode::Prune || mode == SelectMode::FollowSelection {
             let mut has_none_of: HashSet<&str> = HashSet::new();
             for key in selection.keys() {
                 has_none_of.insert(*key);
@@ -59,7 +67,7 @@ impl Qube {
         result: &mut Qube,
         parents: WalkPair,
         mode: &SelectMode,
-        selected_at_this_level: bool,
+        mut remaining_selected_keys: HashSet<&str>,
     ) -> Result<(), String> {
         let source_node =
             self.node(parents.left).ok_or_else(|| format!("Node {:?} not found", parents.left))?;
@@ -69,16 +77,19 @@ impl Qube {
 
         // Get the dimension of each child
         let span = source_node.child_dimensions();
+        let mut has_children = false;
+        let mut children_found = false; // Track if we successfully processed children with matching values
 
         for dimension in span {
+            has_children = true;
             let dimension_str = self.dimension_str(dimension).ok_or_else(|| {
                 format!("Dimension {:?} not found in key store. Should not happen.", dimension)
             })?;
 
-            // For FollowSelection mode, if we selected at a previous level and this dimension
-            // is NOT in the selection, don't recurse deeper (stop at the deepest selected dimension)
+            // For FollowSelection mode: continue as long as there are selected keys to encounter
+            // Only skip dimensions if we've already encountered all selected keys
             if *mode == SelectMode::FollowSelection
-                && selected_at_this_level
+                && remaining_selected_keys.is_empty()
                 && !selection.contains_key(dimension_str)
             {
                 continue;
@@ -86,6 +97,7 @@ impl Qube {
 
             if selection.contains_key(dimension_str) {
                 let selection_coordinates = selection.get(dimension_str).unwrap();
+                let mut found = remaining_selected_keys.remove(dimension_str);
 
                 // Get children for this dimension
                 let source_children: Vec<_> = match source_node.children(*dimension) {
@@ -115,8 +127,15 @@ impl Qube {
 
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
-                    // We selected at this level, so mark it for FollowSelection mode
-                    self.select_recurse(selection, result, new_parents, mode, true)?;
+                    // Recurse with the (possibly modified) remaining keys
+                    self.select_recurse(
+                        selection,
+                        result,
+                        new_parents,
+                        mode,
+                        remaining_selected_keys.clone(),
+                    )?;
+                    children_found = true;
                 }
             } else {
                 // Dimension not in selection, so we take all children
@@ -140,16 +159,29 @@ impl Qube {
 
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
-                    // Pass along the selected_at_this_level flag
+                    // Pass along the remaining selected keys for FollowSelection
                     self.select_recurse(
                         selection,
                         result,
                         new_parents,
                         mode,
-                        selected_at_this_level,
+                        remaining_selected_keys.clone(),
                     )?;
+                    children_found = true;
                 }
             }
+        }
+
+        // In FollowSelection mode: if we've reached a terminal point and haven't found all requested keys,
+        // remove this branch. A terminal point is:
+        // - A leaf node (no child dimensions), OR
+        // - A node where we've found all keys and skipped remaining unselected dimensions
+        if *mode == SelectMode::FollowSelection
+            && !remaining_selected_keys.is_empty()
+            && !children_found
+        {
+            // This branch reached a dead end without finding all requested keys
+            result.remove_node(parents.right).ok();
         }
 
         Ok(())
@@ -555,6 +587,172 @@ mod tests {
         let expected = r#"root
 └── class=1"#;
 
+        assert_eq!(result_qube.to_ascii(), Qube::from_ascii(expected)?.to_ascii());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_follow_selection_key_order_independence() -> Result<(), String> {
+        // Test that FollowSelection works regardless of key order in the selection
+        // Tree is: class -> expver -> param
+        // But we specify selection as: param="1", class=1 (reverse order)
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        // Specify selection in different order than tree (param first, then class)
+        // Should still get same result as if we specified in tree order
+        let selection = [("param", Coordinates::from(1)), ("class", Coordinates::from(1))];
+        let result_qube = qube.select(&selection, SelectMode::FollowSelection)?;
+
+        println!("FollowSelection with reordered keys:\n{}", result_qube.to_ascii());
+
+        // Should show all combinations: class=1 with all expver that have param=1
+        let expected = r#"root
+└── class=1
+    ├── expver=0001
+    │   └── param=1
+    └── expver=0002
+        └── param=1"#;
+
+        assert_eq!(result_qube.to_ascii(), Qube::from_ascii(expected)?.to_ascii());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_follow_selection_drops_incomplete_branches() -> Result<(), String> {
+        // Test that FollowSelection drops branches that don't have all requested KEY DIMENSIONS
+        // Even if they have some of the requested keys with values
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        // Select for a key that only some branches have
+        // Request: step (doesn't exist) and class (exists)
+        // Since no branch has "step" dimension, all should be dropped
+        // This tests that missing requested keys cause branch removal
+        let selection = [("step", Coordinates::from(1))];
+        let result_qube = qube.select(&selection, SelectMode::FollowSelection)?;
+
+        println!("FollowSelection with nonexistent key:\n{}", result_qube.to_ascii());
+
+        // Since "step" key is never found in any branch, result should be empty (just root)
+        let expected = r#"root"#;
+        assert_eq!(result_qube.to_ascii(), Qube::from_ascii(expected)?.to_ascii());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_follow_selection_drops_incomplete_branches_2() -> Result<(), String> {
+        // Test that FollowSelection drops branches that don't have all requested KEY DIMENSIONS
+        // Even if they have some of the requested keys with values
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── step=1
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        // Select for a key that only some branches have
+        // Request: step (doesn't exist) and class (exists)
+        // Since no branch has "step" dimension, all should be dropped
+        // This tests that missing requested keys cause branch removal
+        let selection = [("step", Coordinates::from(1))];
+        let result_qube = qube.select(&selection, SelectMode::FollowSelection)?;
+
+        println!("FollowSelection with nonexistent key:\n{}", result_qube.to_ascii());
+
+        // Since "step" key is never found in any branch, result should be empty (just root)
+        let expected = r#"root
+└── class=2
+    └── step=1"#;
+        assert_eq!(result_qube.to_ascii(), Qube::from_ascii(expected)?.to_ascii());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_follow_selection_keeps_complete_branches() -> Result<(), String> {
+        // Test that FollowSelection keeps branches that have all requested keys
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        // Select multiple values of expver and param - all combinations should show
+        let selection =
+            [("expver", Coordinates::from(&["0001", "0002"])), ("param", Coordinates::from(1))];
+        let result_qube = qube.select(&selection, SelectMode::FollowSelection)?;
+
+        println!("FollowSelection with multiple selected values:\n{}", result_qube.to_ascii());
+
+        // Should show all class/expver combinations that have param=1
+        let expected = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   └── param=1
+│   └── expver=0002
+│       └── param=1
+└── class=2
+    ├── expver=0001
+    │   └── param=1
+    └── expver=0002
+        └── param=1"#;
         assert_eq!(result_qube.to_ascii(), Qube::from_ascii(expected)?.to_ascii());
 
         Ok(())
