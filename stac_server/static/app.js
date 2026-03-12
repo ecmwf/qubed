@@ -562,14 +562,14 @@ function renderMARSRequest(request, descriptions) {
     return `<span class="punct">[</span>${valueArray.map((v) => format_value(key, v)).join(`<span class="punct">,</span> `)}<span class="punct">]</span>`;
   };
 
-  // Add feature object to each request if polygon is selected
-  const requestsWithFeature = selectedPolygon ? request.map(obj => ({
-    ...obj,
-    feature: {
-      type: "polygon",
-      shape: selectedPolygon
+  // Add feature object to each request if polygon is selected; always strip "root" key
+  const requestsWithFeature = request.map(obj => {
+    const { root: _root, ...rest } = obj;
+    if (selectedPolygon) {
+      return { ...rest, feature: { type: "polygon", shape: selectedPolygon } };
     }
-  })) : request;
+    return rest;
+  });
 
   // Store for copying
   currentMARSRequests = requestsWithFeature;
@@ -654,12 +654,15 @@ async function fetchCatalog(request, stacUrl) {
     const marsRequestsSection = document.getElementById("mars-requests-section");
     const nextButton = document.getElementById("next-btn");
 
+    const sidebar = document.getElementById("catalog-list");
+
     if (hasReachedEnd) {
       // Step 1: show the region selection page, hide everything else
       console.log("At end of traversal, showing region selection step");
       currentSelectionSection.style.display = "none";
       marsRequestsSection.style.display = "none";
       nextButton.style.display = "none";
+      if (sidebar) sidebar.style.display = "none";
       catalogCache = catalog; // Store catalog for re-rendering with features
       console.log("Descriptions available:", catalog.debug.descriptions);
 
@@ -682,6 +685,7 @@ async function fetchCatalog(request, stacUrl) {
       }
     } else {
       // Not at the end: show current selection, hide region + MARS sections, show next button
+      if (sidebar) sidebar.style.display = "";
       currentSelectionSection.style.display = "block";
       marsRequestsSection.style.display = "none";
       nextButton.style.display = "flex";
@@ -897,7 +901,9 @@ function showMARSRequestsSection() {
   const regionSelectionSection = document.getElementById("region-selection-section");
   const marsRequestsSection = document.getElementById("mars-requests-section");
   const polytopeSection = document.getElementById("polytope-section");
+  const sidebar = document.getElementById("catalog-list");
 
+  if (sidebar) sidebar.style.display = "none";
   if (regionSelectionSection) regionSelectionSection.style.display = "none";
   if (marsRequestsSection) {
     marsRequestsSection.style.display = "block";

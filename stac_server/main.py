@@ -164,6 +164,109 @@ async def get_language():
 # Admin endpoint – push new/updated data into the running catalogue
 # ---------------------------------------------------------------------------
 
+@app.post("/api/v2/polytope/query")
+async def query_polytope(
+    body_json=Depends(get_body_json),
+):
+    """
+    Query the Destination Earth Polytope data extraction service with MARS requests.
+    Expects a JSON body with:
+    - 'requests': array of MARS request objects
+    - 'credentials': object with 'user_email' and 'user_key' fields
+
+    Connects to: polytope.lumi.apps.dte.destination-earth.eu
+    Collection: destination-earth
+    """
+    try:
+        import earthkit.data
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="earthkit.data is not installed. Please install it with 'pip install earthkit-data'",
+        )
+
+    requests_list = body_json.get("requests", [])
+    if not requests_list:
+        raise HTTPException(status_code=400, detail="No requests provided")
+
+    credentials = body_json.get("credentials", {})
+    user_email = credentials.get("user_email")
+    user_key = credentials.get("user_key")
+
+    if not user_email or not user_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Credentials required: provide user_email and user_key",
+        )
+
+    polytope_kwargs = {
+        "stream": False,
+        "address": "polytope.lumi.apps.dte.destination-earth.eu",
+        "user_email": user_email,
+        "user_key": user_key,
+    }
+
+    logger.info(f"Querying Polytope with user email: {user_email}")
+
+    results = []
+    successful = 0
+    failed = 0
+
+    for idx, mars_request in enumerate(requests_list):
+        try:
+            logger.info(f"Querying Polytope for request {idx + 1}/{len(requests_list)}")
+            logger.debug(f"Request: {mars_request}")
+
+            ds = earthkit.data.from_source(
+                "polytope", "destination-earth", mars_request, **polytope_kwargs
+            )
+
+            try:
+                ds_json = ds._json()
+                logger.info(f"Successfully extracted JSON from request {idx + 1}")
+            except Exception as json_error:
+                logger.warning(f"Could not extract JSON from request {idx + 1}: {json_error}")
+                ds_json = None
+
+            data_info = (
+                f"Retrieved {len(ds)} fields" if hasattr(ds, "__len__") else "Data retrieved"
+            )
+
+            result_entry = {
+                "success": True,
+                "request_index": idx,
+                "message": data_info,
+                "data_size": str(len(ds)) if hasattr(ds, "__len__") else None,
+                "mars_request": mars_request,
+            }
+            if ds_json is not None:
+                result_entry["json_data"] = ds_json
+
+            results.append(result_entry)
+            successful += 1
+            logger.info(f"Request {idx + 1} successful: {data_info}")
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Request {idx + 1} failed: {error_msg}")
+            results.append(
+                {
+                    "success": False,
+                    "request_index": idx,
+                    "error": error_msg,
+                    "mars_request": mars_request,
+                }
+            )
+            failed += 1
+
+    return {
+        "total": len(requests_list),
+        "successful": successful,
+        "failed": failed,
+        "results": results,
+    }
+
+
 @app.post("/api/v2/union/")
 async def union(
     credentials: HTTPAuthorizationCredentials = Depends(validate_api_key),
