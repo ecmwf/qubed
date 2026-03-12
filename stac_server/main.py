@@ -178,109 +178,69 @@ async def union(
 # Catalogue query endpoints (server-side fallback for WASM)
 # ---------------------------------------------------------------------------
 
-def follow_query(request: dict[str, str | list[str]], qube: PyQube):
-    rel_qube = qube.select(request, None, None)
-    full_axes = rel_qube.all_unique_dim_coords()
+# def follow_query(request: dict[str, str | list[str]], qube: PyQube):
+#     rel_qube = qube.select(request, None, None)
+#     full_axes = rel_qube.all_unique_dim_coords()
 
-    seen_keys = list(request.keys())
-    dataset_key_ordering = None
+#     seen_keys = list(request.keys())
+#     dataset_key_ordering = None
 
-    s = qube.select(request, "follow_selection", None)
-    s.compress()
+#     s = qube.select(request, "follow_selection", None)
+#     s.compress()
 
-    if seen_keys and "dataset" in seen_keys:
-        ds = request["dataset"]
-        ds_name = ds if not isinstance(ds, list) else (ds[0] if len(ds) == 1 else None)
-        dataset_key_ordering = dataset_key_orders.get(ds_name) or dataset_key_orders["default"]
+#     if seen_keys and "dataset" in seen_keys:
+#         ds = request["dataset"]
+#         ds_name = ds if not isinstance(ds, list) else (ds[0] if len(ds) == 1 else None)
+#         dataset_key_ordering = dataset_key_orders.get(ds_name) or dataset_key_orders["default"]
 
-    if dataset_key_ordering is None:
-        available_keys = {node.key for _, node in s.leaf_nodes()}
-    else:
-        available_keys = [key for key in dataset_key_ordering if key in full_axes]
+#     if dataset_key_ordering is None:
+#         available_keys = {node.key for _, node in s.leaf_nodes()}
+#     else:
+#         available_keys = [key for key in dataset_key_ordering if key in full_axes]
 
-    frontier_keys = next((x for x in available_keys if x not in seen_keys), [])
+#     frontier_keys = next((x for x in available_keys if x not in seen_keys), [])
 
-    return_axes = []
-    for key, info in full_axes.items():
-        entry = {
-            "key": key,
-            "on_frontier": (key in frontier_keys) and (key not in seen_keys),
-        }
-        vals = list(info)
-        try:
-            sorted_vals = sorted(vals, key=int)
-        except (ValueError, TypeError):
-            sorted_vals = sorted(vals)
-        entry["values"] = sorted_vals
-        return_axes.append(entry)
+#     return_axes = []
+#     for key, info in full_axes.items():
+#         entry = {
+#             "key": key,
+#             "on_frontier": (key in frontier_keys) and (key not in seen_keys),
+#         }
+#         vals = list(info)
+#         try:
+#             sorted_vals = sorted(vals, key=int)
+#         except (ValueError, TypeError):
+#             sorted_vals = sorted(vals)
+#         entry["values"] = sorted_vals
+#         return_axes.append(entry)
 
-    return s, return_axes
-
-
-def make_link(axis, request_params):
-    key_name = axis["key"]
-    href_template = (
-        f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
-    )
-    values_from_language = mars_language.get(key_name, {}).get("values", {})
-    return {
-        "title": key_name,
-        "uriTemplate": href_template,
-        "rel": "child",
-        "type": "application/json",
-        "variables": {
-            key_name: {
-                "description": mars_language.get(key_name, {}).get("description", ""),
-                "enum": axis["values"],
-                "value_descriptions": {
-                    v: values_from_language[v]
-                    for v in axis["values"]
-                    if v in values_from_language
-                },
-                "on_frontier": axis["on_frontier"],
-            }
-        },
-    }
+#     return s, return_axes
 
 
-@app.get("/api/v2/stac/")
-async def get_STAC(
-    request: dict[str, str | list[str]] = Depends(parse_request),
-):
-    q, axes = follow_query(request, qube)
-
-    end_of_traversal = not any(a["on_frontier"] for a in axes)
-    final_object = list(q.to_datacubes()) if end_of_traversal else []
-
-    kvs = [
-        f"{k}={','.join(v)}" if isinstance(v, list) else f"{k}={v}"
-        for k, v in request.items()
-    ]
-    request_params = "&".join(kvs)
-
-    all_keys = {a["key"] for a in axes} | set(request.keys())
-    descriptions = {
-        key: {
-            "key": key,
-            "values": request.get(key, []) if isinstance(request.get(key), list) else ([request[key]] if key in request else []),
-            "description": mars_language.get(key, {}).get("description", ""),
-            "value_descriptions": mars_language.get(key, {}).get("values", {}),
-        }
-        for key in all_keys
-    }
-
-    return {
-        "type": "Catalog",
-        "stac_version": "1.0.0",
-        "id": "root" if not request else "/stac?" + request_params,
-        "description": "STAC collection representing potential children of this request",
-        "links": [make_link(a, request_params) for a in axes],
-        "final_object": final_object,
-        "debug": {
-            "descriptions": descriptions,
-            "qube": q.to_ascii(),
-        },
-    }
+# def make_link(axis, request_params):
+#     key_name = axis["key"]
+#     href_template = (
+#         f"/stac?{request_params}{'&' if request_params else ''}{key_name}={{{key_name}}}"
+#     )
+#     values_from_language = mars_language.get(key_name, {}).get("values", {})
+#     return {
+#         "title": key_name,
+#         "uriTemplate": href_template,
+#         "rel": "child",
+#         "type": "application/json",
+#         "variables": {
+#             key_name: {
+#                 "description": mars_language.get(key_name, {}).get("description", ""),
+#                 "enum": axis["values"],
+#                 "value_descriptions": {
+#                     v: values_from_language[v]
+#                     for v in axis["values"]
+#                     if v in values_from_language
+#                 },
+#                 "on_frontier": axis["on_frontier"],
+#             }
+#         },
+#     }
 
 
 @app.get("/api/v2/select/")
@@ -290,42 +250,42 @@ async def select(
     return qube.select(request).to_json()
 
 
-@app.get("/api/v2/query")
-async def query(
-    request: dict[str, str | list[str]] = Depends(parse_request),
-):
-    _, paths = follow_query(request, qube)
-    return paths
+# @app.get("/api/v2/query")
+# async def query(
+#     request: dict[str, str | list[str]] = Depends(parse_request),
+# ):
+#     _, paths = follow_query(request, qube)
+#     return paths
 
 
-@app.get("/api/v2/basicstac/{filters:path}")
-async def basic_stac(filters: str):
-    pairs = filters.strip("/").split("/")
-    request = dict(p.split("=") for p in pairs if "=" in p)
+# @app.get("/api/v2/basicstac/{filters:path}")
+# async def basic_stac(filters: str):
+#     pairs = filters.strip("/").split("/")
+#     request = dict(p.split("=") for p in pairs if "=" in p)
 
-    q, _ = follow_query(request, qube)
+#     q, _ = follow_query(request, qube)
 
-    def _make_link(child_request):
-        kvs = [f"{k}={v}" for k, v in child_request.items()]
-        last_key, last_value = list(child_request.items())[-1]
-        return {
-            "title": f"{last_key}={last_value}",
-            "href": f"/api/v2/basicstac/{'/'.join(kvs)}",
-            "rel": "child",
-            "type": "application/json",
-        }
+#     def _make_link(child_request):
+#         kvs = [f"{k}={v}" for k, v in child_request.items()]
+#         last_key, last_value = list(child_request.items())[-1]
+#         return {
+#             "title": f"{last_key}={last_value}",
+#             "href": f"/api/v2/basicstac/{'/'.join(kvs)}",
+#             "rel": "child",
+#             "type": "application/json",
+#         }
 
-    this_key, this_value = list(request.items())[-1] if request else ("root", "root")
-    key_info = mars_language.get(this_key, {})
-    value_info = key_info.get("values", {}).get(this_value, f"No info found for `{this_value}`.")
-    if this_key == "root":
-        value_info = "The root node"
+#     this_key, this_value = list(request.items())[-1] if request else ("root", "root")
+#     key_info = mars_language.get(this_key, {})
+#     value_info = key_info.get("values", {}).get(this_value, f"No info found for `{this_value}`.")
+#     if this_key == "root":
+#         value_info = "The root node"
 
-    return {
-        "type": "Catalog",
-        "stac_version": "1.0.0",
-        "id": "root" if not request else "/".join(f"{k}={v}" for k, v in request.items()),
-        "title": f"{this_key}={this_value}",
-        "description": value_info,
-        "links": [_make_link(leaf) for leaf in q.leaves()],
-    }
+#     return {
+#         "type": "Catalog",
+#         "stac_version": "1.0.0",
+#         "id": "root" if not request else "/".join(f"{k}={v}" for k, v in request.items()),
+#         "title": f"{this_key}={this_value}",
+#         "description": value_info,
+#         "links": [_make_link(leaf) for leaf in q.leaves()],
+#     }

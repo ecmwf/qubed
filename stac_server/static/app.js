@@ -705,6 +705,7 @@ async function fetchCatalog(request, stacUrl) {
 
 // Initialize the viewer by fetching the STAC catalog
 function initializeViewer() {
+  window.__viewerStarted = true;
   const stacUrl = getSTACUrlFromQuery();
   const request = get_request_from_url();
 
@@ -1343,21 +1344,26 @@ function closeNotebook() {
   outputDiv.style.display = 'none';
 }
 
-// Call initializeViewer on page load
-// Also expose it globally so catalogue_wasm.js can re-trigger it after the
-// WASM catalogue finishes loading asynchronously.
+// Expose initializeViewer globally so catalogue_wasm.js can call it once the
+// WASM catalogue (or the server fallback) is ready.
 window.initializeViewer = initializeViewer;
-initializeViewer();
 
-// Show server-side badge after a short delay (WASM will override if it loads)
+// Show a loading spinner — catalogue_wasm.js will replace this once ready.
+const _itemsEl = document.getElementById("items");
+if (_itemsEl) {
+  _itemsEl.innerHTML = '<p style="padding:1rem;color:#888">⏳ Loading catalogue…</p>';
+}
+
+// Safety net: if catalogue_wasm.js hasn't triggered a render within 8s
+// (e.g. the .wasm file is missing), fall back to the server-side endpoint.
 setTimeout(() => {
-  const badge = document.getElementById("wasm-status");
-  if (badge && !window.__wasmCatalogue) {
-    badge.textContent = "🌐 Server";
-    badge.style.background = "#cce5ff";
-    badge.style.color = "#004085";
+  if (!window.__wasmCatalogue && !window.__viewerStarted) {
+    console.warn("[wasm] Timed out waiting for WASM — falling back to server");
+    const badge = document.getElementById("wasm-status");
+    if (badge) { badge.textContent = "🌐 Server"; badge.style.background = "#cce5ff"; badge.style.color = "#004085"; }
+    initializeViewer();
   }
-}, 1000);
+}, 8000);
 
 // Add event listener for copy button
 document.addEventListener("DOMContentLoaded", () => {

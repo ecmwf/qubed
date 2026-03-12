@@ -63,19 +63,19 @@ async function initWasm() {
       console.warn("[wasm] /api/v2/language not available; descriptions will be empty");
     }
 
-    // 5. Expose the catalogue to app.js and re-run the viewer
+    // 5. Expose the catalogue and trigger the first (and only) render via WASM
     window.__wasmCatalogue = catalogue;
     console.log("[wasm] WasmCatalogue ready — client-side catalogue browsing active");
     const badge = document.getElementById("wasm-status");
     if (badge) { badge.textContent = "🦀 WASM"; badge.style.background = "#d4edda"; badge.style.color = "#155724"; }
 
-    // Re-run the viewer so it picks up the WASM catalogue for the current URL
-    if (typeof window.initializeViewer === "function") {
-      window.initializeViewer();
-    }
+    window.initializeViewer();
   } catch (err) {
-    console.error("[wasm] Initialisation failed:", err);
-    // window.__wasmCatalogue remains unset → app.js uses server-side STAC
+    console.error("[wasm] Initialisation failed, falling back to server:", err);
+    // Fall back: render via the server-side /api/v2/stac/ endpoint
+    const badge = document.getElementById("wasm-status");
+    if (badge) { badge.textContent = "🌐 Server"; badge.style.background = "#cce5ff"; badge.style.color = "#004085"; }
+    window.initializeViewer();
   }
 }
 
