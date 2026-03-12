@@ -812,7 +812,7 @@ mod tests {
 
     #[test]
     fn test_select_multiple_values_same_key_default_mode_int() -> Result<(), String> {
-        // Test selecting multiple values on the same key in Default mode
+        // Test selecting multiple integer values on the same key in Default mode
         let input = r#"root
 ├── class=1
 │   ├── expver=0001
@@ -832,9 +832,9 @@ mod tests {
 
         let qube = Qube::from_ascii(input).unwrap();
 
-        // Select multiple expver values: 0001 AND 0002
+        // Select multiple param values: 1 AND 2 (both integers)
         // Default mode should show full subtree for all selected values
-        let selection = [("param", Coordinates::from(&["1", "2"]))];
+        let selection = [("param", Coordinates::from(&[1, 2]))];
         let result_qube = qube.select(&selection, SelectMode::Default)?;
 
         println!("Default mode with multiple param values:\n{}", result_qube.to_ascii());
