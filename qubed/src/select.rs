@@ -16,7 +16,7 @@ pub(crate) struct WalkPair {
 }
 
 impl Qube {
-    // Select takes a dictionary of key-vecvalues pairs and returns a QubeView
+    // Select takes a dictionary of key-values pairs and returns a QubeView
     // It does not matter which order the keys are specified
     //
     // SelectMode:
@@ -24,15 +24,16 @@ impl Qube {
     // - Prune: Removes branches that don't have all selected dimensions
     // - FollowSelection: Only shows nodes up to the selected values, doesn't expand deeper
 
-    pub fn select<C>(&self, selection: &[(&str, C)], mode: SelectMode) -> Result<Qube, String>
-    where
-        C: Into<Coordinates> + Clone,
-    {
+    pub fn select(
+        &self,
+        selection: &[(&str, Coordinates)],
+        mode: SelectMode,
+    ) -> Result<Qube, String> {
         let root = self.root();
         let mut result = Qube::new();
 
         let selection: HashMap<&str, Coordinates> =
-            selection.iter().map(|(k, v)| (*k, v.clone().into())).collect();
+            selection.iter().map(|(k, v)| (*k, v.clone())).collect();
 
         let parents = WalkPair { left: root, right: result.root() };
 
@@ -74,8 +75,12 @@ impl Qube {
                 format!("Dimension {:?} not found in key store. Should not happen.", dimension)
             })?;
 
-            // For FollowSelection mode, if we selected at a previous level, don't recurse deeper
-            if *mode == SelectMode::FollowSelection && selected_at_this_level {
+            // For FollowSelection mode, if we selected at a previous level and this dimension
+            // is NOT in the selection, don't recurse deeper (stop at the deepest selected dimension)
+            if *mode == SelectMode::FollowSelection
+                && selected_at_this_level
+                && !selection.contains_key(dimension_str)
+            {
                 continue;
             }
 
@@ -231,7 +236,7 @@ mod tests {
 
         let qube = Qube::from_ascii(input).unwrap();
 
-        let selection = [("class", &[1])];
+        let selection = [("class", Coordinates::from(1))];
         let selected_qube = qube.select(&selection, SelectMode::Default)?;
 
         println!("Selected Qube:\n{}", selected_qube.to_ascii());
@@ -275,7 +280,7 @@ mod tests {
         selection.insert("class".to_string(), Coordinates::from(1));
         selection.insert("param".to_string(), Coordinates::from(1));
 
-        let selection = [("class", &[1]), ("param", &[1])];
+        let selection = [("class", Coordinates::from(1)), ("param", Coordinates::from(1))];
 
         let selected_qube = qube.select(&selection, SelectMode::Default)?;
 
@@ -319,7 +324,7 @@ mod tests {
         // // selection.insert("class".to_string(), Coordinates::from(1));
         // selection.insert("param".to_string(), Coordinates::from(1));
 
-        let selection = [("expver", &["0001"])];
+        let selection = [("expver", Coordinates::from(&["0001"]))];
 
         let selected_qube = qube.select(&selection, SelectMode::Default)?;
 
@@ -367,7 +372,7 @@ mod tests {
         // // selection.insert("class".to_string(), Coordinates::from(1));
         // selection.insert("param".to_string(), Coordinates::from(1));
 
-        let selection = [("expver", &["0003"])];
+        let selection = [("expver", Coordinates::from(&["0003"]))];
 
         let selected_qube = qube.select(&selection, SelectMode::Prune)?;
 
@@ -450,7 +455,8 @@ mod tests {
 
         // Select class=1 and expver=0001 with FollowSelection mode
         // Should only show the path to these selections, not the param children
-        let selection = [("class", &["1"]), ("expver", &["0001"])];
+        // Note: Can now mix integer and string coordinates in one selection!
+        let selection = [("class", Coordinates::from(1)), ("expver", Coordinates::from(&["0001"]))];
         let selected_qube = qube.select(&selection, SelectMode::FollowSelection)?;
 
         println!("FollowSelection Result:\n{}", selected_qube.to_ascii());
@@ -488,7 +494,7 @@ mod tests {
 
         let qube = Qube::from_ascii(input).unwrap();
 
-        let selection = [("class", &[1])];
+        let selection = [("class", Coordinates::from(1))];
 
         // Default mode: shows full subtree
         let default_result = qube.select(&selection, SelectMode::Default)?;
@@ -539,7 +545,7 @@ mod tests {
         // Only select class=1 (expver is NOT selected)
         // With FollowSelection, we should get class=1 and ALL its expver children,
         // but stop before param
-        let selection = [("class", &[1])];
+        let selection = [("class", Coordinates::from(1))];
         let result_qube = qube.select(&selection, SelectMode::FollowSelection)?;
 
         println!("FollowSelection with partial selection:\n{}", result_qube.to_ascii());
