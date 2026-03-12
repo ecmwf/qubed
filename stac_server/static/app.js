@@ -655,19 +655,38 @@ async function fetchCatalog(request, stacUrl) {
     const nextButton = document.getElementById("next-btn");
 
     if (hasReachedEnd) {
-      // At the end: show MARS requests, hide current selection and next button
-      console.log("At end of traversal, rendering MARS requests");
+      // Step 1: show the region selection page, hide everything else
+      console.log("At end of traversal, showing region selection step");
       currentSelectionSection.style.display = "none";
-      marsRequestsSection.style.display = "block";
+      marsRequestsSection.style.display = "none";
       nextButton.style.display = "none";
       catalogCache = catalog; // Store catalog for re-rendering with features
       console.log("Descriptions available:", catalog.debug.descriptions);
-      renderMARSRequest(catalog.final_object, catalog.debug.descriptions);
+
+      // Show region selection section (Step 1)
+      const regionSelectionSection = document.getElementById("region-selection-section");
+      if (regionSelectionSection) {
+        regionSelectionSection.style.display = "block";
+        // Reset map/buttons to initial state each time end-of-traversal is reached
+        const mapContainer = document.getElementById("map-container");
+        const enableRegionBtn = document.getElementById("enable-region-btn");
+        const skipRegionBtn = document.getElementById("skip-region-btn");
+        if (mapContainer) mapContainer.style.display = "none";
+        if (enableRegionBtn) enableRegionBtn.style.display = "";
+        if (skipRegionBtn) skipRegionBtn.textContent = "Continue without Region →";
+        // Clear any previous polygon
+        selectedPolygon = null;
+        if (drawnItems) drawnItems.clearLayers();
+        const selReg = document.getElementById("selected-region");
+        if (selReg) selReg.style.display = "none";
+      }
     } else {
-      // Not at the end: show current selection, hide MARS requests, show next button
+      // Not at the end: show current selection, hide region + MARS sections, show next button
       currentSelectionSection.style.display = "block";
       marsRequestsSection.style.display = "none";
       nextButton.style.display = "flex";
+      const regionSelectionSection = document.getElementById("region-selection-section");
+      if (regionSelectionSection) regionSelectionSection.style.display = "none";
       renderRequestBreakdown(request, catalog.debug.descriptions);
     }
 
@@ -678,20 +697,6 @@ async function fetchCatalog(request, stacUrl) {
     if (catalog.links) {
       console.log("Fetched STAC catalog:", stacUrl, catalog.links);
       renderCatalogItems(catalog.links);
-    }
-
-    // Show region selection at the end of catalogue
-    const regionSelection = document.getElementById("region-selection");
-    const catalogList = document.getElementById("catalog-list");
-    const polytopeSection = document.getElementById("polytope-section");
-    if (hasReachedEnd) {
-      regionSelection.style.display = "block";
-      catalogList.classList.add("region-active");
-      if (polytopeSection) polytopeSection.style.display = "block";
-    } else {
-      regionSelection.style.display = "none";
-      catalogList.classList.remove("region-active");
-      if (polytopeSection) polytopeSection.style.display = "none";
     }
 
     // Highlight the request and raw STAC
@@ -887,27 +892,52 @@ function displaySelectedRegion(coordinates) {
   }
 }
 
+// Transition from Step 1 (region selection) to Step 2 (MARS requests + Polytope)
+function showMARSRequestsSection() {
+  const regionSelectionSection = document.getElementById("region-selection-section");
+  const marsRequestsSection = document.getElementById("mars-requests-section");
+  const polytopeSection = document.getElementById("polytope-section");
+
+  if (regionSelectionSection) regionSelectionSection.style.display = "none";
+  if (marsRequestsSection) {
+    marsRequestsSection.style.display = "block";
+    // Scroll to the top of the main content
+    marsRequestsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  if (polytopeSection) polytopeSection.style.display = "block";
+
+  if (catalogCache) {
+    renderMARSRequest(catalogCache.final_object, catalogCache.debug.descriptions);
+  }
+}
+
 // Event listeners for region selection
 document.addEventListener("DOMContentLoaded", () => {
   const enableRegionBtn = document.getElementById('enable-region-btn');
   const skipRegionBtn = document.getElementById('skip-region-btn');
   const clearRegionBtn = document.getElementById('clear-region-btn');
+  const confirmRegionBtn = document.getElementById('confirm-region-btn');
   const mapContainer = document.getElementById('map-container');
 
   if (enableRegionBtn) {
     enableRegionBtn.addEventListener('click', () => {
       mapContainer.style.display = 'block';
       enableRegionBtn.style.display = 'none';
-      skipRegionBtn.textContent = 'Continue Without Region';
       initializeRegionMap();
     });
   }
 
   if (skipRegionBtn) {
     skipRegionBtn.addEventListener('click', () => {
-      // User chose to skip region selection - could proceed to next step
-      console.log('User skipped region selection');
-      // Here you could trigger the next action or inform the user
+      console.log('User skipped region selection, proceeding to MARS requests');
+      showMARSRequestsSection();
+    });
+  }
+
+  if (confirmRegionBtn) {
+    confirmRegionBtn.addEventListener('click', () => {
+      console.log('User confirmed region, proceeding to MARS requests with polygon:', selectedPolygon);
+      showMARSRequestsSection();
     });
   }
 

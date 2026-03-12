@@ -102,37 +102,6 @@
                     <!-- Items from the STAC catalog will be rendered here -->
                 </div>
 
-                <!-- Geographic Region Selection -->
-                <div id="region-selection" class="region-selection" style="display: none;">
-                    <h3 class="region-title">
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M10 2a6 6 0 00-6 6c0 4.5 6 10 6 10s6-5.5 6-10a6 6 0 00-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z"/>
-                        </svg>
-                        Geographic Region Selection
-                    </h3>
-                    <p class="region-description">Would you like to filter your data by geographic region?</p>
-
-                    <div class="region-controls">
-                        <button id="enable-region-btn" class="region-btn primary">Select Region on Map</button>
-                        <button id="skip-region-btn" class="region-btn secondary">Skip Region Selection</button>
-                    </div>
-
-                    <div id="map-container" style="display: none;">
-                        <div class="map-instructions">
-                            <p><strong>Instructions:</strong> Use the polygon (□) or rectangle (▭) tool to draw your region.</p>
-                        </div>
-                        <div id="map" style="height: 400px; width: 100%; border-radius: 10px; overflow: hidden; margin-bottom: 1rem;"></div>
-
-                        <div id="selected-region" class="selected-region" style="display: none;">
-                            <h4>Selected Region Feature:</h4>
-                            <div class="code-block">
-                                <pre id="region-coordinates"></pre>
-                            </div>
-                            <button id="clear-region-btn" class="region-btn secondary">Clear Selection</button>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Additional Actions -->
                 <div class="sidebar-footer">
                     <a id="stac-anchor" class="text-link">
@@ -164,6 +133,53 @@
                 </div>
             </section>
 
+            <!-- Step 1: Geographic Region Selection (shown at end of traversal) -->
+            <section id="region-selection-section" class="detail-section" style="display: none;">
+                <h2 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10 2a6 6 0 00-6 6c0 4.5 6 10 6 10s6-5.5 6-10a6 6 0 00-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z"/>
+                    </svg>
+                    Geographic Region Selection
+                </h2>
+                <p class="section-description">
+                    You've finished navigating the catalogue. Would you like to restrict your data to a specific geographic region?
+                    Draw a region on the map below, or skip to proceed with the full global dataset.
+                </p>
+
+                <div class="region-controls">
+                    <button id="enable-region-btn" class="region-btn primary">
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10 2a6 6 0 00-6 6c0 4.5 6 10 6 10s6-5.5 6-10a6 6 0 00-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z"/>
+                        </svg>
+                        Draw Region on Map
+                    </button>
+                    <button id="skip-region-btn" class="region-btn secondary">
+                        Continue without Region →
+                    </button>
+                </div>
+
+                <div id="map-container" style="display: none;">
+                    <div class="map-instructions">
+                        <p><strong>Instructions:</strong> Use the polygon (□) or rectangle (▭) tool in the top-right of the map to draw your selection area.</p>
+                    </div>
+                    <div id="map" style="height: 450px; width: 100%; border-radius: 10px; overflow: hidden; margin-bottom: 1rem;"></div>
+
+                    <div id="selected-region" class="selected-region" style="display: none;">
+                        <h4>Selected Region:</h4>
+                        <div class="code-block">
+                            <pre id="region-coordinates"></pre>
+                        </div>
+                        <div class="region-controls" style="margin-top: 0.75rem;">
+                            <button id="confirm-region-btn" class="region-btn primary">
+                                Continue with this Region →
+                            </button>
+                            <button id="clear-region-btn" class="region-btn secondary">Clear Selection</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 2: MARS Requests (shown after region step) -->
             <section id="mars-requests-section" class="detail-section" style="display: none;">
                 <h2 class="section-title">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
