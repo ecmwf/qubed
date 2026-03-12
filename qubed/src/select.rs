@@ -757,4 +757,152 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_select_multiple_values_same_key_default_mode() -> Result<(), String> {
+        // Test selecting multiple values on the same key in Default mode
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        // Select multiple expver values: 0001 AND 0002
+        // Default mode should show full subtree for all selected values
+        let selection = [("expver", Coordinates::from(&["0001", "0002"]))];
+        let result_qube = qube.select(&selection, SelectMode::Default)?;
+
+        println!("Default mode with multiple expver values:\n{}", result_qube.to_ascii());
+
+        // Should include all class/expver combinations where expver is 0001 or 0002
+        let expected = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        assert_eq!(result_qube.to_ascii(), Qube::from_ascii(expected)?.to_ascii());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_multiple_values_same_key_default_mode_int() -> Result<(), String> {
+        // Test selecting multiple values on the same key in Default mode
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        // Select multiple expver values: 0001 AND 0002
+        // Default mode should show full subtree for all selected values
+        let selection = [("param", Coordinates::from(&["1", "2"]))];
+        let result_qube = qube.select(&selection, SelectMode::Default)?;
+
+        println!("Default mode with multiple param values:\n{}", result_qube.to_ascii());
+
+        // Should include all class/expver combinations where param is 1 or 2
+        let expected = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        assert_eq!(result_qube.to_ascii(), Qube::from_ascii(expected)?.to_ascii());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_multiple_values_same_key_excludes_unselected() -> Result<(), String> {
+        // Test that selecting multiple values on same key excludes values not in the selection
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   └── param=1
+│   ├── expver=0002
+│   │   └── param=1
+│   └── expver=0003
+│       └── param=1
+└── class=2
+    ├── expver=0001
+    │   └── param=1
+    ├── expver=0002
+    │   └── param=1
+    └── expver=0003
+        └── param=1"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        // Select only expver 0001 and 0002 (excludes 0003)
+        let selection = [("expver", Coordinates::from(&["0001", "0002"]))];
+        let result_qube = qube.select(&selection, SelectMode::Default)?;
+
+        println!("Multiple values excluding unselected:\n{}", result_qube.to_ascii());
+
+        // Should NOT include expver=0003
+        let expected = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   └── param=1
+│   └── expver=0002
+│       └── param=1
+└── class=2
+    ├── expver=0001
+    │   └── param=1
+    └── expver=0002
+        └── param=1"#;
+
+        assert_eq!(result_qube.to_ascii(), Qube::from_ascii(expected)?.to_ascii());
+
+        Ok(())
+    }
 }
