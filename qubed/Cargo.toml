@@ -14,7 +14,8 @@ smallbitvec = "2.6.0"
 tiny-str = "0.10.0"
 tiny-vec = "0.10.0"
 chrono = "0.4"
-rayon = "1.7"
+# rayon is not available on wasm32; gate it behind a feature flag
+rayon = { version = "1.7", optional = true }
 
 [lib]
 path = "src/lib.rs"
