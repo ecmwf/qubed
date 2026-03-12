@@ -1,0 +1,18 @@
+[package]
+name = "qubed_wasm"
+version = "0.1.0"
+edition = "2024"
+description = "WebAssembly bindings for the qubed catalogue browser"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+qubed = { path = "../qubed" }
+wasm-bindgen = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true

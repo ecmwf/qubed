@@ -6,5 +6,6 @@ members = [
     "qubed_meteo",
     "py_qubed",
     "py_qubed_meteo",
+    "qubed_wasm",
 ]
 

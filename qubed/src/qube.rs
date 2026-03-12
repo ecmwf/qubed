@@ -213,6 +213,27 @@ impl Qube {
         map
     }
 
+    /// Returns the dimension name of every leaf node (i.e. the "frontier" keys
+    /// that appear at the deepest traversed level, used by the WASM catalogue to
+    /// determine which key should be shown next when no explicit ordering is known).
+    pub fn leaf_dimensions(&self) -> Vec<String> {
+        let paths = self.leaf_node_ids_paths();
+        let mut seen = HashSet::new();
+        let mut result = Vec::new();
+        for path in &paths {
+            if let Some(&leaf_id) = path.last() {
+                if let Some(node) = self.nodes.get(leaf_id) {
+                    if let Some(dim_str) = self.dimension_str(&node.dim) {
+                        if seen.insert(dim_str.to_string()) {
+                            result.push(dim_str.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        result
+    }
+
     pub fn remove_node(&mut self, id: NodeIdx) -> Result<(), String> {
         let node = self.nodes.remove(id).ok_or_else(|| format!("Node {:?} not found", id))?;
 

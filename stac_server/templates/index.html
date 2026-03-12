@@ -94,6 +94,9 @@
                     </button>
                 </nav>
 
+                <!-- WASM status badge -->
+                <div id="wasm-status" style="font-size:0.75rem;padding:4px 8px;border-radius:4px;margin-bottom:8px;background:#eee;color:#555;display:inline-block">⏳ Loading…</div>
+
                 <!-- Catalog Items -->
                 <div id="items" class="catalog-items">
                     <!-- Items from the STAC catalog will be rendered here -->
@@ -350,6 +353,9 @@ qube.print()</code></pre>
     <script>
         window.API_URL = "{{ api_url }}stac/";
     </script>
+    <!-- WASM catalogue: loads Rust logic client-side for zero-latency browsing.
+         Falls back to server-side API automatically if WASM fails to load. -->
+    <script type="module" src="/static/catalogue_wasm.js"></script>
 </body>
 
 </html>

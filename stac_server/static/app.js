@@ -630,8 +630,17 @@ function renderRawSTACResponse(catalog) {
 // Fetch STAC catalog and display items
 async function fetchCatalog(request, stacUrl) {
   try {
-    const response = await fetch(stacUrl);
-    const catalog = await response.json();
+    let catalog;
+    if (window.__wasmCatalogue) {
+      // Use the client-side Rust/WASM catalogue — no network round-trip needed.
+      // `request` is an ordered array of [key, [value, ...]] pairs.
+      const reqObj = Object.fromEntries(request);
+      catalog = JSON.parse(window.__wasmCatalogue.stac(JSON.stringify(reqObj)));
+      console.log("[wasm] WASM stac() returned catalog:", catalog);
+    } else {
+      const response = await fetch(stacUrl);
+      catalog = await response.json();
+    }
 
     console.log("Fetched catalog:", catalog);
 
@@ -1335,7 +1344,20 @@ function closeNotebook() {
 }
 
 // Call initializeViewer on page load
+// Also expose it globally so catalogue_wasm.js can re-trigger it after the
+// WASM catalogue finishes loading asynchronously.
+window.initializeViewer = initializeViewer;
 initializeViewer();
+
+// Show server-side badge after a short delay (WASM will override if it loads)
+setTimeout(() => {
+  const badge = document.getElementById("wasm-status");
+  if (badge && !window.__wasmCatalogue) {
+    badge.textContent = "🌐 Server";
+    badge.style.background = "#cce5ff";
+    badge.style.color = "#004085";
+  }
+}, 1000);
 
 // Add event listener for copy button
 document.addEventListener("DOMContentLoaded", () => {
