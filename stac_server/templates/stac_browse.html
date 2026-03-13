@@ -240,10 +240,6 @@ function renderBreadcrumb() {
 
   if (S.view === 'catalog' || S.view === 'item') {
     const parts = S.catalogPath ? S.catalogPath.split('/') : [];
-    // root catalog crumb only if we're deeper
-    if (parts.length > 0 || S.view === 'item') {
-      crumbs.push({ label: 'Catalogue', click: () => go({ view:'catalog', catalogPath:'', itemId:null }) });
-    }
     let acc = '';
     for (let i = 0; i < parts.length; i++) {
       const seg = parts[i];
@@ -650,13 +646,14 @@ function _renderItemHtml(el, item, lang, cid, iid) {
     </tr>`;
   }
 
-  // top-level "general" keys surfaced in the left column
-  const GENERAL_KEYS = ['datetime','date','time','class','stream','type','dataset','expver',
-                        'activity','experiment','generation','model','realization'];
-  const generalEntries = GENERAL_KEYS.filter(k => props[k] != null).map(k => [k, props[k]]);
-  const otherEntries   = Object.entries(props).filter(([k]) => !GENERAL_KEYS.includes(k));
-  const generalRows = generalEntries.map(([k,v]) => metaRow(k, v)).join('');
-  const otherRows   = otherEntries.map(([k,v]) => metaRow(k, v)).join('');
+  // All properties in a consistent order: priority keys first, then the rest
+  const PRIORITY_KEYS = ['datetime','date','time','class','stream','type','dataset','expver',
+                         'activity','experiment','generation','model','realization'];
+  const orderedEntries = [
+    ...PRIORITY_KEYS.filter(k => props[k] != null).map(k => [k, props[k]]),
+    ...Object.entries(props).filter(([k]) => !PRIORITY_KEYS.includes(k)),
+  ];
+  const allMetaRows = orderedEntries.map(([k,v]) => metaRow(k, v)).join('');
 
   // ── Spatial extent ────────────────────────────────────────────────────
   const bbox = item.bbox || [-180, -90, 180, 90];
@@ -731,19 +728,13 @@ ds = ekd.from_source("mars", {k: v for k, v in props.items() if k != "datetime"}
 
     <div class="item-2col">
 
-      <!-- ─── Left: map + general summary ─── -->
+      <!-- ─── Left: map only ─── -->
       <div class="item-left">
-        <div class="meta-section" style="padding:.75rem;margin-bottom:.7rem">
+        <div class="meta-section" style="padding:.75rem">
           <div class="meta-section-title">Spatial Coverage</div>
           <div class="map-wrap"><div id="item-map"></div></div>
           <div style="font-size:.75rem;color:var(--text-secondary,#888);margin-top:.4rem;text-align:center">${esc(bboxLabel)}</div>
         </div>
-
-        ${generalRows ? `
-        <div class="meta-section" style="margin-bottom:.7rem">
-          <div class="meta-section-title">General</div>
-          <table class="meta-table"><tbody>${generalRows}</tbody></table>
-        </div>` : ''}
       </div>
 
       <!-- ─── Right: tabs ─── -->
@@ -756,10 +747,9 @@ ds = ekd.from_source("mars", {k: v for k, v in props.items() if k != "datetime"}
 
         <!-- Metadata tab -->
         <div id="itm" class="meta-section" style="border-radius:0 0 10px 10px;margin-top:0;box-shadow:0 2px 8px rgba(0,0,0,.08)">
-          ${otherRows
-            ? `<table class="meta-table"><tbody>${otherRows}</tbody></table>`
-            : `<p class="empty" style="margin:0">All fields shown in General.</p>`}
-          ${assetKeys.length && !otherRows ? assetsBlock : ''}
+          ${allMetaRows
+            ? `<table class="meta-table"><tbody>${allMetaRows}</tbody></table>`
+            : `<p class="empty" style="margin:0">No properties.</p>`}
         </div>
 
         <!-- Access tab -->

@@ -248,6 +248,7 @@ def _make_catalog_node(
         dcs = sub_qube.to_datacubes()
         item_links: list[dict] = []
         for dc in dcs:
+            dc.pop("root", None)  # not needed in item properties; confuses the browser
             iid = _make_item_id(dc)
             dt = _mars_datetime(dc.get("date"), dc.get("time"))
             item_links.append({
