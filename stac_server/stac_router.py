@@ -401,6 +401,45 @@ async def get_collection(collection_id: str, request: Request):
     return _make_collection(collection_id, sub.all_unique_dim_coords(), base)
 
 
+@router.get("/collections/{collection_id}/items", summary="List Collection Items")
+async def list_collection_items(
+    collection_id: str,
+    request: Request,
+    limit: int = Query(MAX_ITEMS_DEFAULT, ge=1, le=MAX_ITEMS_HARD_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    """Return GeoJSON FeatureCollection of items for a collection (STAC spec)."""
+    base = _base_url(request)
+    prefix = f"{base}/api/stac/v1"
+    sub = _select_collection(collection_id)
+    if sub is None:
+        raise HTTPException(status_code=404, detail=f"Collection '{collection_id}' not found")
+    all_dcs = sub.to_datacubes()
+    total = len(all_dcs)
+    features = [
+        _datacube_to_stac_item(dc, collection_id, base)
+        for dc in all_dcs[offset: offset + limit]
+    ]
+    links = [
+        {"rel": "self",       "type": "application/geo+json", "href": f"{prefix}/collections/{collection_id}/items?limit={limit}&offset={offset}"},
+        {"rel": "root",       "type": "application/json",     "href": f"{prefix}/"},
+        {"rel": "collection", "type": "application/json",     "href": f"{prefix}/collections/{collection_id}"},
+    ]
+    if offset + limit < total:
+        links.append({"rel": "next", "type": "application/geo+json",
+                      "href": f"{prefix}/collections/{collection_id}/items?limit={limit}&offset={offset + limit}"})
+    if offset > 0:
+        links.append({"rel": "prev", "type": "application/geo+json",
+                      "href": f"{prefix}/collections/{collection_id}/items?limit={limit}&offset={max(0, offset - limit)}"})
+    return {
+        "type":           "FeatureCollection",
+        "features":       features,
+        "numberMatched":  total,
+        "numberReturned": len(features),
+        "links":          links,
+    }
+
+
 # ── Hierarchical catalog browsing ────────────────────────────────────────────
 
 @router.get("/collections/{collection_id}/catalog", summary="Root Catalog Node")
