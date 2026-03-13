@@ -5,135 +5,120 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{{ title }} — STAC Browser</title>
   <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗂️</text></svg>">
   <style>
-    /* ── Layout ─────────────────────────────────────────────────── */
-    body { margin: 0; font-family: var(--font-family, system-ui, sans-serif); background: var(--bg-secondary, #f4f6fb); color: var(--text-primary, #1a1a2e); }
+    body { margin:0; font-family:var(--font-family,system-ui,sans-serif); background:var(--bg-secondary,#f4f6fb); color:var(--text-primary,#1a1a2e); }
 
+    /* header */
     .sb-header {
-      background: linear-gradient(135deg, var(--primary-color, #2563eb) 0%, var(--primary-dark, #1d4ed8) 100%);
-      color: #fff;
-      padding: 1rem 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,.18);
+      background:linear-gradient(135deg,var(--primary-color,#2563eb) 0%,var(--primary-dark,#1d4ed8) 100%);
+      color:#fff; padding:.85rem 1.5rem;
+      display:flex; align-items:center; gap:1rem;
+      box-shadow:0 2px 8px rgba(0,0,0,.18);
     }
-    .sb-header h1 { margin: 0; font-size: 1.3rem; font-weight: 700; }
-    .sb-header a { color: rgba(255,255,255,.85); text-decoration: none; font-size: .9rem; }
-    .sb-header a:hover { color: #fff; text-decoration: underline; }
+    .sb-header h1 { margin:0; font-size:1.25rem; font-weight:700; }
+    .sb-header a { color:rgba(255,255,255,.85); text-decoration:none; font-size:.88rem; }
+    .sb-header a:hover { color:#fff; text-decoration:underline; }
 
-    .sb-main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+    /* main */
+    .sb-main { max-width:1100px; margin:0 auto; padding:1.25rem 1.5rem; }
 
-    /* ── Breadcrumb ─────────────────────────────────────────────── */
+    /* breadcrumb */
     .breadcrumb {
-      display: flex; align-items: center; gap: .4rem;
-      font-size: .9rem; margin-bottom: 1.25rem;
-      background: var(--bg-primary, #fff);
-      border-radius: 8px;
-      padding: .55rem 1rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+      display:flex; align-items:center; gap:.35rem; flex-wrap:wrap;
+      font-size:.88rem; margin-bottom:1.1rem;
+      background:var(--bg-primary,#fff); border-radius:8px;
+      padding:.5rem 1rem; box-shadow:0 1px 4px rgba(0,0,0,.07);
     }
-    .breadcrumb span { color: var(--text-secondary, #888); }
-    .breadcrumb a { color: var(--primary-color, #2563eb); text-decoration: none; font-weight: 500; }
-    .breadcrumb a:hover { text-decoration: underline; }
-    .breadcrumb .current { color: var(--text-primary, #1a1a2e); font-weight: 600; }
+    .breadcrumb .sep { color:var(--text-secondary,#aaa); }
+    .breadcrumb a { color:var(--primary-color,#2563eb); text-decoration:none; font-weight:500; }
+    .breadcrumb a:hover { text-decoration:underline; }
+    .breadcrumb .cur { color:var(--text-primary,#1a1a2e); font-weight:600; }
 
-    /* ── Cards ──────────────────────────────────────────────────── */
-    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-
+    /* cards */
+    .card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:.85rem; }
     .card {
-      background: var(--bg-primary, #fff);
-      border-radius: 10px;
-      padding: 1.1rem 1.25rem;
-      box-shadow: 0 1px 6px rgba(0,0,0,.08);
-      cursor: pointer;
-      transition: box-shadow .15s, transform .15s;
-      border: 1.5px solid transparent;
+      background:var(--bg-primary,#fff); border-radius:10px;
+      padding:1rem 1.15rem; box-shadow:0 1px 6px rgba(0,0,0,.08);
+      cursor:pointer; transition:box-shadow .15s,transform .15s;
+      border:1.5px solid transparent;
     }
-    .card:hover { box-shadow: 0 4px 16px rgba(37,99,235,.15); transform: translateY(-2px); border-color: var(--primary-color, #2563eb); }
-
-    .card-title { font-weight: 700; font-size: 1rem; margin-bottom: .35rem; }
-    .card-meta { font-size: .82rem; color: var(--text-secondary, #666); line-height: 1.5; }
+    .card:hover { box-shadow:0 4px 16px rgba(37,99,235,.15); transform:translateY(-2px); border-color:var(--primary-color,#2563eb); }
     .card-badge {
-      display: inline-block; font-size: .72rem; font-weight: 600;
-      background: var(--primary-color, #2563eb); color: #fff;
-      border-radius: 5px; padding: .15rem .5rem; margin-bottom: .4rem;
+      display:inline-block; font-size:.7rem; font-weight:700; letter-spacing:.03em;
+      background:var(--primary-color,#2563eb); color:#fff;
+      border-radius:5px; padding:.12rem .45rem; margin-bottom:.35rem; text-transform:uppercase;
     }
+    .card-badge.leaf { background:#059669; }
+    .card-title { font-weight:700; font-size:.97rem; margin-bottom:.25rem; word-break:break-all; }
+    .card-meta { font-size:.8rem; color:var(--text-secondary,#666); line-height:1.5; }
 
-    /* ── Item table ─────────────────────────────────────────────── */
-    .item-table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: .87rem; background: var(--bg-primary, #fff); border-radius: 10px; box-shadow: 0 1px 6px rgba(0,0,0,.08); overflow: hidden; }
-    thead { background: var(--primary-color, #2563eb); color: #fff; }
-    th { padding: .6rem .85rem; text-align: left; font-weight: 600; white-space: nowrap; }
-    td { padding: .5rem .85rem; border-bottom: 1px solid var(--border-color, #e8eaf0); vertical-align: top; word-break: break-all; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: var(--bg-secondary, #f4f6fb); cursor: pointer; }
-
-    /* ── Item detail panel ──────────────────────────────────────── */
-    .item-detail {
-      background: var(--bg-primary, #fff);
-      border-radius: 10px;
-      padding: 1.25rem;
-      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    /* key-level header */
+    .level-header {
+      background:var(--bg-primary,#fff); border-radius:10px;
+      padding:.85rem 1.15rem; margin-bottom:.9rem;
+      box-shadow:0 1px 4px rgba(0,0,0,.07);
+      display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
     }
-    .item-detail h2 { margin: 0 0 .75rem; font-size: 1.1rem; }
-    .prop-grid { display: grid; grid-template-columns: minmax(120px, auto) 1fr; gap: .3rem .75rem; font-size: .88rem; }
-    .prop-key { font-weight: 600; color: var(--text-secondary, #555); padding: .2rem 0; }
-    .prop-val { padding: .2rem 0; word-break: break-all; }
-    .prop-val.highlight { color: var(--primary-color, #2563eb); font-weight: 500; }
-
-    /* ── Summaries (collection detail) ─────────────────────────── */
-    .summary-grid { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .3rem; }
-    .summary-chip {
-      font-size: .78rem; background: var(--bg-secondary, #f0f2fa);
-      border-radius: 5px; padding: .2rem .55rem;
-      color: var(--text-secondary, #555);
-      border: 1px solid var(--border-color, #e0e4f0);
+    .level-key {
+      display:inline-flex; align-items:center; gap:.35rem;
+      background:var(--primary-color,#2563eb); color:#fff;
+      border-radius:7px; padding:.3rem .75rem; font-weight:700; font-size:.95rem;
     }
+    .level-count { font-size:.85rem; color:var(--text-secondary,#555); }
 
-    /* ── Pagination ─────────────────────────────────────────────── */
-    .pagination { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; font-size: .9rem; }
-    .btn {
-      background: var(--primary-color, #2563eb); color: #fff;
-      border: none; border-radius: 6px; padding: .4rem .9rem;
-      cursor: pointer; font-size: .88rem; font-weight: 500;
-      transition: background .15s;
-    }
-    .btn:disabled { background: var(--text-secondary, #aaa); cursor: default; }
-    .btn.secondary { background: var(--bg-primary, #fff); color: var(--primary-color, #2563eb); border: 1.5px solid var(--primary-color, #2563eb); }
-    .btn.secondary:hover { background: var(--primary-color, #2563eb); color: #fff; }
+    /* item table */
+    .item-table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:.85rem; background:var(--bg-primary,#fff); border-radius:10px; box-shadow:0 1px 6px rgba(0,0,0,.08); overflow:hidden; }
+    thead { background:var(--primary-color,#2563eb); color:#fff; }
+    th { padding:.55rem .8rem; text-align:left; font-weight:600; white-space:nowrap; }
+    td { padding:.45rem .8rem; border-bottom:1px solid var(--border-color,#e8eaf0); vertical-align:top; word-break:break-all; }
+    tr:last-child td { border-bottom:none; }
+    tr.data-row:hover td { background:var(--bg-secondary,#f4f6fb); cursor:pointer; }
 
-    /* ── Helpers ────────────────────────────────────────────────── */
-    .section-title { font-size: 1.15rem; font-weight: 700; margin: 0 0 1rem; }
-    .empty { color: var(--text-secondary, #888); font-style: italic; padding: 2rem 0; text-align: center; }
-    .loading { color: var(--text-secondary, #888); padding: 2rem 0; text-align: center; }
-    .error-msg { background: #fef2f2; border: 1.5px solid #fca5a5; color: #b91c1c; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; }
-    .ext-link { color: var(--primary-color, #2563eb); font-size: .8rem; text-decoration: none; }
-    .ext-link:hover { text-decoration: underline; }
+    /* item detail */
+    .item-detail { background:var(--bg-primary,#fff); border-radius:10px; padding:1.15rem; box-shadow:0 1px 6px rgba(0,0,0,.08); }
+    .prop-grid { display:grid; grid-template-columns:minmax(110px,auto) 1fr; gap:.25rem .7rem; font-size:.87rem; }
+    .prop-key { font-weight:600; color:var(--text-secondary,#555); padding:.18rem 0; }
+    .prop-val { padding:.18rem 0; word-break:break-all; }
 
-    /* ── Filter bar ─────────────────────────────────────────────── */
-    .filter-bar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
-    .filter-bar input {
-      border: 1.5px solid var(--border-color, #d1d5db);
-      border-radius: 6px; padding: .35rem .65rem;
-      font-size: .87rem; background: var(--bg-primary, #fff);
-      color: var(--text-primary, #1a1a2e);
-      min-width: 180px;
-    }
-    .filter-bar label { font-size: .87rem; font-weight: 500; }
+    /* tabs */
+    .tabs { display:flex; gap:0; margin-bottom:1rem; border-bottom:2px solid var(--border-color,#e0e4f0); }
+    .tab { padding:.45rem 1rem; font-size:.88rem; font-weight:500; cursor:pointer; border:none; background:none; color:var(--text-secondary,#666); border-bottom:2.5px solid transparent; margin-bottom:-2px; transition:color .15s,border-color .15s; }
+    .tab.active { color:var(--primary-color,#2563eb); border-bottom-color:var(--primary-color,#2563eb); }
 
-    /* ── Tabs ───────────────────────────────────────────────────── */
-    .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 2px solid var(--border-color, #e0e4f0); }
-    .tab {
-      padding: .5rem 1.1rem; font-size: .9rem; font-weight: 500;
-      cursor: pointer; border: none; background: none;
-      color: var(--text-secondary, #666);
-      border-bottom: 2.5px solid transparent; margin-bottom: -2px;
-      transition: color .15s, border-color .15s;
-    }
-    .tab.active { color: var(--primary-color, #2563eb); border-bottom-color: var(--primary-color, #2563eb); }
+    /* collection summaries */
+    .chip-list { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.25rem; }
+    .chip { font-size:.75rem; background:var(--bg-secondary,#f0f2fa); border-radius:5px; padding:.18rem .5rem; color:var(--text-secondary,#555); border:1px solid var(--border-color,#e0e4f0); }
+
+    /* misc */
+    .section-title { font-size:1.1rem; font-weight:700; margin:0 0 .85rem; }
+    .empty  { color:var(--text-secondary,#888); font-style:italic; padding:2rem 0; text-align:center; }
+    .loading{ color:var(--text-secondary,#888); padding:2rem 0; text-align:center; }
+    .err    { background:#fef2f2; border:1.5px solid #fca5a5; color:#b91c1c; border-radius:8px; padding:.7rem 1rem; margin-bottom:1rem; }
+    .btn { background:var(--primary-color,#2563eb); color:#fff; border:none; border-radius:6px; padding:.4rem .9rem; cursor:pointer; font-size:.86rem; font-weight:500; transition:background .15s; }
+    .btn:hover { background:var(--primary-dark,#1d4ed8); }
+    .btn.sec { background:var(--bg-primary,#fff); color:var(--primary-color,#2563eb); border:1.5px solid var(--primary-color,#2563eb); }
+    .btn.sec:hover { background:var(--primary-color,#2563eb); color:#fff; }
+    .row { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:.85rem; }
+
+    /* map */
+    #item-map { height:340px; border-radius:8px; overflow:hidden; border:1.5px solid var(--border-color,#e0e4f0); }
+
+    /* metadata table */
+    .meta-table { width:100%; border-collapse:collapse; font-size:.86rem; }
+    .meta-table th { text-align:left; padding:.45rem .7rem; font-weight:600; color:var(--text-secondary,#555); border-bottom:2px solid var(--border-color,#e8eaf0); white-space:nowrap; }
+    .meta-table td { padding:.42rem .7rem; border-bottom:1px solid var(--border-color,#f0f2f8); vertical-align:top; }
+    .meta-table tr:last-child td { border-bottom:none; }
+    .meta-table tr:hover td { background:var(--bg-secondary,#f4f6fb); }
+    .meta-key { font-weight:700; font-family:monospace; font-size:.84rem; color:var(--primary-color,#2563eb); }
+    .meta-key-desc { font-size:.78rem; color:var(--text-secondary,#777); margin-top:.1rem; }
+    .meta-val-name { font-weight:600; }
+    .meta-val-raw { font-family:monospace; font-size:.82rem; color:var(--text-secondary,#555); }
+    .meta-val-desc { font-size:.78rem; color:var(--text-secondary,#777); margin-top:.1rem; }
   </style>
 </head>
 <body>
@@ -142,276 +127,345 @@
   <h1>🗂️ {{ title }} — STAC Browser</h1>
   <a href="/browse">← Qubed Browser</a>
   <span style="flex:1"></span>
-  <a id="ext-stac-link" href="#" target="_blank" title="Open in external STAC browser">External viewer ↗</a>
+  <a id="ext-link" href="#" target="_blank">External STAC viewer ↗</a>
 </header>
 
 <main class="sb-main">
-  <nav class="breadcrumb" id="breadcrumb"></nav>
+  <nav class="breadcrumb" id="bc"></nav>
   <div id="view"></div>
 </main>
 
 <script>
-// ── Config ────────────────────────────────────────────────────────────────
-const STAC_ROOT = '/api/stac/v1';
-const PAGE_SIZE = 50;
+// ── Constants ─────────────────────────────────────────────────────────────
+const API = '/api/stac/v1';
+const CATALOG_BASE = (cid) => `${API}/collections/${cid}/catalog`;
 
 // ── State ─────────────────────────────────────────────────────────────────
-let state = { view: 'collections', collectionId: null, itemId: null, offset: 0, filters: {} };
+// view: 'collections' | 'collection' | 'catalog' | 'item'
+// catalogPath: "class=od/stream=oper" style string (empty = root)
+let S = { view: 'collections', collectionId: null, catalogPath: '', itemId: null };
 
-// ── External browser link ─────────────────────────────────────────────────
-const extLink = document.getElementById('ext-stac-link');
-const catalogueUrl = encodeURIComponent(window.location.origin + STAC_ROOT + '/');
-extLink.href = `https://radiantearth.github.io/stac-browser/#/external/${catalogueUrl}`;
+// Set external viewer link
+document.getElementById('ext-link').href =
+  `https://radiantearth.github.io/stac-browser/#/external/${encodeURIComponent(location.origin + API + '/')}`;
 
-// ── Router ────────────────────────────────────────────────────────────────
-function navigate(newState) {
-  Object.assign(state, { offset: 0, filters: {} }, newState);
+// ── API ───────────────────────────────────────────────────────────────────
+async function api(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+// ── Navigate ──────────────────────────────────────────────────────────────
+function go(patch) {
+  Object.assign(S, patch);
   render();
 }
 
-// ── API helpers ───────────────────────────────────────────────────────────
-async function fetchJson(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} — ${await res.text()}`);
-  return res.json();
+// ── Breadcrumb ────────────────────────────────────────────────────────────
+function renderBreadcrumb() {
+  const bc = document.getElementById('bc');
+  const crumbs = [];
+
+  crumbs.push({ label: 'Collections', click: () => go({ view:'collections', collectionId:null, catalogPath:'', itemId:null }) });
+
+  if (S.collectionId) {
+    crumbs.push({ label: S.collectionId, click: () => go({ view:'collection', catalogPath:'', itemId:null }) });
+  }
+
+  if (S.view === 'catalog' || S.view === 'item') {
+    // one crumb per key=value pair in the path
+    const parts = S.catalogPath ? S.catalogPath.split('/') : [];
+    // root catalog
+    crumbs.push({ label: 'Catalogue', click: () => go({ view:'catalog', catalogPath:'', itemId:null }) });
+    let acc = '';
+    for (let i = 0; i < parts.length; i++) {
+      const seg = parts[i];
+      acc = acc ? acc + '/' + seg : seg;
+      const snap = acc;
+      const [k, v] = seg.split('=');
+      crumbs.push({ label: `${k} = ${v}`, click: () => go({ view:'catalog', catalogPath: snap, itemId:null }) });
+    }
+  }
+
+  if (S.view === 'item' && S.itemId) {
+    crumbs.push({ label: S.itemId.slice(0, 12) + '…', click: null });
+  }
+
+  bc.innerHTML = crumbs.map((c, i) => {
+    const sep = i ? '<span class="sep">›</span>' : '';
+    if (i === crumbs.length - 1 || !c.click)
+      return `${sep}<span class="cur">${esc(c.label)}</span>`;
+    const fn = c.click.toString();
+    return `${sep}<a href="#" onclick="(${fn})();return false">${esc(c.label)}</a>`;
+  }).join(' ');
 }
 
-function qs(params) {
-  const p = new URLSearchParams(params);
-  return p.toString() ? '?' + p.toString() : '';
-}
-
-// ── Render dispatcher ─────────────────────────────────────────────────────
+// ── Main render ───────────────────────────────────────────────────────────
 async function render() {
   renderBreadcrumb();
   const el = document.getElementById('view');
   el.innerHTML = '<p class="loading">Loading…</p>';
   try {
-    if (state.view === 'collections') await renderCollections(el);
-    else if (state.view === 'collection') await renderCollection(el);
-    else if (state.view === 'items') await renderItems(el);
-    else if (state.view === 'item') await renderItem(el);
+    if (S.view === 'collections') await renderCollections(el);
+    else if (S.view === 'collection') await renderCollection(el);
+    else if (S.view === 'catalog')   await renderCatalog(el);
+    else if (S.view === 'item')      await renderItem(el);
   } catch (e) {
-    el.innerHTML = `<div class="error-msg">⚠️ ${e.message}</div>`;
+    el.innerHTML = `<div class="err">⚠️ ${esc(e.message)}</div>`;
   }
-}
-
-// ── Breadcrumb ────────────────────────────────────────────────────────────
-function renderBreadcrumb() {
-  const bc = document.getElementById('breadcrumb');
-  const parts = [{ label: 'Collections', onclick: () => navigate({ view: 'collections' }) }];
-  if (state.collectionId) {
-    parts.push({ label: state.collectionId, onclick: () => navigate({ view: 'collection', collectionId: state.collectionId }) });
-  }
-  if (state.view === 'items') {
-    parts.push({ label: 'Items', onclick: null });
-  }
-  if (state.itemId) {
-    parts.push({ label: state.view === 'items' ? 'Items' : state.itemId, onclick: null });
-  }
-  bc.innerHTML = parts.map((p, i) => {
-    const isLast = i === parts.length - 1;
-    const sep = i ? '<span>›</span>' : '';
-    if (isLast) return `${sep}<span class="current">${p.label}</span>`;
-    return `${sep}<a href="#" onclick="(${p.onclick.toString()})();return false">${p.label}</a>`;
-  }).join(' ');
 }
 
 // ── Collections list ──────────────────────────────────────────────────────
 async function renderCollections(el) {
-  const data = await fetchJson(`${STAC_ROOT}/collections`);
+  const data = await api(`${API}/collections`);
   const cols = data.collections || [];
   if (!cols.length) { el.innerHTML = '<p class="empty">No collections found.</p>'; return; }
 
   el.innerHTML = `<p class="section-title">Collections (${cols.length})</p><div class="card-grid" id="cg"></div>`;
-  const grid = el.querySelector('#cg');
   for (const c of cols) {
-    const card = document.createElement('div');
-    card.className = 'card';
-    const dates = (c.extent?.temporal?.interval?.[0] || [null, null]);
-    const d0 = dates[0] ? dates[0].slice(0, 10) : '—';
-    const d1 = dates[1] ? dates[1].slice(0, 10) : '—';
-    const itemCount = (c.links || []).find(l => l.rel === 'items') ? '' : '';
-    card.innerHTML = `
-      <div class="card-badge">Collection</div>
-      <div class="card-title">${esc(c.title || c.id)}</div>
-      <div class="card-meta">${esc(c.description || '')}</div>
-      <div class="card-meta" style="margin-top:.45rem">📅 ${d0} → ${d1}</div>`;
-    card.onclick = () => navigate({ view: 'collection', collectionId: c.id });
-    grid.appendChild(card);
+    const interval = c.extent?.temporal?.interval?.[0] || [];
+    const d0 = interval[0] ? interval[0].slice(0,10) : '—';
+    const d1 = interval[1] ? interval[1].slice(0,10) : '—';
+    const card = mkCard('Collection', c.title || c.id, c.description || '', `📅 ${d0} → ${d1}`);
+    card.onclick = () => go({ view:'collection', collectionId: c.id, catalogPath:'', itemId:null });
+    el.querySelector('#cg').appendChild(card);
   }
 }
 
-// ── Single collection detail ──────────────────────────────────────────────
+// ── Collection detail ─────────────────────────────────────────────────────
 async function renderCollection(el) {
-  const cid = state.collectionId;
-  const [col] = await Promise.all([fetchJson(`${STAC_ROOT}/collections/${cid}`)]);
-  const interval = col.extent?.temporal?.interval?.[0] || [];
-  const d0 = interval[0] ? interval[0].slice(0, 10) : '—';
-  const d1 = interval[1] ? interval[1].slice(0, 10) : '—';
+  const cid = S.collectionId;
+  const c = await api(`${API}/collections/${cid}`);
+  const interval = c.extent?.temporal?.interval?.[0] || [];
+  const d0 = interval[0] ? interval[0].slice(0,10) : '—';
+  const d1 = interval[1] ? interval[1].slice(0,10) : '—';
 
-  const summaryHtml = Object.entries(col.summaries || {}).map(([k, vals]) => {
-    const chips = vals.slice(0, 20).map(v => `<span class="summary-chip">${esc(String(v))}</span>`).join('');
-    const more = vals.length > 20 ? `<span class="summary-chip">+${vals.length - 20} more</span>` : '';
-    return `<div style="margin-bottom:.65rem"><strong style="font-size:.85rem">${esc(k)}</strong><div class="summary-grid">${chips}${more}</div></div>`;
+  const summHtml = Object.entries(c.summaries || {}).map(([k, vals]) => {
+    const chips = vals.slice(0,24).map(v => `<span class="chip">${esc(String(v))}</span>`).join('');
+    const more = vals.length > 24 ? `<span class="chip">+${vals.length-24} more</span>` : '';
+    return `<div style="margin-bottom:.55rem"><strong style="font-size:.82rem">${esc(k)}</strong><div class="chip-list">${chips}${more}</div></div>`;
   }).join('');
 
   el.innerHTML = `
     <div class="item-detail" style="margin-bottom:1rem">
       <div class="card-badge">Collection</div>
-      <h2 style="margin:.3rem 0 .5rem">${esc(col.title || col.id)}</h2>
-      <p style="margin:0 0 .75rem;font-size:.9rem;color:var(--text-secondary,#555)">${esc(col.description || '')}</p>
-      <div class="prop-grid">
-        <span class="prop-key">ID</span><span class="prop-val">${esc(col.id)}</span>
-        <span class="prop-key">License</span><span class="prop-val">${esc(col.license || '—')}</span>
-        <span class="prop-key">Temporal</span><span class="prop-val">${d0} → ${d1}</span>
-        <span class="prop-key">Spatial</span><span class="prop-val">global (−180°,−90° → 180°,90°)</span>
+      <h2 style="margin:.3rem 0 .5rem;font-size:1.1rem">${esc(c.title||c.id)}</h2>
+      <p style="margin:0 0 .75rem;font-size:.88rem;color:var(--text-secondary,#555)">${esc(c.description||'')}</p>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:.25rem .65rem;font-size:.86rem;margin-bottom:.75rem">
+        <span style="font-weight:600;color:var(--text-secondary)">Temporal</span><span>${d0} → ${d1}</span>
+        <span style="font-weight:600;color:var(--text-secondary)">License</span><span>${esc(c.license||'—')}</span>
       </div>
-      ${summaryHtml ? `<div style="margin-top:.9rem"><strong style="font-size:.9rem">Summaries</strong><div style="margin-top:.4rem">${summaryHtml}</div></div>` : ''}
+      ${summHtml ? `<div><strong style="font-size:.88rem">Dimension summaries</strong><div style="margin-top:.35rem">${summHtml}</div></div>` : ''}
     </div>
-    <button class="btn" onclick="navigate({view:'items',collectionId:'${esc(cid)}',offset:0})">Browse Items →</button>`;
+    <button class="btn" onclick="go({view:'catalog',catalogPath:'',itemId:null})">
+      Browse metadata hierarchy →
+    </button>`;
 }
 
-// ── Items list ────────────────────────────────────────────────────────────
-async function renderItems(el) {
-  const cid = state.collectionId;
-  const params = { limit: PAGE_SIZE, offset: state.offset, ...state.filters };
-  const data = await fetchJson(`${STAC_ROOT}/collections/${cid}/items${qs(params)}`);
-  const items = data.features || [];
-  const total = data.numberMatched ?? items.length;
+// ── Catalog node ──────────────────────────────────────────────────────────
+async function renderCatalog(el) {
+  const cid = S.collectionId;
+  const url = S.catalogPath
+    ? `${CATALOG_BASE(cid)}/${S.catalogPath}`
+    : CATALOG_BASE(cid);
 
-  // Collect all property keys from this page
-  const allKeys = new Set();
-  items.forEach(it => Object.keys(it.properties || {}).forEach(k => allKeys.add(k)));
-  // Bring important keys forward
-  const priorityKeys = ['datetime', 'date', 'time', 'type', 'stream', 'param', 'levtype', 'step'];
-  const keys = [...priorityKeys.filter(k => allKeys.has(k)), ...[...allKeys].filter(k => !priorityKeys.includes(k))];
+  const node = await api(url);
 
-  // Filter bar
-  const filterEntries = Object.entries(state.filters || {}).filter(([k]) => !['limit','offset'].includes(k));
-  const filterBadges = filterEntries.map(([k, v]) =>
-    `<span class="summary-chip" style="cursor:pointer" onclick="removeFilter('${esc(k)}')">✕ ${esc(k)}=${esc(v)}</span>`
-  ).join('');
+  const childLinks = (node.links || []).filter(l => l.rel === 'child');
+  const itemLinks  = (node.links || []).filter(l => l.rel === 'item');
+  const nextKey = node.next_key;
 
-  el.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem">
-      <p class="section-title" style="margin:0">Items — ${esc(cid)} <span style="font-weight:400;font-size:.9rem;color:var(--text-secondary,#666)">(${total.toLocaleString()} total)</span></p>
-      <button class="btn secondary" style="font-size:.82rem;padding:.3rem .75rem" onclick="navigate({view:'collection',collectionId:'${esc(cid)}'})">← Collection</button>
-    </div>
-    ${filterBadges ? `<div class="summary-grid" style="margin-bottom:.75rem">${filterBadges}</div>` : ''}
-    <div class="filter-bar">
-      <label>Filter:</label>
-      <input id="fk" placeholder="key (e.g. param)" />
-      <input id="fv" placeholder="value (e.g. 130)" />
-      <button class="btn" onclick="addFilter()">Add filter</button>
-    </div>
-    ${items.length === 0 ? '<p class="empty">No items match the current filters.</p>' : `
-    <div class="item-table-wrap">
-      <table>
-        <thead><tr><th>#</th>${keys.map(k => `<th>${esc(k)}</th>`).join('')}</tr></thead>
-        <tbody id="tbody"></tbody>
-      </table>
-    </div>
-    <div class="pagination">
-      <button class="btn" ${state.offset === 0 ? 'disabled' : ''} onclick="prevPage()">← Prev</button>
-      <span>${(state.offset + 1).toLocaleString()}–${Math.min(state.offset + PAGE_SIZE, total).toLocaleString()} of ${total.toLocaleString()}</span>
-      <button class="btn" ${state.offset + PAGE_SIZE >= total ? 'disabled' : ''} onclick="nextPage()">Next →</button>
-    </div>`}`;
+  if (childLinks.length > 0) {
+    // ── Internal node: show child catalog cards ──
+    el.innerHTML = `
+      <div class="level-header">
+        <span>Select a value for</span>
+        <span class="level-key">${esc(nextKey || '?')}</span>
+        <span class="level-count">${childLinks.length} option${childLinks.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="card-grid" id="cg"></div>`;
 
-  const tbody = el.querySelector('#tbody');
-  if (tbody) {
-    items.forEach((it, i) => {
+    for (const lnk of childLinks) {
+      const val   = lnk['stac:value'] ?? lnk.title ?? '';
+      const key   = lnk['stac:key']   ?? nextKey ?? '';
+      // strip " (description)" suffix from title to get clean value
+      const rawVal = lnk['stac:value'] ?? val;
+      // description = title minus the "key = value" prefix
+      const desc = lnk.title?.replace(`${key} = ${rawVal}`, '').replace(/^\s*\(\s*/, '').replace(/\s*\)\s*$/, '') || '';
+      const childPath = S.catalogPath ? S.catalogPath + '/' + key + '=' + rawVal : key + '=' + rawVal;
+      const card = mkCard('Value', esc(rawVal), esc(desc), `🔑 ${esc(key)}`);
+      card.onclick = () => go({ view:'catalog', catalogPath: childPath });
+      el.querySelector('#cg').appendChild(card);
+    }
+
+  } else if (itemLinks.length > 0) {
+    // ── Leaf node: show items as a table ──
+    const allKeys = new Set();
+    itemLinks.forEach(l => Object.keys(l['stac:properties'] || {}).forEach(k => allKeys.add(k)));
+    const priority = ['datetime','date','time','type','stream','param','levtype','step','number'];
+    const keys = [...priority.filter(k => allKeys.has(k)), ...[...allKeys].filter(k => !priority.includes(k) && k !== 'datetime')];
+
+    el.innerHTML = `
+      <div class="level-header">
+        <span class="card-badge leaf">Leaf</span>
+        <span style="font-weight:600">${itemLinks.length} item${itemLinks.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="item-table-wrap">
+        <table>
+          <thead><tr><th>#</th>${keys.map(k=>`<th>${esc(k)}</th>`).join('')}</tr></thead>
+          <tbody id="tb"></tbody>
+        </table>
+      </div>`;
+
+    const tb = el.querySelector('#tb');
+    itemLinks.forEach((lnk, i) => {
+      const props = lnk['stac:properties'] || {};
+      const iid   = lnk.href.split('/').pop();
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${state.offset + i + 1}</td>` +
+      tr.className = 'data-row';
+      tr.innerHTML = `<td>${i+1}</td>` +
         keys.map(k => {
-          const v = it.properties[k];
-          return `<td>${v !== undefined && v !== null ? esc(String(v)) : '<span style="color:#bbb">—</span>'}</td>`;
+          const v = props[k];
+          return `<td>${v != null ? esc(String(v)) : '<span style="color:#ccc">—</span>'}</td>`;
         }).join('');
-      tr.onclick = () => navigate({ view: 'item', collectionId: cid, itemId: it.id });
-      tbody.appendChild(tr);
+      tr.onclick = () => go({ view:'item', itemId: iid });
+      tb.appendChild(tr);
     });
-  }
 
-  // bind filter enter key
-  el.querySelector('#fv')?.addEventListener('keydown', e => { if (e.key === 'Enter') addFilter(); });
-}
-
-function addFilter() {
-  const k = document.getElementById('fk')?.value?.trim();
-  const v = document.getElementById('fv')?.value?.trim();
-  if (k && v) {
-    state.filters = { ...state.filters, [k]: v };
-    state.offset = 0;
-    render();
+  } else {
+    el.innerHTML = '<p class="empty">No children or items at this level.</p>';
   }
 }
 
-function removeFilter(k) {
-  const f = { ...state.filters };
-  delete f[k];
-  state.filters = f;
-  state.offset = 0;
-  render();
+// ── Language cache ────────────────────────────────────────────────────────
+let _lang = null;
+async function getLang() {
+  if (_lang) return _lang;
+  try { _lang = await api('/api/v2/language'); } catch(e) { _lang = {}; }
+  return _lang;
 }
 
-function prevPage() { state.offset = Math.max(0, state.offset - PAGE_SIZE); render(); }
-function nextPage() { state.offset += PAGE_SIZE; render(); }
+let _currentItem = null; // stashed for the Map tab onclick
 
-// ── Single item detail ────────────────────────────────────────────────────
+// ── Item detail ───────────────────────────────────────────────────────────
 async function renderItem(el) {
-  const cid = state.collectionId;
-  const iid = state.itemId;
-  const item = await fetchJson(`${STAC_ROOT}/collections/${cid}/items/${iid}`);
+  const cid = S.collectionId;
+  const iid = S.itemId;
+  const [item, lang] = await Promise.all([
+    api(`${API}/collections/${cid}/items/${iid}`),
+    getLang(),
+  ]);
+  _currentItem = item;
   const props = item.properties || {};
 
-  const propRows = Object.entries(props).map(([k, v]) => {
-    const val = v !== null && v !== undefined ? esc(JSON.stringify(v).replace(/^"|"$/g, '')) : '<span style="color:#bbb">null</span>';
-    const highlight = ['datetime', 'date', 'param', 'type'].includes(k) ? 'highlight' : '';
-    return `<span class="prop-key">${esc(k)}</span><span class="prop-val ${highlight}">${val}</span>`;
+  // ── Metadata tab ──────────────────────────────────────────────────────
+  const metaRows = Object.entries(props).map(([k, v]) => {
+    const langKey = lang[k] || {};
+    const keyDesc = langKey.description || '';
+    const valStr  = v != null ? String(v) : '';
+    const valInfo = (langKey.values || {})[valStr] || {};
+    const valName = valInfo.name || '';
+    const valDesc = valInfo.description || '';
+    const valUrl  = valInfo.url || '';
+    const rawSpan  = `<span class="meta-val-raw">${esc(valStr || 'null')}</span>`;
+    const nameSpan = valName ? `<span class="meta-val-name">${esc(valName)}</span> ${rawSpan}` : rawSpan;
+    const descDiv  = valDesc ? `<div class="meta-val-desc">${esc(valDesc)}</div>` : '';
+    const urlDiv   = valUrl  ? `<div class="meta-val-desc"><a href="${esc(valUrl)}" target="_blank" style="color:var(--primary-color,#2563eb)">${esc(valUrl)}</a></div>` : '';
+    return `
+      <tr>
+        <td><div class="meta-key">${esc(k)}</div>${keyDesc ? `<div class="meta-key-desc">${esc(keyDesc)}</div>` : ''}</td>
+        <td>${nameSpan}${descDiv}${urlDiv}</td>
+      </tr>`;
   }).join('');
 
-  const linksHtml = (item.links || []).map(l =>
-    `<div><a href="${esc(l.href)}" target="_blank" class="ext-link">${esc(l.rel)}</a> — <span style="font-size:.8rem;color:var(--text-secondary,#666)">${esc(l.type || '')}</span></div>`
+  // ── Links tab ─────────────────────────────────────────────────────────
+  const linksHtml = (item.links||[]).map(l =>
+    `<div style="margin-bottom:.35rem"><a href="${esc(l.href)}" target="_blank" style="color:var(--primary-color,#2563eb);font-size:.85rem;text-decoration:none">${esc(l.rel)}</a>
+     <span style="color:var(--text-secondary,#666);font-size:.78rem"> — ${esc(l.type||'')}</span></div>`
   ).join('');
 
   el.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.9rem">
-      <h2 style="margin:0;font-size:1.05rem;font-weight:700;word-break:break-all">${esc(iid)}</h2>
-      <button class="btn secondary" style="font-size:.82rem;padding:.3rem .75rem" onclick="navigate({view:'items',collectionId:'${esc(cid)}'})">← Items</button>
+    <div class="row">
+      <h2 style="margin:0;font-size:1rem;word-break:break-all;flex:1">${esc(iid)}</h2>
+      <button class="btn sec" style="font-size:.8rem;padding:.3rem .7rem"
+        onclick="go({view:'catalog'})">← Back</button>
     </div>
     <div class="tabs">
-      <button class="tab active" onclick="switchTab(this,'tab-props')">Properties</button>
-      <button class="tab" onclick="switchTab(this,'tab-links')">Links</button>
-      <button class="tab" onclick="switchTab(this,'tab-raw')">Raw JSON</button>
+      <button class="tab active" onclick="swTab(this,'tm')">Metadata</button>
+      <button class="tab" onclick="swTab(this,'tmap');initMap(_currentItem)">Map</button>
+      <button class="tab" onclick="swTab(this,'tl')">Links</button>
+      <button class="tab" onclick="swTab(this,'tr')">Raw JSON</button>
     </div>
-    <div id="tab-props" class="item-detail">
-      <div class="prop-grid">${propRows}</div>
+    <div id="tm" class="item-detail">
+      <table class="meta-table">
+        <thead><tr><th>Field</th><th>Value</th></tr></thead>
+        <tbody>${metaRows}</tbody>
+      </table>
     </div>
-    <div id="tab-links" class="item-detail" style="display:none">
-      ${linksHtml || '<p class="empty">No links.</p>'}
+    <div id="tmap" class="item-detail" style="display:none">
+      <div id="item-map"></div>
+      <p style="font-size:.8rem;color:var(--text-secondary,#777);margin:.5rem 0 0">
+        Spatial domain: global (−180°, −90° → 180°, 90°)
+      </p>
     </div>
-    <div id="tab-raw" class="item-detail" style="display:none">
-      <pre style="font-size:.8rem;overflow-x:auto;white-space:pre-wrap;margin:0">${esc(JSON.stringify(item, null, 2))}</pre>
+    <div id="tl" class="item-detail" style="display:none">${linksHtml||'<p class="empty">No links.</p>'}</div>
+    <div id="tr" class="item-detail" style="display:none">
+      <pre style="font-size:.78rem;white-space:pre-wrap;margin:0;overflow-x:auto">${esc(JSON.stringify(item,null,2))}</pre>
     </div>`;
 }
 
-function switchTab(btn, targetId) {
+// ── Leaflet map ───────────────────────────────────────────────────────────
+let _map = null;
+function initMap(item) {
+  // Defer one tick so the div is visible before Leaflet measures it
+  setTimeout(() => {
+    const bbox = item.bbox || [-180, -90, 180, 90];
+    const container = document.getElementById('item-map');
+    if (!container) return;
+    if (_map) { _map.remove(); _map = null; }
+    _map = L.map('item-map', { zoomControl: true, scrollWheelZoom: false });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 8,
+    }).addTo(_map);
+    const bounds = [[bbox[1], bbox[0]], [bbox[3], bbox[2]]];
+    L.rectangle(bounds, {
+      color: '#2563eb', weight: 2,
+      fillColor: '#2563eb', fillOpacity: 0.12,
+    }).addTo(_map);
+    _map.fitBounds(bounds, { padding: [20, 20] });
+  }, 30);
+}
+
+function swTab(btn, tid) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  ['tab-props', 'tab-links', 'tab-raw'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = id === targetId ? '' : 'none';
+  ['tm','tmap','tl','tr'].forEach(id => {
+    const e = document.getElementById(id);
+    if (e) e.style.display = id === tid ? '' : 'none';
   });
 }
 
-// ── Utility ────────────────────────────────────────────────────────────────
-function esc(str) {
-  return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+// ── Helpers ───────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-// ── Boot ───────────────────────────────────────────────────────────────────
+function mkCard(badge, title, desc, meta) {
+  const d = document.createElement('div');
+  d.className = 'card';
+  d.innerHTML = `
+    <div class="card-badge">${badge}</div>
+    <div class="card-title">${title}</div>
+    ${desc ? `<div class="card-meta">${desc}</div>` : ''}
+    ${meta ? `<div class="card-meta" style="margin-top:.3rem">${meta}</div>` : ''}`;
+  return d;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────
 render();
 </script>
 </body>
