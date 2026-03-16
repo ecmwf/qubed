@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ title }} — STAC Browser</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗂️</text></svg>">
+  <style>
+    body { margin:0; font-family:var(--font-family,system-ui,sans-serif); background:var(--bg-secondary,#f4f6fb); color:var(--text-primary,#1a1a2e); }
+
+    /* header */
+    .sb-header {
+      background:linear-gradient(135deg,var(--primary-color,#2563eb) 0%,var(--primary-dark,#1d4ed8) 100%);
+      color:#fff; padding:.85rem 1.5rem;
+      display:flex; align-items:center; gap:1rem;
+      box-shadow:0 2px 8px rgba(0,0,0,.18);
+    }
+    .sb-header h1 { margin:0; font-size:1.25rem; font-weight:700; }
+    .sb-header a { color:rgba(255,255,255,.85); text-decoration:none; font-size:.88rem; }
+    .sb-header a:hover { color:#fff; text-decoration:underline; }
+
+    /* main */
+    .sb-main { max-width:1100px; margin:0 auto; padding:1.25rem 1.5rem; }
+
+    /* breadcrumb */
+    .breadcrumb {
+      display:flex; align-items:center; gap:.35rem; flex-wrap:wrap;
+      font-size:.88rem; margin-bottom:1.1rem;
+      background:var(--bg-primary,#fff); border-radius:8px;
+      padding:.5rem 1rem; box-shadow:0 1px 4px rgba(0,0,0,.07);
+    }
+    .breadcrumb .sep { color:var(--text-secondary,#aaa); }
+    .breadcrumb a { color:var(--primary-color,#2563eb); text-decoration:none; font-weight:500; }
+    .breadcrumb a:hover { text-decoration:underline; }
+    .breadcrumb .cur { color:var(--text-primary,#1a1a2e); font-weight:600; }
+
+    /* cards */
+    .card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:.85rem; }
+    .card {
+      background:var(--bg-primary,#fff); border-radius:10px;
+      padding:1rem 1.15rem; box-shadow:0 1px 6px rgba(0,0,0,.08);
+      cursor:pointer; transition:box-shadow .15s,transform .15s;
+      border:1.5px solid transparent;
+    }
+    .card:hover { box-shadow:0 4px 16px rgba(37,99,235,.15); transform:translateY(-2px); border-color:var(--primary-color,#2563eb); }
+    .card-badge {
+      display:inline-block; font-size:.7rem; font-weight:700; letter-spacing:.03em;
+      background:var(--primary-color,#2563eb); color:#fff;
+      border-radius:5px; padding:.12rem .45rem; margin-bottom:.35rem; text-transform:uppercase;
+    }
+    .card-badge.leaf { background:#059669; }
+    .card-title { font-weight:700; font-size:.97rem; margin-bottom:.25rem; word-break:break-all; }
+    .card-meta { font-size:.8rem; color:var(--text-secondary,#666); line-height:1.5; }
+
+    /* key-level header */
+    .level-header {
+      background:var(--bg-primary,#fff); border-radius:10px;
+      padding:.85rem 1.15rem; margin-bottom:.9rem;
+      box-shadow:0 1px 4px rgba(0,0,0,.07);
+      display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+    }
+    .level-key {
+      display:inline-flex; align-items:center; gap:.35rem;
+      background:var(--primary-color,#2563eb); color:#fff;
+      border-radius:7px; padding:.3rem .75rem; font-weight:700; font-size:.95rem;
+    }
+    .level-count { font-size:.85rem; color:var(--text-secondary,#555); }
+
+    /* item table */
+    .item-table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:.85rem; background:var(--bg-primary,#fff); border-radius:10px; box-shadow:0 1px 6px rgba(0,0,0,.08); overflow:hidden; }
+    thead { background:var(--primary-color,#2563eb); color:#fff; }
+    th { padding:.55rem .8rem; text-align:left; font-weight:600; white-space:nowrap; }
+    td { padding:.45rem .8rem; border-bottom:1px solid var(--border-color,#e8eaf0); vertical-align:top; word-break:break-all; }
+    tr:last-child td { border-bottom:none; }
+    tr.data-row:hover td { background:var(--bg-secondary,#f4f6fb); cursor:pointer; }
+
+    /* item detail */
+    .item-detail { background:var(--bg-primary,#fff); border-radius:10px; padding:1.15rem; box-shadow:0 1px 6px rgba(0,0,0,.08); }
+    .prop-grid { display:grid; grid-template-columns:minmax(110px,auto) 1fr; gap:.25rem .7rem; font-size:.87rem; }
+    .prop-key { font-weight:600; color:var(--text-secondary,#555); padding:.18rem 0; }
+    .prop-val { padding:.18rem 0; word-break:break-all; }
+
+    /* tabs */
+    .tabs { display:flex; gap:0; margin-bottom:1rem; border-bottom:2px solid var(--border-color,#e0e4f0); }
+    .tab { padding:.45rem 1rem; font-size:.88rem; font-weight:500; cursor:pointer; border:none; background:none; color:var(--text-secondary,#666); border-bottom:2.5px solid transparent; margin-bottom:-2px; transition:color .15s,border-color .15s; }
+    .tab.active { color:var(--primary-color,#2563eb); border-bottom-color:var(--primary-color,#2563eb); }
+
+    /* collection summaries */
+    .chip-list { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.25rem; }
+    .chip { font-size:.75rem; background:var(--bg-secondary,#f0f2fa); border-radius:5px; padding:.18rem .5rem; color:var(--text-secondary,#555); border:1px solid var(--border-color,#e0e4f0); }
+
+    /* misc */
+    .section-title { font-size:1.1rem; font-weight:700; margin:0 0 .85rem; }
+    .empty  { color:var(--text-secondary,#888); font-style:italic; padding:2rem 0; text-align:center; }
+    .loading{ color:var(--text-secondary,#888); padding:2rem 0; text-align:center; }
+    .err    { background:#fef2f2; border:1.5px solid #fca5a5; color:#b91c1c; border-radius:8px; padding:.7rem 1rem; margin-bottom:1rem; }
+    .btn { background:var(--primary-color,#2563eb); color:#fff; border:none; border-radius:6px; padding:.4rem .9rem; cursor:pointer; font-size:.86rem; font-weight:500; transition:background .15s; }
+    .btn:hover { background:var(--primary-dark,#1d4ed8); }
+    .btn.sec { background:var(--bg-primary,#fff); color:var(--primary-color,#2563eb); border:1.5px solid var(--primary-color,#2563eb); }
+    .btn.sec:hover { background:var(--primary-color,#2563eb); color:#fff; }
+    .row { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-bottom:.85rem; }
+
+    /* item two-column layout */
+    .item-2col {
+      display:grid;
+      grid-template-columns: 340px 1fr;
+      gap:.9rem;
+      align-items:start;
+    }
+    @media (max-width:780px) { .item-2col { grid-template-columns:1fr; } }
+    .item-left { position:sticky; top:.75rem; }
+    .map-wrap { border-radius:9px; overflow:hidden; border:1.5px solid var(--border-color,#e0e4f0); }
+    #item-map { height:260px; }
+
+    /* metadata sections */
+    .meta-section { background:var(--bg-primary,#fff); border-radius:10px; padding:1rem 1.1rem; box-shadow:0 1px 6px rgba(0,0,0,.08); margin-bottom:.85rem; }
+    .meta-section-title {
+      font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+      color:var(--text-secondary,#888); margin-bottom:.65rem; padding-bottom:.4rem;
+      border-bottom:1.5px solid var(--border-color,#e8eaf0);
+    }
+    .meta-table { width:100%; border-collapse:collapse; font-size:.86rem; }
+    .meta-table td { padding:.42rem .5rem; border-bottom:1px solid var(--border-color,#f0f2f8); vertical-align:top; }
+    .meta-table tr:last-child td { border-bottom:none; }
+    .meta-table tr:hover td { background:var(--bg-secondary,#f4f6fb); }
+    .meta-key { font-weight:700; font-family:monospace; font-size:.82rem; color:var(--primary-color,#2563eb); white-space:nowrap; }
+    .meta-key-desc { font-size:.76rem; color:var(--text-secondary,#999); margin-top:.08rem; }
+    .meta-val-name { font-weight:600; }
+    .meta-val-raw { font-family:monospace; font-size:.82rem; color:var(--text-secondary,#555); }
+    .meta-val-desc { font-size:.76rem; color:var(--text-secondary,#777); margin-top:.08rem; }
+    .meta-val-url  { font-size:.76rem; margin-top:.08rem; }
+
+    /* quick-facts grid */
+    .quick-grid { display:grid; grid-template-columns:auto 1fr; gap:.2rem .6rem; font-size:.84rem; }
+    .qk { font-weight:600; color:var(--text-secondary,#666); white-space:nowrap; padding:.15rem 0; }
+    .qv { word-break:break-all; padding:.15rem 0; font-family:monospace; font-size:.82rem; }
+
+    /* collapsible details */
+    details.meta-section summary {
+      cursor:pointer; font-weight:600; font-size:.88rem; color:var(--text-primary,#1a1a2e);
+      user-select:none; list-style:none; display:flex; align-items:center; gap:.45rem;
+    }
+    details.meta-section summary::before { content:'▶'; font-size:.7rem; color:var(--text-secondary,#aaa); transition:transform .15s; }
+    details.meta-section[open] summary::before { transform:rotate(90deg); }
+    details.meta-section summary::-webkit-details-marker { display:none; }
+    details.meta-section .det-body { margin-top:.75rem; }
+
+    /* code blocks */
+    .code-block-wrap { position:relative; margin:.35rem 0; }
+    .code-block {
+      background:var(--bg-secondary,#f4f6fb); border:1.5px solid var(--border-color,#e0e4f0);
+      border-radius:7px; padding:.75rem 3rem .75rem .85rem;
+      font-size:.78rem; white-space:pre; overflow-x:auto; margin:0; line-height:1.55;
+      font-family:'SFMono-Regular',Consolas,monospace;
+    }
+    .copy-btn {
+      position:absolute; top:.45rem; right:.45rem;
+      background:var(--bg-primary,#fff); border:1px solid var(--border-color,#dde1ee);
+      border-radius:5px; padding:.18rem .55rem; font-size:.72rem; font-weight:600;
+      color:var(--text-secondary,#666); cursor:pointer; transition:background .12s;
+    }
+    .copy-btn:hover { background:var(--primary-color,#2563eb); color:#fff; border-color:transparent; }
+
+    /* asset rows */
+    .asset-row {
+      display:flex; align-items:flex-start; gap:.7rem;
+      padding:.5rem 0; border-bottom:1px solid var(--border-color,#f0f2f8);
+    }
+    .asset-row:last-child { border-bottom:none; }
+    .asset-title { font-weight:600; font-size:.87rem; }
+    .asset-type  { font-size:.74rem; color:var(--text-secondary,#888); font-family:monospace; margin-top:.1rem; }
+  </style>
+</head>
+<body>
+
+<header class="sb-header">
+  <h1>🗂️ {{ title }} — STAC Browser</h1>
+  <a href="/browse">← Qubed Browser</a>
+  <span style="flex:1"></span>
+  <a id="ext-link" href="#" target="_blank">External STAC viewer ↗</a>
+</header>
+
+<main class="sb-main">
+  <nav class="breadcrumb" id="bc"></nav>
+  <div id="view"></div>
+</main>
+
+<script>
+// ── Constants ─────────────────────────────────────────────────────────────
+const API = '/api/stac/v1';
+const CATALOG_BASE = (cid) => `${API}/collections/${cid}/catalog`;
+
+// ── State ─────────────────────────────────────────────────────────────────
+// view: 'collections' | 'collection' | 'catalog' | 'item'
+//   collections  → list of collection cards (clicking one goes to catalog)
+//   collection   → collection overview/detail (reachable via breadcrumb)
+//   catalog      → hierarchical drill-down (root or nested key=value path)
+//   item         → full item detail with map
+// catalogPath: "class=od/stream=oper" style string (empty = root catalog)
+let S = { view: 'collections', collectionId: null, catalogPath: '', itemId: null, itemData: null };
+
+// Set external viewer link
+document.getElementById('ext-link').href =
+  `https://radiantearth.github.io/stac-browser/#/external/${encodeURIComponent(location.origin + API + '/')}`;
+
+// ── API ───────────────────────────────────────────────────────────────────
+async function api(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+// ── Navigate ──────────────────────────────────────────────────────────────
+function go(patch) {
+  Object.assign(S, patch);
+  render();
+}
+
+// ── Breadcrumb ────────────────────────────────────────────────────────────
+function renderBreadcrumb() {
+  const bc = document.getElementById('bc');
+  const crumbs = [];
+
+  crumbs.push({ label: 'Collections', click: () => go({ view:'collections', collectionId:null, catalogPath:'', itemId:null }) });
+
+  if (S.collectionId) {
+    // collection name → collection detail (overview), catalog root → no extra crumb
+    const collClick = () => go({ view:'collection', catalogPath:'', itemId:null });
+    if (S.view === 'collection') {
+      crumbs.push({ label: S.collectionId, click: null });
+    } else {
+      crumbs.push({ label: S.collectionId, click: collClick });
+    }
+  }
+
+  if (S.view === 'catalog' || S.view === 'item') {
+    const parts = S.catalogPath ? S.catalogPath.split('/') : [];
+    let acc = '';
+    for (let i = 0; i < parts.length; i++) {
+      const seg = parts[i];
+      acc = acc ? acc + '/' + seg : seg;
+      const snap = acc;
+      const [k, v] = seg.split('=');
+      const isLast = i === parts.length - 1 && S.view !== 'item';
+      crumbs.push({ label: `${v}`, title: `${k} = ${v}`, click: isLast ? null : () => go({ view:'catalog', catalogPath: snap, itemId:null }) });
+    }
+  }
+
+  if (S.view === 'item' && S.itemId) {
+    crumbs.push({ label: S.itemId.slice(0, 16) + '…', click: null });
+  }
+
+  bc.innerHTML = crumbs.map((c, i) => {
+    const sep = i ? '<span class="sep">›</span>' : '';
+    const label = esc(c.label);
+    const tip   = c.title ? ` title="${esc(c.title)}"` : '';
+    if (i === crumbs.length - 1 || !c.click)
+      return `${sep}<span class="cur"${tip}>${label}</span>`;
+    const fn = c.click.toString();
+    return `${sep}<a href="#"${tip} onclick="(${fn})();return false">${label}</a>`;
+  }).join(' ');
+}
+
+// ── Main render ───────────────────────────────────────────────────────────
+async function render() {
+  renderBreadcrumb();
+  const el = document.getElementById('view');
+  el.innerHTML = '<p class="loading">Loading…</p>';
+  try {
+    if (S.view === 'collections') await renderCollections(el);
+    else if (S.view === 'collection') await renderCollection(el);
+    else if (S.view === 'catalog')   await renderCatalog(el);
+    else if (S.view === 'item')      await renderItem(el);
+  } catch (e) {
+    el.innerHTML = `<div class="err">⚠️ ${esc(e.message)}</div>`;
+  }
+}
+
+// ── Collections list ──────────────────────────────────────────────────────
+async function renderCollections(el) {
+  const data = await api(`${API}/collections`);
+  const cols = data.collections || [];
+  if (!cols.length) { el.innerHTML = '<p class="empty">No collections found.</p>'; return; }
+
+  el.innerHTML = `<p class="section-title">Collections (${cols.length})</p><div class="card-grid" id="cg"></div>`;
+  for (const c of cols) {
+    const interval = c.extent?.temporal?.interval?.[0] || [];
+    const d0 = interval[0] ? interval[0].slice(0,10) : '—';
+    const d1 = interval[1] ? interval[1].slice(0,10) : '—';
+    const card = mkCard('Collection', c.title || c.id, c.description || '', `📅 ${d0} → ${d1}`);
+    card.onclick = () => go({ view:'catalog', collectionId: c.id, catalogPath:'', itemId:null });
+    el.querySelector('#cg').appendChild(card);
+  }
+}
+
+// ── Collection detail ─────────────────────────────────────────────────────
+let _collItems = null; // cached items for current collection
+let _collItemsPage = 0;
+const COLL_PAGE = 50;
+
+async function renderCollection(el) {
+  const cid = S.collectionId;
+  _collItems = null;
+  _collItemsPage = 0;
+  const c = await api(`${API}/collections/${cid}`);
+  const interval = c.extent?.temporal?.interval?.[0] || [];
+  const d0 = interval[0] ? interval[0].slice(0,10) : '—';
+  const d1 = interval[1] ? interval[1].slice(0,10) : '—';
+
+  const summHtml = Object.entries(c.summaries || {}).map(([k, vals]) => {
+    const chips = vals.slice(0,20).map(v => `<span class="chip">${esc(String(v))}</span>`).join('');
+    const more = vals.length > 20 ? `<span class="chip">+${vals.length-20} more</span>` : '';
+    return `<div style="margin-bottom:.5rem"><strong style="font-size:.82rem">${esc(k)}</strong><div class="chip-list">${chips}${more}</div></div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.9rem">
+      <div style="flex:1">
+        <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary,#888);margin-bottom:.15rem">Collection</div>
+        <h2 style="margin:0;font-size:1.1rem;font-weight:700">${esc(c.title||c.id)}</h2>
+      </div>
+    </div>
+
+    <div class="tabs" style="margin-bottom:.9rem">
+      <button class="tab active" id="ctab-ov"   onclick="showCollTab('ov')">Overview</button>
+      <button class="tab"        id="ctab-items" onclick="showCollTab('items')">Items</button>
+      <button class="tab"        id="ctab-hier"  onclick="showCollTab('hier')">Browse hierarchy</button>
+    </div>
+
+    <!-- Overview tab -->
+    <div id="ctab-body-ov">
+      <div class="meta-section">
+        <div class="meta-section-title">Description</div>
+        <p style="margin:0;font-size:.88rem;color:var(--text-secondary,#555)">${esc(c.description||'No description.')}</p>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:.2rem .6rem;font-size:.84rem;margin-top:.65rem">
+          <span style="font-weight:600;color:var(--text-secondary)">Temporal</span><span>${d0} → ${d1}</span>
+          <span style="font-weight:600;color:var(--text-secondary)">License</span><span>${esc(c.license||'—')}</span>
+        </div>
+      </div>
+      ${summHtml ? `<div class="meta-section"><div class="meta-section-title">Dimension Summaries</div>${summHtml}</div>` : ''}
+    </div>
+
+    <!-- Items tab -->
+    <div id="ctab-body-items" style="display:none">
+      <div id="coll-items-wrap"><p class="loading">Loading items…</p></div>
+    </div>
+
+    <!-- Hierarchy tab -->
+    <div id="ctab-body-hier" style="display:none">
+      <div class="meta-section" style="text-align:center;padding:1.5rem">
+        <p style="margin:0 0 .75rem;font-size:.88rem;color:var(--text-secondary,#666)">
+          Drill down through the metadata hierarchy (class → stream → type → …) to browse items by their dimension values.
+        </p>
+        <button class="btn" onclick="go({view:'catalog',catalogPath:'',itemId:null})">
+          Browse metadata hierarchy →
+        </button>
+      </div>
+    </div>`;
+
+  // pre-load items in background so the tab is snappy
+  _loadCollItems(cid);
+}
+
+async function _loadCollItems(cid) {
+  try {
+    const data = await api(`${API}/collections/${cid}/items?limit=${COLL_PAGE}&offset=0`);
+    _collItems = data;
+    _renderCollItemsTable();
+  } catch(e) {
+    const w = document.getElementById('coll-items-wrap');
+    if (w) w.innerHTML = `<div class="err">⚠️ ${esc(e.message)}</div>`;
+  }
+}
+
+function _renderCollItemsTable() {
+  const wrap = document.getElementById('coll-items-wrap');
+  if (!wrap) return;
+  if (!_collItems) { wrap.innerHTML = '<p class="loading">Loading…</p>'; return; }
+  const features = _collItems.features || [];
+  const total    = _collItems.numberMatched || features.length;
+  if (!features.length) { wrap.innerHTML = '<p class="empty">No items found.</p>'; return; }
+
+  // Collect all property keys (prioritised)
+  const priority = ['datetime','date','time','type','stream','class','param','levtype','step'];
+  const keySet = new Set();
+  features.forEach(f => Object.keys(f.properties||{}).forEach(k => keySet.add(k)));
+  const keys = [...priority.filter(k => keySet.has(k)),
+                ...[...keySet].filter(k => !priority.includes(k) && k !== 'datetime')];
+
+  const offset = _collItems._offset || 0;
+  const prevBtn = offset > 0
+    ? `<button class="btn sec" style="font-size:.8rem;padding:.28rem .65rem" onclick="_collItemsPrev()">← Prev</button>` : '';
+  const nextBtn = offset + features.length < total
+    ? `<button class="btn" style="font-size:.8rem;padding:.28rem .65rem" onclick="_collItemsNext()">Next →</button>` : '';
+
+  wrap.innerHTML = `
+    <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem">
+      <span style="font-size:.84rem;color:var(--text-secondary,#666)">${offset+1}–${offset+features.length} of ${total} items</span>
+      <span style="flex:1"></span>
+      ${prevBtn}${nextBtn}
+    </div>
+    <div class="item-table-wrap">
+      <table>
+        <thead><tr><th>#</th>${keys.map(k=>`<th>${esc(k)}</th>`).join('')}</tr></thead>
+        <tbody id="coll-items-tb"></tbody>
+      </table>
+    </div>`;
+
+  const tb = wrap.querySelector('#coll-items-tb');
+  features.forEach((f, i) => {
+    const props = f.properties || {};
+    const iid   = f.id;
+    const prebuiltItem = {
+      type: 'Feature', stac_version: '1.0.0',
+      id: iid, collection: S.collectionId,
+      geometry: null, bbox: null,
+      properties: props, links: f.links || [], assets: f.assets || {},
+    };
+    const tr = document.createElement('tr');
+    tr.className = 'data-row';
+    tr.innerHTML = `<td>${offset+i+1}</td>` +
+      keys.map(k => {
+        const v = props[k];
+        return `<td>${v != null ? esc(String(v)) : '<span style="color:#ccc">—</span>'}</td>`;
+      }).join('');
+    tr.onclick = () => go({ view:'item', itemId: iid, itemData: prebuiltItem });
+    tb.appendChild(tr);
+  });
+}
+
+async function _collItemsPrev() {
+  const offset = Math.max(0, (_collItems?._offset || 0) - COLL_PAGE);
+  await _collLoadPage(offset);
+}
+async function _collItemsNext() {
+  const offset = (_collItems?._offset || 0) + COLL_PAGE;
+  await _collLoadPage(offset);
+}
+async function _collLoadPage(offset) {
+  const wrap = document.getElementById('coll-items-wrap');
+  if (wrap) wrap.innerHTML = '<p class="loading">Loading…</p>';
+  const data = await api(`${API}/collections/${S.collectionId}/items?limit=${COLL_PAGE}&offset=${offset}`);
+  data._offset = offset;
+  _collItems = data;
+  _renderCollItemsTable();
+}
+
+function showCollTab(name) {
+  ['ov','items','hier'].forEach(n => {
+    document.getElementById(`ctab-${n}`)?.classList.toggle('active', n === name);
+    const b = document.getElementById(`ctab-body-${n}`);
+    if (b) b.style.display = n === name ? '' : 'none';
+  });
+  // kick render if items tab selected and already loaded
+  if (name === 'items') _renderCollItemsTable();
+}
+
+// ── Catalog node ──────────────────────────────────────────────────────────
+let _collCache = {}; // collection metadata cache keyed by id
+
+async function _getCollection(cid) {
+  if (!_collCache[cid]) _collCache[cid] = api(`${API}/collections/${cid}`);
+  return _collCache[cid];
+}
+
+async function renderCatalog(el) {
+  const cid = S.collectionId;
+  const url = S.catalogPath
+    ? `${CATALOG_BASE(cid)}/${S.catalogPath}`
+    : CATALOG_BASE(cid);
+
+  // fetch catalog node + (at root) collection info in parallel
+  const isRoot = !S.catalogPath;
+  const [node, coll] = await Promise.all([api(url), isRoot ? _getCollection(cid) : Promise.resolve(null)]);
+
+  el.innerHTML = ''; // clear the "Loading…" placeholder
+
+  // ── collection info banner at root level ──────────────────────────────
+  if (isRoot && coll) {
+    const interval = coll.extent?.temporal?.interval?.[0] || [];
+    const d0 = interval[0] ? interval[0].slice(0,10) : '—';
+    const d1 = interval[1] ? interval[1].slice(0,10) : '—';
+    const summKeys = Object.keys(coll.summaries || {});
+    const chips = summKeys.slice(0,6).map(k => {
+      const vals = (coll.summaries[k] || []);
+      return `<span class="chip" title="${esc(k)}">${esc(k)}: ${vals.length > 3 ? vals.slice(0,3).map(v=>esc(String(v))).join(', ')+' +'+( vals.length-3)+' more' : vals.map(v=>esc(String(v))).join(', ')}</span>`;
+    }).join('');
+    const infoHtml = `
+      <details class="meta-section coll-info-banner">
+        <summary>
+          <span class="card-badge" style="margin-right:.45rem">Collection</span>
+          <strong>${esc(coll.title||coll.id)}</strong>
+          <span style="font-size:.8rem;color:var(--text-secondary,#888);font-weight:400;margin-left:.6rem">${esc(coll.description||'')}</span>
+        </summary>
+        <div class="det-body" style="font-size:.83rem;color:var(--text-secondary,#666)">
+          <span>📅 ${d0} → ${d1}</span>
+          ${chips ? `<div class="chip-list" style="margin-top:.35rem">${chips}</div>` : ''}
+          <a href="#" onclick="go({view:'collection',catalogPath:'',itemId:null});return false" style="display:inline-block;margin-top:.5rem;font-size:.8rem;color:var(--primary-color,#2563eb)">View full collection details →</a>
+        </div>
+      </details>`;
+    el.insertAdjacentHTML('beforeend', infoHtml);
+  }
+
+  const childLinks = (node.links || []).filter(l => l.rel === 'child');
+  const itemLinks  = (node.links || []).filter(l => l.rel === 'item');
+  const nextKey = node.next_key;
+
+  // content goes into a div that sits below the (already-inserted) banner
+  const body = document.createElement('div');
+  el.appendChild(body);
+
+  if (childLinks.length > 0) {
+    // ── Internal node: show child catalog cards ──
+    body.innerHTML = `
+      <div class="level-header">
+        <span>Select a value for</span>
+        <span class="level-key">${esc(nextKey || '?')}</span>
+        <span class="level-count">${childLinks.length} option${childLinks.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="card-grid" id="cg"></div>`;
+
+    for (const lnk of childLinks) {
+      const val    = lnk['stac:value'] ?? lnk.title ?? '';
+      const key    = lnk['stac:key']   ?? nextKey ?? '';
+      const rawVal = lnk['stac:value'] ?? val;
+      const desc   = lnk.title?.replace(`${key} = ${rawVal}`, '').replace(/^\s*\(\s*/, '').replace(/\s*\)\s*$/, '') || '';
+      const childPath = S.catalogPath ? S.catalogPath + '/' + key + '=' + rawVal : key + '=' + rawVal;
+      const card = mkCard('Value', esc(rawVal), esc(desc), `🔑 ${esc(key)}`);
+      card.onclick = () => go({ view:'catalog', catalogPath: childPath });
+      body.querySelector('#cg').appendChild(card);
+    }
+
+  } else if (itemLinks.length > 0) {
+    // ── Leaf node: show items as a table ──
+    const allKeys = new Set();
+    itemLinks.forEach(l => Object.keys(l['stac:properties'] || {}).forEach(k => allKeys.add(k)));
+    const priority = ['datetime','date','time','type','stream','param','levtype','step','number'];
+    const keys = [...priority.filter(k => allKeys.has(k)), ...[...allKeys].filter(k => !priority.includes(k) && k !== 'datetime')];
+
+    body.innerHTML = `
+      <div class="level-header">
+        <span class="card-badge leaf">Leaf</span>
+        <span style="font-weight:600">${itemLinks.length} item${itemLinks.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="item-table-wrap">
+        <table>
+          <thead><tr><th>#</th>${keys.map(k=>`<th>${esc(k)}</th>`).join('')}</tr></thead>
+          <tbody id="tb"></tbody>
+        </table>
+      </div>`;
+
+    const tb = body.querySelector('#tb');
+    itemLinks.forEach((lnk, i) => {
+      const props = lnk['stac:properties'] || {};
+      const iid   = lnk.href.split('/').pop();
+      // pre-build a lightweight STAC item from the catalog link data
+      const prebuiltItem = {
+        type: 'Feature', stac_version: '1.0.0',
+        id: iid, collection: S.collectionId,
+        geometry: null, bbox: null,
+        properties: props, links: [], assets: {},
+      };
+      const tr = document.createElement('tr');
+      tr.className = 'data-row';
+      tr.innerHTML = `<td>${i+1}</td>` +
+        keys.map(k => {
+          const v = props[k];
+          return `<td>${v != null ? esc(String(v)) : '<span style="color:#ccc">—</span>'}</td>`;
+        }).join('');
+      tr.onclick = () => go({ view:'item', itemId: iid, itemData: prebuiltItem });
+      tb.appendChild(tr);
+    });
+
+  } else {
+    body.innerHTML = '<p class="empty">No children or items at this level.</p>';
+  }
+}
+
+// ── Language cache ────────────────────────────────────────────────────────
+let _lang = null;
+async function getLang() {
+  if (_lang) return _lang;
+  try { _lang = await api('/api/v2/language'); } catch(e) { _lang = {}; }
+  return _lang;
+}
+
+let _currentItem = null; // kept for debug/console access
+
+// ── Item detail ───────────────────────────────────────────────────────────
+async function renderItem(el) {
+  const cid = S.collectionId;
+  const iid = S.itemId;
+
+  // Use pre-built item from catalog state immediately (no round-trip needed).
+  // Fetch full item + language in parallel in the background to enrich display.
+  let item = S.itemData || null;
+  let lang = _lang || {};
+
+  if (!item) {
+    // Fallback: fetch from server (slower path, e.g. direct URL navigation)
+    [item, lang] = await Promise.all([
+      api(`${API}/collections/${cid}/items/${iid}`),
+      getLang(),
+    ]);
+  } else {
+    // Render immediately with whatever language we have cached,
+    // then re-render once language finishes loading.
+    getLang().then(l => {
+      lang = l;
+      _currentItem = item;
+      _renderItemHtml(el, item, lang, cid, iid);
+    });
+  }
+
+  _currentItem = item;
+  _renderItemHtml(el, item, lang, cid, iid);
+}
+
+function _renderItemHtml(el, item, lang, cid, iid) {
+  const props = item.properties || {};
+
+  // ── Metadata row builder ──────────────────────────────────────────────
+  function metaRow(k, v) {
+    const langKey = lang[k] || {};
+    const keyDesc = langKey.description || '';
+    const valStr  = v != null ? String(v) : 'null';
+    const valInfo = (langKey.values || {})[valStr] || {};
+    const valName = valInfo.name || '';
+    const valDesc = valInfo.description || '';
+    const valUrl  = valInfo.url || '';
+    const rawSpan  = `<span class="meta-val-raw">${esc(valStr)}</span>`;
+    const nameSpan = valName ? `<span class="meta-val-name">${esc(valName)}</span>&ensp;${rawSpan}` : rawSpan;
+    const descDiv  = valDesc ? `<div class="meta-val-desc">${esc(valDesc)}</div>` : '';
+    const urlDiv   = valUrl  ? `<div class="meta-val-url"><a href="${esc(valUrl)}" target="_blank" style="color:var(--primary-color,#2563eb);font-size:.76rem">${esc(valUrl)}</a></div>` : '';
+    return `<tr>
+      <td style="width:38%;padding-right:.9rem">
+        <div class="meta-key">${esc(k)}</div>
+        ${keyDesc ? `<div class="meta-key-desc">${esc(keyDesc)}</div>` : ''}
+      </td>
+      <td>${nameSpan}${descDiv}${urlDiv}</td>
+    </tr>`;
+  }
+
+  // All properties in a consistent order: priority keys first, then the rest
+  const PRIORITY_KEYS = ['datetime','date','time','class','stream','type','dataset','expver',
+                         'activity','experiment','generation','model','realization'];
+  const orderedEntries = [
+    ...PRIORITY_KEYS.filter(k => props[k] != null).map(k => [k, props[k]]),
+    ...Object.entries(props).filter(([k]) => !PRIORITY_KEYS.includes(k)),
+  ];
+  const allMetaRows = orderedEntries.map(([k,v]) => metaRow(k, v)).join('');
+
+  // ── Spatial extent ────────────────────────────────────────────────────
+  const bbox = item.bbox || [-180, -90, 180, 90];
+  const isGlobal = bbox[0]===-180 && bbox[1]===-90 && bbox[2]===180 && bbox[3]===90;
+  const bboxLabel = isGlobal
+    ? 'Global (−180 → 180°, −90 → 90°)'
+    : `${bbox[0]}°, ${bbox[1]}° → ${bbox[2]}°, ${bbox[3]}°`;
+
+  // ── Code snippets ─────────────────────────────────────────────────────
+  // MARS request — all props except STAC-internal datetime
+  const marsProps = Object.entries(props).filter(([k]) => k !== 'datetime');
+  const marsLines = marsProps.map(([k,v]) => `  ${k}=${v}`).join(',\n');
+  const marsSnippet = `retrieve,\n${marsLines},\n  target = "output.grib"`;
+
+  // Python earthkit.data
+  const marsDict = Object.fromEntries(marsProps);
+  const pyDictStr = '{\n' + Object.entries(marsDict).map(([k,v]) => `    "${k}": "${v}"`).join(',\n') + '\n}';
+  const earthkitSnippet =
+`import earthkit.data as ekd
+
+request = ${pyDictStr}
+
+ds = ekd.from_source("mars", request)
+print(ds.to_pandas())`;
+
+  // STAC API (Python requests)
+  const stacUrl = `${location.origin}/api/stac/v1/collections/${cid}/items/${iid}`;
+  const stacSnippet =
+`import requests
+
+# Fetch item metadata from the STAC API
+resp = requests.get("${stacUrl}")
+item = resp.json()
+
+# Properties contain the MARS request parameters
+props = item["properties"]
+print(props)
+
+# You can then build a data request:
+import earthkit.data as ekd
+ds = ekd.from_source("mars", {k: v for k, v in props.items() if k != "datetime"})`;
+
+  // STAC + curl one-liner
+  const curlSnippet = `curl -s "${stacUrl}" | python3 -m json.tool`;
+
+  // ── Assets (STAC assets dict, may be empty) ───────────────────────────
+  const assets = item.assets || {};
+  const assetKeys = Object.keys(assets);
+  const assetsBlock = assetKeys.length
+    ? assetKeys.map(ak => {
+        const a = assets[ak];
+        return `<div class="asset-row">
+          <div>
+            <div class="asset-title">${esc(a.title||ak)}</div>
+            ${a.type  ? `<div class="asset-type">${esc(a.type)}</div>` : ''}
+            ${(a.roles||[]).length ? `<div class="asset-type">${esc(a.roles.join(', '))}</div>` : ''}
+          </div>
+          <a href="${esc(a.href||'#')}" target="_blank" class="btn" style="font-size:.78rem;padding:.28rem .65rem;flex-shrink:0">↓ Download</a>
+        </div>`;
+      }).join('')
+    : '';
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.9rem">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.73rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary,#888);margin-bottom:.12rem">STAC Item · ${esc(cid)}</div>
+        <h2 style="margin:0;font-size:.95rem;font-weight:700;word-break:break-all;font-family:monospace">${esc(iid)}</h2>
+      </div>
+      <button class="btn sec" style="font-size:.8rem;padding:.3rem .7rem;flex-shrink:0"
+        onclick="go({view:'catalog'})">← Back</button>
+    </div>
+
+    <div class="item-2col">
+
+      <!-- ─── Left: map only ─── -->
+      <div class="item-left">
+        <div class="meta-section" style="padding:.75rem">
+          <div class="meta-section-title">Spatial Coverage</div>
+          <div class="map-wrap"><div id="item-map"></div></div>
+          <div style="font-size:.75rem;color:var(--text-secondary,#888);margin-top:.4rem;text-align:center">${esc(bboxLabel)}</div>
+        </div>
+      </div>
+
+      <!-- ─── Right: tabs ─── -->
+      <div class="item-right">
+        <div class="tabs" style="margin-bottom:0;border-radius:10px 10px 0 0;background:var(--bg-primary,#fff);padding:.4rem .7rem 0;box-shadow:0 1px 0 var(--border-color,#e0e4f0)">
+          <button class="tab active" onclick="swItemTab(this,'itm')">Metadata</button>
+          <button class="tab" onclick="swItemTab(this,'iacc')">Access</button>
+          <button class="tab" onclick="swItemTab(this,'ijson')">Raw JSON</button>
+        </div>
+
+        <!-- Metadata tab -->
+        <div id="itm" class="meta-section" style="border-radius:0 0 10px 10px;margin-top:0;box-shadow:0 2px 8px rgba(0,0,0,.08)">
+          ${allMetaRows
+            ? `<table class="meta-table"><tbody>${allMetaRows}</tbody></table>`
+            : `<p class="empty" style="margin:0">No properties.</p>`}
+        </div>
+
+        <!-- Access tab -->
+        <div id="iacc" class="meta-section" style="display:none;border-radius:0 0 10px 10px;margin-top:0;box-shadow:0 2px 8px rgba(0,0,0,.08)">
+          ${assetsBlock ? `
+          <div class="meta-section-title">📦 Assets</div>
+          ${assetsBlock}
+          <div style="margin-bottom:1rem"></div>` : ''}
+
+          <div class="meta-section-title">🌐 MARS Request</div>
+          <div class="code-block-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block"><code>${esc(marsSnippet)}</code></pre>
+          </div>
+
+          <div class="meta-section-title" style="margin-top:1rem">🐍 Python — earthkit.data</div>
+          <div class="code-block-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block"><code>${esc(earthkitSnippet)}</code></pre>
+          </div>
+
+          <div class="meta-section-title" style="margin-top:1rem">🐍 Python — STAC API</div>
+          <div class="code-block-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block"><code>${esc(stacSnippet)}</code></pre>
+          </div>
+
+          <div class="meta-section-title" style="margin-top:1rem">💻 curl</div>
+          <div class="code-block-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block"><code>${esc(curlSnippet)}</code></pre>
+          </div>
+        </div>
+
+        <!-- Raw JSON tab -->
+        <div id="ijson" class="meta-section" style="display:none;border-radius:0 0 10px 10px;margin-top:0;box-shadow:0 2px 8px rgba(0,0,0,.08)">
+          <div class="code-block-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre class="code-block"><code>${esc(JSON.stringify(item,null,2))}</code></pre>
+          </div>
+        </div>
+      </div>
+
+    </div>`;
+
+  initMap(item);
+}
+
+function swItemTab(btn, tid) {
+  btn.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  ['itm','iacc','ijson'].forEach(id => {
+    const e = document.getElementById(id);
+    if (e) e.style.display = id === tid ? '' : 'none';
+  });
+}
+
+function copyCode(btn) {
+  const code = btn.nextElementSibling.textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  });
+}
+
+// ── Leaflet map ───────────────────────────────────────────────────────────
+let _map = null;
+function initMap(item) {
+  // Defer one tick so the div is visible before Leaflet measures it
+  setTimeout(() => {
+    const bbox = item.bbox || [-180, -90, 180, 90];
+    const container = document.getElementById('item-map');
+    if (!container) return;
+    if (_map) { _map.remove(); _map = null; }
+    _map = L.map('item-map', { zoomControl: true, scrollWheelZoom: false });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 8,
+    }).addTo(_map);
+    const bounds = [[bbox[1], bbox[0]], [bbox[3], bbox[2]]];
+    L.rectangle(bounds, {
+      color: '#2563eb', weight: 2,
+      fillColor: '#2563eb', fillOpacity: 0.12,
+    }).addTo(_map);
+    _map.fitBounds(bounds, { padding: [20, 20] });
+  }, 30);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function mkCard(badge, title, desc, meta) {
+  const d = document.createElement('div');
+  d.className = 'card';
+  d.innerHTML = `
+    <div class="card-badge">${badge}</div>
+    <div class="card-title">${title}</div>
+    ${desc ? `<div class="card-meta">${desc}</div>` : ''}
+    ${meta ? `<div class="card-meta" style="margin-top:.3rem">${meta}</div>` : ''}`;
+  return d;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>

@@ -293,6 +293,343 @@
         .skip-link:hover {
             text-decoration: underline;
         }
+
+        /* ── STAC API Section ───────────────────────────────────────────── */
+        .stac-section {
+            width: 100%;
+            max-width: 1100px;
+            margin: 4rem auto 0;
+            padding: 0 1.5rem 4rem;
+        }
+
+        .stac-section-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stac-section-header h2 {
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .stac-version-badge {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark, #1d4ed8));
+            color: #fff;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .stac-ext-badge {
+            background: linear-gradient(135deg, #059669, #047857);
+            color: #fff;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .stac-section-lead {
+            color: var(--text-secondary, #666);
+            font-size: 1rem;
+            margin: 0 0 2.5rem;
+            line-height: 1.7;
+            max-width: 780px;
+        }
+
+        .stac-concepts {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .concept-card {
+            background: var(--bg-primary, #fff);
+            border: 1.5px solid var(--border-light, #e8eaf0);
+            border-radius: 10px;
+            padding: 1.1rem 1.2rem;
+        }
+
+        .concept-card .concept-icon { font-size: 1.5rem; margin-bottom: 0.4rem; }
+        .concept-card .concept-title { font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin: 0 0 0.3rem; }
+        .concept-card .concept-desc { font-size: 0.8rem; color: var(--text-secondary, #666); margin: 0; line-height: 1.5; }
+
+        .endpoints-group { margin-bottom: 2rem; }
+
+        .endpoints-group-label {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-secondary, #666);
+            margin-bottom: 0.75rem;
+        }
+
+        .endpoints-group-label::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-color, #e0e4f0);
+        }
+
+        .endpoint-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+        .ep-card {
+            background: var(--bg-primary, #fff);
+            border: 1.5px solid var(--border-light, #e8eaf0);
+            border-radius: 10px;
+            overflow: hidden;
+            transition: box-shadow 0.15s, border-color 0.15s;
+        }
+
+        .ep-card:hover { border-color: var(--primary-color, #2563eb); box-shadow: 0 2px 12px rgba(37,99,235,.1); }
+        .ep-card.ext-card { border-left: 4px solid #059669; }
+
+        .ep-header {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .ep-method {
+            font-size: 0.7rem;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            padding: 0.2rem 0.55rem;
+            border-radius: 5px;
+            min-width: 42px;
+            text-align: center;
+        }
+
+        .ep-method.get  { background: #dbeafe; color: #1d4ed8; }
+        .ep-method.post { background: #dcfce7; color: #15803d; }
+
+        .ep-path {
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 0.84rem;
+            color: var(--text-primary, #1a1a2e);
+            flex: 1;
+            word-break: break-all;
+        }
+
+        .ep-path .ep-param { color: var(--primary-color, #2563eb); }
+
+        .ep-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary, #666);
+            white-space: nowrap;
+        }
+
+        .ep-try-btn {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.25rem 0.65rem;
+            border: 1.5px solid var(--primary-color, #2563eb);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--primary-color, #2563eb);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s;
+        }
+
+        .ep-try-btn:hover { background: var(--primary-color, #2563eb); color: #fff; }
+
+        .ep-chevron {
+            color: var(--text-secondary, #aaa);
+            transition: transform 0.2s;
+            font-size: 0.8rem;
+        }
+
+        .ep-card.open .ep-chevron { transform: rotate(180deg); }
+
+        .ep-body {
+            display: none;
+            border-top: 1.5px solid var(--border-light, #e8eaf0);
+        }
+
+        .ep-card.open .ep-body { display: block; }
+
+        .ep-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1.5px solid var(--border-light, #e8eaf0);
+            background: var(--bg-secondary, #f4f6fb);
+        }
+
+        .ep-tab {
+            padding: 0.4rem 0.85rem;
+            font-size: 0.79rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            background: none;
+            color: var(--text-secondary, #666);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1.5px;
+            transition: color 0.12s, border-color 0.12s;
+        }
+
+        .ep-tab.active { color: var(--primary-color, #2563eb); border-bottom-color: var(--primary-color, #2563eb); background: var(--bg-primary, #fff); }
+
+        .ep-pane { display: none; }
+        .ep-pane.active { display: block; }
+
+        .ep-snippet-wrap {
+            position: relative;
+            background: #1e1e2e;
+            margin: 0;
+        }
+
+        .ep-snippet-wrap pre {
+            margin: 0;
+            padding: 1rem 1.2rem;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 0.78rem;
+            color: #cdd6f4;
+            overflow-x: auto;
+            white-space: pre;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .ep-copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            font-size: 0.72rem;
+            padding: 0.2rem 0.55rem;
+            background: rgba(255,255,255,.12);
+            color: #cdd6f4;
+            border: 1px solid rgba(255,255,255,.2);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .ep-copy-btn:hover { background: rgba(255,255,255,.22); }
+
+        .ep-live-pane {
+            padding: 0.85rem 1rem;
+        }
+
+        .ep-live-url-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            margin-bottom: 0.65rem;
+            flex-wrap: wrap;
+        }
+
+        .ep-live-url {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.78rem;
+            flex: 1;
+            min-width: 0;
+            padding: 0.3rem 0.6rem;
+            border: 1.5px solid var(--border-color, #e0e4f0);
+            border-radius: 6px;
+            background: var(--bg-secondary, #f4f6fb);
+            color: var(--text-primary);
+            outline: none;
+        }
+
+        .ep-live-url:focus { border-color: var(--primary-color, #2563eb); }
+
+        .ep-send-btn {
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.3rem 0.8rem;
+            background: var(--primary-color, #2563eb);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s;
+            white-space: nowrap;
+        }
+
+        .ep-send-btn:hover { background: var(--primary-dark, #1d4ed8); }
+
+        .ep-live-result {
+            background: #1e1e2e;
+            border-radius: 7px;
+            overflow: hidden;
+        }
+
+        .ep-live-result pre {
+            margin: 0;
+            padding: 0.85rem 1rem;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 0.75rem;
+            color: #cdd6f4;
+            overflow: auto;
+            max-height: 320px;
+            white-space: pre;
+        }
+
+        .ep-live-placeholder {
+            color: #6c7086;
+            font-style: italic;
+            padding: 0.85rem 1rem;
+            font-size: 0.8rem;
+        }
+
+        .stac-tools-row {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-top: 2.5rem;
+        }
+
+        .stac-tool-card {
+            flex: 1;
+            min-width: 200px;
+            background: var(--bg-primary, #fff);
+            border: 1.5px solid var(--border-light, #e8eaf0);
+            border-radius: 10px;
+            padding: 1.1rem 1.3rem;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.15s;
+            display: flex;
+            gap: 0.9rem;
+            align-items: flex-start;
+        }
+
+        .stac-tool-card:hover {
+            border-color: var(--primary-color, #2563eb);
+            box-shadow: 0 3px 14px rgba(37,99,235,.12);
+            transform: translateY(-2px);
+        }
+
+        .stac-tool-card .tool-icon { font-size: 1.5rem; flex-shrink: 0; }
+        .stac-tool-card .tool-name { font-size: 0.92rem; font-weight: 700; color: var(--text-primary); margin: 0 0 0.2rem; }
+        .stac-tool-card .tool-desc { font-size: 0.79rem; color: var(--text-secondary, #666); margin: 0; line-height: 1.4; }
+
+        /* syntax highlight tokens */
+        .t-key   { color: #89b4fa; }
+        .t-str   { color: #a6e3a1; }
+        .t-num   { color: #fab387; }
+        .t-cmt   { color: #6c7086; font-style: italic; }
+        .t-kw    { color: #cba6f7; }
+        .t-fn    { color: #89dceb; }
     </style>
 </head>
 
@@ -340,6 +677,8 @@
 
                 <div class="skip-option">
                     <a href="/browse" class="skip-link">Skip to full catalogue browser →</a>
+                    &nbsp;·&nbsp;
+                    <a href="/stac-browse" class="skip-link">STAC catalogue browser →</a>
                 </div>
             </div>
 
@@ -520,6 +859,341 @@
 
             window.location.href = `/browse?${params.toString()}`;
         }
+    </script>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  STAC API Developer Section                                        -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <section class="stac-section" id="stac-api">
+        <div class="stac-section-header">
+            <h2>STAC API</h2>
+            <span class="stac-version-badge">v1.0.0</span>
+            <span class="stac-ext-badge">+ Qubed extensions</span>
+        </div>
+        <p class="stac-section-lead">
+            A fully compliant <a href="https://api.stacspec.org/v1.0.0/core/" target="_blank" style="color:var(--primary-color)">STAC API v1.0.0</a>
+            is available at <code style="background:var(--bg-secondary);padding:.1rem .4rem;border-radius:4px;font-size:.88rem">/api/stac/v1</code>.
+            Beyond the standard, Qubed adds <strong>hierarchical catalogue browsing</strong>:
+            any collection can be drilled into key-by-key (e.g. <em>class → stream → type → …</em>)
+            using the <code style="background:var(--bg-secondary);padding:.1rem .4rem;border-radius:4px;font-size:.88rem">/catalog/…</code>
+            sub-tree, making it trivial to navigate massive multidimensional datasets without
+            enumerating all items upfront.
+        </p>
+
+        <!-- Key concepts -->
+        <div class="stac-concepts">
+            <div class="concept-card">
+                <div class="concept-icon">📦</div>
+                <p class="concept-title">Collection</p>
+                <p class="concept-desc">Each unique <em>dataset</em> dimension value maps to a STAC Collection with extent, summaries and links.</p>
+            </div>
+            <div class="concept-card">
+                <div class="concept-icon">🗂️</div>
+                <p class="concept-title">Hierarchical Catalog</p>
+                <p class="concept-desc">Qubed extension — browse one MARS key at a time via <code>/catalog/key=val/…</code>. The <code>next_key</code> field drives the drill-down.</p>
+            </div>
+            <div class="concept-card">
+                <div class="concept-icon">🔍</div>
+                <p class="concept-title">Item Search</p>
+                <p class="concept-desc">Cross-collection full-text search via <code>GET /search</code> or <code>POST /search</code> with arbitrary property filters.</p>
+            </div>
+            <div class="concept-card">
+                <div class="concept-icon">📄</div>
+                <p class="concept-title">Item</p>
+                <p class="concept-desc">A single datacube leaf — all MARS key=value metadata exposed as GeoJSON Feature <code>properties</code> plus a ready-to-use code snippet.</p>
+            </div>
+        </div>
+
+        <!-- ── Standard endpoints ── -->
+        <div class="endpoints-group">
+            <div class="endpoints-group-label">
+                <span class="stac-version-badge" style="font-size:.65rem">STAC standard</span>
+                Core &amp; OGC feature endpoints
+            </div>
+            <div class="endpoint-list" id="ep-standard"></div>
+        </div>
+
+        <!-- ── Qubed extension endpoints ── -->
+        <div class="endpoints-group">
+            <div class="endpoints-group-label">
+                <span class="stac-ext-badge" style="font-size:.65rem">Qubed extension</span>
+                Hierarchical catalogue browsing
+            </div>
+            <div class="endpoint-list" id="ep-ext"></div>
+        </div>
+
+        <!-- ── External tooling ── -->
+        <div class="stac-tools-row">
+            <a class="stac-tool-card" id="tool-stac-browser" href="#" target="_blank">
+                <span class="tool-icon">🌐</span>
+                <div>
+                    <p class="tool-name">STAC Browser</p>
+                    <p class="tool-desc">Radiant Earth's open-source visual STAC explorer — opens this catalogue directly.</p>
+                </div>
+            </a>
+            <a class="stac-tool-card" href="/stac-browse">
+                <span class="tool-icon">🗂️</span>
+                <div>
+                    <p class="tool-name">Built-in STAC Browser</p>
+                    <p class="tool-desc">Integrated hierarchical browser with live key drill-down, item detail and code snippets.</p>
+                </div>
+            </a>
+            <a class="stac-tool-card" href="/api/stac/v1/" target="_blank">
+                <span class="tool-icon">📡</span>
+                <div>
+                    <p class="tool-name">Raw API</p>
+                    <p class="tool-desc">Explore the raw JSON responses directly in your browser or pipe to <code>jq</code>.</p>
+                </div>
+            </a>
+            <a class="stac-tool-card" href="https://pystac-client.readthedocs.io/" target="_blank">
+                <span class="tool-icon">🐍</span>
+                <div>
+                    <p class="tool-name">pystac-client</p>
+                    <p class="tool-desc">Official Python client — search, iterate collections and download items programmatically.</p>
+                </div>
+            </a>
+        </div>
+    </section>
+
+    <script>
+    // ── STAC API explorer ─────────────────────────────────────────────────────
+    const BASE = '/api/stac/v1';
+    const ORIGIN = location.origin;
+
+    // Set external STAC browser link
+    document.getElementById('tool-stac-browser').href =
+        `https://radiantearth.github.io/stac-browser/#/external/${encodeURIComponent(ORIGIN + BASE + '/')}`;
+
+    // ── Endpoint definitions ──────────────────────────────────────────────────
+    // Each entry: { method, path, desc, ext, defaultUrl, curlExtra, pyExtra }
+    const ENDPOINTS = {
+        standard: [
+            {
+                method: 'GET', path: '/api/stac/v1/',
+                desc: 'Landing page — conformance classes & top-level links',
+                defaultUrl: `${BASE}/`,
+                curl: `curl -s "${ORIGIN}${BASE}/" | python3 -m json.tool`,
+                py: `import requests\n\nresp = requests.get("${ORIGIN}${BASE}/")\nprint(resp.json())`,
+                js: `const data = await fetch("${BASE}/").then(r => r.json());\nconsole.log(data.conformsTo);`,
+            },
+            {
+                method: 'GET', path: '/api/stac/v1/conformance',
+                desc: 'OGC conformance classes declared by this API',
+                defaultUrl: `${BASE}/conformance`,
+                curl: `curl -s "${ORIGIN}${BASE}/conformance" | python3 -m json.tool`,
+                py: `import requests\n\nresp = requests.get("${ORIGIN}${BASE}/conformance")\nprint(resp.json()["conformsTo"])`,
+                js: `const data = await fetch("${BASE}/conformance").then(r => r.json());\nconsole.log(data.conformsTo);`,
+            },
+            {
+                method: 'GET', path: '/api/stac/v1/collections',
+                desc: 'List all collections (one per dataset)',
+                defaultUrl: `${BASE}/collections`,
+                curl: `curl -s "${ORIGIN}${BASE}/collections" | python3 -m json.tool`,
+                py: `import requests\n\nresp = requests.get("${ORIGIN}${BASE}/collections")\nfor c in resp.json()["collections"]:\n    print(c["id"], "-", c["description"])`,
+                js: `const data = await fetch("${BASE}/collections").then(r => r.json());\ndata.collections.forEach(c => console.log(c.id));`,
+            },
+            {
+                method: 'GET', path: '/api/stac/v1/collections/{collection_id}',
+                desc: 'Collection metadata, extent & summaries',
+                defaultUrl: `${BASE}/collections/extremes-dt`,
+                curl: `curl -s "${ORIGIN}${BASE}/collections/extremes-dt" | python3 -m json.tool`,
+                py: `import requests\n\ncid = "extremes-dt"\nresp = requests.get(f"${ORIGIN}${BASE}/collections/{cid}")\nc = resp.json()\nprint(c["description"])\nprint("Keys:", list(c["summaries"].keys()))`,
+                js: `const cid = "extremes-dt";\nconst c = await fetch(\`${BASE}/collections/\${cid}\`).then(r => r.json());\nconsole.log(c.summaries);`,
+            },
+            {
+                method: 'GET', path: '/api/stac/v1/collections/{collection_id}/items',
+                desc: 'Paginated list of all items in a collection',
+                defaultUrl: `${BASE}/collections/extremes-dt/items?limit=5`,
+                curl: `curl -s "${ORIGIN}${BASE}/collections/extremes-dt/items?limit=5" | python3 -m json.tool`,
+                py: `import requests\n\ncid = "extremes-dt"\nresp = requests.get(\n    f"${ORIGIN}${BASE}/collections/{cid}/items",\n    params={"limit": 5}\n)\nfor feat in resp.json()["features"]:\n    print(feat["id"], feat["properties"].get("date"))`,
+                js: `const items = await fetch("${BASE}/collections/extremes-dt/items?limit=5").then(r => r.json());\nitems.features.forEach(f => console.log(f.id, f.properties.date));`,
+            },
+            {
+                method: 'GET', path: '/api/stac/v1/collections/{collection_id}/items/{item_id}',
+                desc: 'Single item by deterministic SHA-256 ID',
+                defaultUrl: `${BASE}/collections/extremes-dt/items/`,
+                curl: `# Grab the first item ID, then fetch it\nITEM=$(curl -s "${ORIGIN}${BASE}/collections/extremes-dt/items?limit=1" | python3 -c "import sys,json; print(json.load(sys.stdin)['features'][0]['id'])")\ncurl -s "${ORIGIN}${BASE}/collections/extremes-dt/items/$ITEM" | python3 -m json.tool`,
+                py: `import requests\n\ncid = "extremes-dt"\n# First get an item ID\nresp = requests.get(f"${ORIGIN}${BASE}/collections/{cid}/items", params={"limit": 1})\nitem_id = resp.json()["features"][0]["id"]\n\n# Then fetch the full item\nitem = requests.get(f"${ORIGIN}${BASE}/collections/{cid}/items/{item_id}").json()\nprint(item["properties"])`,
+                js: `const first = await fetch("${BASE}/collections/extremes-dt/items?limit=1").then(r => r.json());\nconst id = first.features[0].id;\nconst item = await fetch(\`${BASE}/collections/extremes-dt/items/\${id}\`).then(r => r.json());\nconsole.log(item.properties);`,
+            },
+            {
+                method: 'GET', path: '/api/stac/v1/search',
+                desc: 'Cross-collection item search with property filters',
+                defaultUrl: `${BASE}/search?limit=5`,
+                curl: `curl -s "${ORIGIN}${BASE}/search?limit=5" | python3 -m json.tool`,
+                py: `import requests\n\n# Free-text filter on arbitrary MARS properties\nresp = requests.get(\n    f"${ORIGIN}${BASE}/search",\n    params={"limit": 5, "stream": "oper", "type": "fc"}\n)\nprint(f"Matched {resp.json()['numberMatched']} items")`,
+                js: `const results = await fetch("${BASE}/search?limit=5&stream=oper").then(r => r.json());\nconsole.log("Matched:", results.numberMatched);`,
+            },
+            {
+                method: 'POST', path: '/api/stac/v1/search',
+                desc: 'POST search — body accepts collections, ids, limit, offset, and any MARS key filters',
+                defaultUrl: `${BASE}/search`,
+                curl: `curl -s -X POST "${ORIGIN}${BASE}/search" \\\n  -H "Content-Type: application/json" \\\n  -d '{"collections":["extremes-dt"],"limit":5,"stream":"oper"}' \\\n  | python3 -m json.tool`,
+                py: `import requests\n\nresp = requests.post(\n    f"${ORIGIN}${BASE}/search",\n    json={\n        "collections": ["extremes-dt"],\n        "limit": 5,\n        "stream": "oper",\n        "type": "fc"\n    }\n)\nprint(f"Matched {resp.json()['numberMatched']} items")`,
+                js: `const results = await fetch("${BASE}/search", {\n    method: "POST",\n    headers: {"Content-Type": "application/json"},\n    body: JSON.stringify({collections: ["extremes-dt"], limit: 5, stream: "oper"})\n}).then(r => r.json());\nconsole.log("Matched:", results.numberMatched);`,
+            },
+        ],
+        ext: [
+            {
+                method: 'GET', path: '/api/stac/v1/collections/{collection_id}/catalog',
+                desc: 'Root catalog node — returns the first MARS key to drill into, with one child link per value',
+                ext: true,
+                defaultUrl: `${BASE}/collections/extremes-dt/catalog`,
+                curl: `curl -s "${ORIGIN}${BASE}/collections/extremes-dt/catalog" | python3 -m json.tool`,
+                py: `import requests\n\ncid = "extremes-dt"\nnode = requests.get(f"${ORIGIN}${BASE}/collections/{cid}/catalog").json()\nprint("Next key to select:", node["next_key"])\nchildren = [l for l in node["links"] if l["rel"] == "child"]\nprint(f"{len(children)} child values:")\nfor c in children:\n    print(" •", c["title"])`,
+                js: `const node = await fetch("${BASE}/collections/extremes-dt/catalog").then(r => r.json());\nconsole.log("Drill by:", node.next_key);\nnode.links.filter(l => l.rel === "child").forEach(l => console.log(l.title, l.href));`,
+            },
+            {
+                method: 'GET', path: '/api/stac/v1/collections/{collection_id}/catalog/{path}',
+                desc: 'Nested catalog node — path is a slash-separated list of key=value segments',
+                ext: true,
+                defaultUrl: `${BASE}/collections/extremes-dt/catalog/stream=oper`,
+                curl: `curl -s "${ORIGIN}${BASE}/collections/extremes-dt/catalog/stream=oper" | python3 -m json.tool`,
+                py: `import requests\n\ncid = "extremes-dt"\npath = "stream=oper"   # drill deeper: "stream=oper/type=fc"\nnode = requests.get(f"${ORIGIN}${BASE}/collections/{cid}/catalog/{path}").json()\nprint("Next key:", node.get("next_key", "(leaf – showing items)"))\nchildren = [l for l in node["links"] if l["rel"] == "child"]\nitems    = [l for l in node["links"] if l["rel"] == "item"]\nif children:\n    for c in children: print(" •", c["title"])\nelif items:\n    print(f"{len(items)} items at leaf")\n    print(items[0])`,
+                js: `// Walk the tree programmatically\nasync function walkCatalog(cid, path = "") {\n    const url = path\n        ? \`${BASE}/collections/\${cid}/catalog/\${path}\`\n        : \`${BASE}/collections/\${cid}/catalog\`;\n    const node = await fetch(url).then(r => r.json());\n    if (node.next_key) {\n        const children = node.links.filter(l => l.rel === "child");\n        console.log(\`Key: \${node.next_key}, values:\`, children.map(c => c.title));\n    } else {\n        const items = node.links.filter(l => l.rel === "item");\n        console.log(\`Leaf: \${items.length} item(s)\`);\n    }\n}\nwalkCatalog("extremes-dt");`,
+            },
+        ],
+    };
+
+    // ── Render endpoints into the DOM ─────────────────────────────────────────
+    function renderEndpoints() {
+        renderGroup('ep-standard', ENDPOINTS.standard, false);
+        renderGroup('ep-ext',      ENDPOINTS.ext,      true);
+    }
+
+    function renderGroup(containerId, list, isExt) {
+        const container = document.getElementById(containerId);
+        list.forEach((ep, idx) => {
+            const id = `ep-${containerId}-${idx}`;
+            const card = document.createElement('div');
+            card.className = 'ep-card' + (isExt ? ' ext-card' : '');
+            card.id = id;
+
+            const pathHtml = ep.path.replace(/\{([^}]+)\}/g,
+                '<span class="ep-param">{$1}</span>');
+
+            card.innerHTML = `
+              <div class="ep-header" onclick="toggleEp('${id}')">
+                <span class="ep-method ${ep.method.toLowerCase()}">${ep.method}</span>
+                <span class="ep-path">${pathHtml}</span>
+                <span class="ep-desc" title="${ep.desc}">${truncate(ep.desc, 48)}</span>
+                <span class="ep-chevron">▼</span>
+              </div>
+              <div class="ep-body">
+                <div class="ep-tabs">
+                  <button class="ep-tab active" onclick="switchEpTab(event,'${id}','live')">▶ Try it</button>
+                  <button class="ep-tab"        onclick="switchEpTab(event,'${id}','curl')">curl</button>
+                  <button class="ep-tab"        onclick="switchEpTab(event,'${id}','py')">Python</button>
+                  <button class="ep-tab"        onclick="switchEpTab(event,'${id}','js')">JavaScript</button>
+                </div>
+                <div class="ep-pane active" id="${id}-live">
+                  <div class="ep-live-pane">
+                    <div class="ep-live-url-row">
+                      <input class="ep-live-url" id="${id}-url" value="${ep.defaultUrl}" spellcheck="false"
+                             onkeydown="if(event.key==='Enter')sendReq('${id}')">
+                      <button class="ep-send-btn" onclick="sendReq('${id}')">Send →</button>
+                    </div>
+                    <div class="ep-live-result" id="${id}-result">
+                      <div class="ep-live-placeholder">Response will appear here</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="ep-pane" id="${id}-curl">
+                  <div class="ep-snippet-wrap">
+                    <button class="ep-copy-btn" onclick="copySnippet(this)">Copy</button>
+                    <pre>${escHtml(ep.curl)}</pre>
+                  </div>
+                </div>
+                <div class="ep-pane" id="${id}-py">
+                  <div class="ep-snippet-wrap">
+                    <button class="ep-copy-btn" onclick="copySnippet(this)">Copy</button>
+                    <pre>${escHtml(ep.py)}</pre>
+                  </div>
+                </div>
+                <div class="ep-pane" id="${id}-js">
+                  <div class="ep-snippet-wrap">
+                    <button class="ep-copy-btn" onclick="copySnippet(this)">Copy</button>
+                    <pre>${escHtml(ep.js)}</pre>
+                  </div>
+                </div>
+              </div>`;
+
+            container.appendChild(card);
+        });
+    }
+
+    function toggleEp(id) {
+        const card = document.getElementById(id);
+        card.classList.toggle('open');
+    }
+
+    function switchEpTab(evt, cardId, pane) {
+        evt.stopPropagation();
+        const card = document.getElementById(cardId);
+        card.querySelectorAll('.ep-tab').forEach(t => t.classList.remove('active'));
+        evt.target.classList.add('active');
+        card.querySelectorAll('.ep-pane').forEach(p => p.classList.remove('active'));
+        card.querySelector(`#${cardId}-${pane}`).classList.add('active');
+    }
+
+    async function sendReq(cardId) {
+        const url   = document.getElementById(`${cardId}-url`).value.trim();
+        const result = document.getElementById(`${cardId}-result`);
+        result.innerHTML = '<div class="ep-live-placeholder">Fetching…</div>';
+
+        try {
+            const ep = findEp(cardId);
+            const isPost = ep && ep.method === 'POST';
+            const opts   = isPost
+                ? { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{"limit":5}' }
+                : {};
+            const resp = await fetch(url, opts);
+            const text = await resp.text();
+
+            let pretty;
+            try {
+                pretty = JSON.stringify(JSON.parse(text), null, 2);
+            } catch {
+                pretty = text;
+            }
+
+            // Trim for display
+            const lines = pretty.split('\n');
+            const shown = lines.length > 120 ? lines.slice(0,120).join('\n') + '\n\n// … (truncated)' : pretty;
+            result.innerHTML = `<pre>${escHtml(shown)}</pre>`;
+        } catch (e) {
+            result.innerHTML = `<pre style="color:#f38ba8">${escHtml(String(e))}</pre>`;
+        }
+    }
+
+    // find the endpoint definition by card id
+    function findEp(cardId) {
+        const all = [...ENDPOINTS.standard, ...ENDPOINTS.ext];
+        const m = cardId.match(/-(\d+)$/);
+        if (!m) return null;
+        const idx = parseInt(m[1]);
+        if (cardId.startsWith('ep-ep-standard')) return ENDPOINTS.standard[idx];
+        if (cardId.startsWith('ep-ep-ext'))      return ENDPOINTS.ext[idx];
+        return null;
+    }
+
+    function copySnippet(btn) {
+        const code = btn.nextElementSibling.textContent;
+        navigator.clipboard.writeText(code).then(() => {
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy', 1500);
+        });
+    }
+
+    function truncate(s, n) {
+        return s.length <= n ? s : s.slice(0, n - 1) + '…';
+    }
+
+    function escHtml(s) {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    renderEndpoints();
     </script>
 </body>
 
