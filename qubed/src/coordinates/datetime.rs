@@ -69,6 +69,11 @@ impl DateTimeCoordinates {
                     set_b.insert(*v);
                 }
 
+                let mut set_a: HashSet<NaiveDateTime> = HashSet::new();
+                for v in list_a.iter() {
+                    set_a.insert(*v);
+                }
+
                 let mut intersection = TinyVec::new();
                 let mut only_a = TinyVec::new();
 
@@ -86,7 +91,7 @@ impl DateTimeCoordinates {
 
                 let mut only_b = TinyVec::new();
                 for v in list_b.iter() {
-                    if !list_a.contains(v) {
+                    if !set_a.contains(v) {
                         only_b.push(*v);
                     }
                 }
