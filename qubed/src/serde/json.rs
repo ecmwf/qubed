@@ -90,7 +90,9 @@ impl Qube {
                 let native = nref.coordinates().to_json_value();
 
                 match nref.coordinates() {
-                    crate::Coordinates::Empty => Value::Object(map),
+                    // Represent empty coordinates as JSON null so they round-trip as `Empty`,
+                    // not as `Mixed(empty)` (which is how an empty object `{}` would be read).
+                    crate::Coordinates::Empty => Value::Null,
                     crate::Coordinates::Integers(_) => match native {
                         Value::Array(arr) => {
                             map.insert("ints".to_string(), Value::Array(arr));
