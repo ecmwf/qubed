@@ -735,7 +735,6 @@ mod tests {
 
     #[test]
     fn test_drop_middle_dimension_preserves_leaves() {
-        use crate::Qube;
         let input = r#"root
 └── class=1
     ├── expver=0001
