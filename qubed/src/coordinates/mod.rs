@@ -362,7 +362,7 @@ impl Coordinates {
                 }
 
                 match &boxed.datetimes {
-                    datetime::DateTimeCoordinates::Set(list) => {
+                    datetime::DateTimeCoordinates::List(list) => {
                         if list.len() > 0 {
                             let vals: Vec<Value> = list
                                 .iter()
@@ -379,7 +379,7 @@ impl Coordinates {
                 Value::Object(map)
             }
             Coordinates::DateTimes(coords) => match coords {
-                datetime::DateTimeCoordinates::Set(list) => {
+                datetime::DateTimeCoordinates::List(list) => {
                     let vals: Vec<Value> = list
                         .iter()
                         .map(|dt: &NaiveDateTime| {

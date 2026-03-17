@@ -31,6 +31,12 @@ impl FloatCoordinates {
         }
     }
 
+    pub(crate) fn contains(&self, value: f64) -> bool {
+        match self {
+            FloatCoordinates::List(list) => list.iter().any(|&v| v.to_bits() == value.to_bits()),
+        }
+    }
+
     pub(crate) fn to_string(&self) -> String {
         match self {
             FloatCoordinates::List(list) => {
