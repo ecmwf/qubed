@@ -88,8 +88,6 @@ def test_select_3():
 
     selected = q.select({"expver": ["0001"]}, None, None)
 
-    print(selected.to_ascii())
-
     expected = r"""root
 ├── class=1
 │   └── expver=0001
