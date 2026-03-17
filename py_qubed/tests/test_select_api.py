@@ -175,8 +175,6 @@ def test_compress():
     
     # The qube should still be valid and have the same structure
     ascii_after = q.to_ascii()
-
-    print(ascii_after)
     
     # Verify the structure is preserved or optimized (may change due to deduplication)
     assert len(ascii_before) > 0
@@ -201,8 +199,6 @@ def test_compress_2():
     
     # The qube should still be valid and have the same structure
     ascii_after = q.to_ascii()
-
-    print(ascii_after)
     
     # Verify the structure is preserved or optimized (may change due to deduplication)
     assert len(ascii_before) > 0
