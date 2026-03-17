@@ -56,9 +56,12 @@ impl StringCoordinates {
             }
         }
     }
-    pub(crate) fn contains(&self, value: String) -> bool {
+    pub(crate) fn contains(&self, value: impl AsRef<str>) -> bool {
         match self {
-            StringCoordinates::Set(set) => set.contains(&TinyString::from(value)),
+            StringCoordinates::Set(set) => {
+                let tiny_value = TinyString::from(value.as_ref());
+                set.contains(&tiny_value)
+            }
         }
     }
 
