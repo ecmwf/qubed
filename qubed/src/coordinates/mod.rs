@@ -115,11 +115,26 @@ impl Coordinates {
         match (self, coord_type) {
             (Coordinates::Empty, _) => false,
             (Coordinates::Integers(ints), CoordinateTypes::Integer(val)) => ints.contains(val),
-            (Coordinates::DateTimes(_), _) => unimplemented!(),
-            (Coordinates::Floats(_), _) => unimplemented!(),
-            (Coordinates::Strings(_), _) => unimplemented!(),
-            (Coordinates::Mixed(_), _) => unimplemented!(),
-            _ => unimplemented!(),
+            (Coordinates::DateTimes(datetimes), CoordinateTypes::DateTime(val)) => {
+                datetimes.contains(val)
+            }
+            (Coordinates::Floats(floats), CoordinateTypes::Float(val)) => floats.contains(val),
+            (Coordinates::Strings(strings), CoordinateTypes::String(val)) => {
+                strings.contains(val)
+            }
+            (Coordinates::Mixed(mixed), CoordinateTypes::Integer(val)) => {
+                mixed.integers.contains(val)
+            }
+            (Coordinates::Mixed(mixed), CoordinateTypes::Float(val)) => {
+                mixed.floats.contains(val)
+            }
+            (Coordinates::Mixed(mixed), CoordinateTypes::DateTime(val)) => {
+                mixed.datetimes.contains(val)
+            }
+            (Coordinates::Mixed(mixed), CoordinateTypes::String(val)) => {
+                mixed.strings.contains(val)
+            }
+            _ => false,
         }
     }
 
