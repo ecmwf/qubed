@@ -372,7 +372,7 @@ impl Coordinates {
                                 .iter()
                                 .map(|dt: &NaiveDateTime| {
                                     // Serialize NaiveDateTime as an ISO-like string without timezone.
-                                    Value::String(dt.format("%Y-%m-%dT%H:%M:%S").to_string())
+                                    Value::String(dt.format("%Y%m%dT%H%M").to_string())
                                 })
                                 .collect();
                             map.insert("datetimes".to_string(), Value::Array(vals));
@@ -388,7 +388,7 @@ impl Coordinates {
                         let vals: Vec<Value> = list
                             .iter()
                             .map(|dt: &NaiveDateTime| {
-                                Value::String(dt.format("%Y-%m-%dT%H:%M:%S").to_string())
+                                Value::String(dt.format("%Y%m%dT%H%M").to_string())
                             })
                             .collect();
                         Value::Array(vals)
