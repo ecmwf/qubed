@@ -33,6 +33,12 @@ impl DateTimeCoordinates {
         }
     }
 
+    pub(crate) fn contains(&self, value: NaiveDateTime) -> bool {
+        match self {
+            DateTimeCoordinates::List(list) => list.iter().any(|&v| v == value),
+        }
+    }
+
     pub(crate) fn to_string(&self) -> String {
         match self {
             DateTimeCoordinates::List(list) => list
@@ -49,8 +55,8 @@ impl DateTimeCoordinates {
             DateTimeCoordinates::List(list) => {
                 for dt in list.iter() {
                     // use seconds and nanoseconds for stable hashing
-                    dt.timestamp().hash(hasher);
-                    dt.timestamp_subsec_nanos().hash(hasher);
+                    dt.and_utc().timestamp().hash(hasher);
+                    dt.and_utc().timestamp_subsec_nanos().hash(hasher);
                 }
             }
         }
@@ -67,6 +73,11 @@ impl DateTimeCoordinates {
                 let mut set_b: HashSet<NaiveDateTime> = HashSet::new();
                 for v in list_b.iter() {
                     set_b.insert(*v);
+                }
+
+                let mut set_a: HashSet<NaiveDateTime> = HashSet::new();
+                for v in list_a.iter() {
+                    set_a.insert(*v);
                 }
 
                 let mut intersection = TinyVec::new();
@@ -86,7 +97,7 @@ impl DateTimeCoordinates {
 
                 let mut only_b = TinyVec::new();
                 for v in list_b.iter() {
-                    if !list_a.contains(v) {
+                    if !set_a.contains(v) {
                         only_b.push(*v);
                     }
                 }
@@ -114,13 +125,13 @@ impl DateTimeCoordinates {
 
         // Try YYYY-MM-DD
         if let Ok(d) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-            return Some(NaiveDateTime::new(d, NaiveTime::from_hms(0, 0, 0)));
+            return Some(NaiveDateTime::new(d, NaiveTime::from_hms_opt(0, 0, 0).unwrap()));
         }
 
         // Try YYYYMMDD
         if s.len() == 8 {
             if let Ok(d) = NaiveDate::parse_from_str(s, "%Y%m%d") {
-                return Some(NaiveDateTime::new(d, NaiveTime::from_hms(0, 0, 0)));
+                return Some(NaiveDateTime::new(d, NaiveTime::from_hms_opt(0, 0, 0).unwrap()));
             }
         }
 
@@ -155,9 +166,7 @@ impl From<&str> for DateTimeCoordinates {
             vec.push(ndt);
             DateTimeCoordinates::List(vec)
         } else {
-            let mut vec = TinyVec::new();
-            vec.push(NaiveDateTime::from_timestamp(0, 0));
-            DateTimeCoordinates::List(vec)
+            DateTimeCoordinates::default()
         }
     }
 }

@@ -95,7 +95,10 @@ impl Coordinates {
             Coordinates::Strings(strings) => strings.len(),
             Coordinates::DateTimes(datetimes) => datetimes.len(),
             Coordinates::Mixed(mixed) => {
-                mixed.integers.len() + mixed.floats.len() + mixed.strings.len()
+                mixed.integers.len()
+                    + mixed.floats.len()
+                    + mixed.strings.len()
+                    + mixed.datetimes.len()
             }
         }
     }
@@ -112,11 +115,22 @@ impl Coordinates {
         match (self, coord_type) {
             (Coordinates::Empty, _) => false,
             (Coordinates::Integers(ints), CoordinateTypes::Integer(val)) => ints.contains(val),
-            (Coordinates::DateTimes(_), _) => unimplemented!(),
-            (Coordinates::Floats(_), _) => unimplemented!(),
-            (Coordinates::Strings(_), _) => unimplemented!(),
-            (Coordinates::Mixed(_), _) => unimplemented!(),
-            _ => unimplemented!(),
+            (Coordinates::DateTimes(datetimes), CoordinateTypes::DateTime(val)) => {
+                datetimes.contains(val)
+            }
+            (Coordinates::Floats(floats), CoordinateTypes::Float(val)) => floats.contains(val),
+            (Coordinates::Strings(strings), CoordinateTypes::String(val)) => strings.contains(val),
+            (Coordinates::Mixed(mixed), CoordinateTypes::Integer(val)) => {
+                mixed.integers.contains(val)
+            }
+            (Coordinates::Mixed(mixed), CoordinateTypes::Float(val)) => mixed.floats.contains(val),
+            (Coordinates::Mixed(mixed), CoordinateTypes::DateTime(val)) => {
+                mixed.datetimes.contains(val)
+            }
+            (Coordinates::Mixed(mixed), CoordinateTypes::String(val)) => {
+                mixed.strings.contains(val)
+            }
+            _ => false,
         }
     }
 
@@ -187,6 +201,7 @@ impl Coordinates {
                 mixed.integers.hash(hasher);
                 mixed.floats.hash(hasher);
                 mixed.strings.hash(hasher);
+                mixed.datetimes.hash(hasher);
             }
             Coordinates::DateTimes(datetimes) => {
                 datetimes.hash(hasher);
@@ -346,9 +361,34 @@ impl Coordinates {
                     }
                 }
 
+                match &boxed.datetimes {
+                    datetime::DateTimeCoordinates::List(list) => {
+                        if list.len() > 0 {
+                            let vals: Vec<Value> = list
+                                .iter()
+                                .map(|dt: &NaiveDateTime| {
+                                    // Serialize NaiveDateTime as an ISO-like string without timezone.
+                                    Value::String(dt.format("%Y%m%dT%H%M").to_string())
+                                })
+                                .collect();
+                            map.insert("datetimes".to_string(), Value::Array(vals));
+                        }
+                    }
+                }
+
                 Value::Object(map)
             }
-            Coordinates::DateTimes(_) => todo!(),
+            Coordinates::DateTimes(coords) => match coords {
+                datetime::DateTimeCoordinates::List(list) => {
+                    let vals: Vec<Value> = list
+                        .iter()
+                        .map(|dt: &NaiveDateTime| {
+                            Value::String(dt.format("%Y%m%dT%H%M").to_string())
+                        })
+                        .collect();
+                    Value::Array(vals)
+                }
+            },
         }
     }
 
