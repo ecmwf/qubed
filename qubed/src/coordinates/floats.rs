@@ -9,8 +9,8 @@ pub enum FloatCoordinates {
 }
 
 impl FloatCoordinates {
-    pub(crate) fn extend(&mut self, _new_coords: &FloatCoordinates) {
-        match (self, _new_coords) {
+    pub(crate) fn extend(&mut self, new_coords: &FloatCoordinates) {
+        match (self, new_coords) {
             (FloatCoordinates::List(list), FloatCoordinates::List(new_list)) => {
                 for &v in new_list.iter() {
                     list.push(v);
@@ -19,9 +19,9 @@ impl FloatCoordinates {
         }
     }
 
-    pub(crate) fn append(&mut self, _new_coord: f64) {
+    pub(crate) fn append(&mut self, new_coord: f64) {
         match self {
-            FloatCoordinates::List(list) => list.push(_new_coord),
+            FloatCoordinates::List(list) => list.push(new_coord),
         }
     }
 
