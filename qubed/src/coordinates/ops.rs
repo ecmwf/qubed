@@ -2,6 +2,22 @@ use crate::Coordinates;
 use crate::coordinates::CoordinateTypes;
 use chrono::NaiveDateTime;
 
+impl From<NaiveDateTime> for CoordinateTypes {
+    fn from(value: NaiveDateTime) -> Self {
+        CoordinateTypes::DateTime(value)
+    }
+}
+
+impl FromIterator<NaiveDateTime> for Coordinates {
+    fn from_iter<T: IntoIterator<Item = NaiveDateTime>>(iter: T) -> Self {
+        let mut coords = Coordinates::Empty;
+        for dt in iter {
+            coords.append_datetime(dt);
+        }
+        coords
+    }
+}
+
 impl Coordinates {
     pub fn extend(&mut self, new_coords: &Coordinates) {
         match new_coords {
