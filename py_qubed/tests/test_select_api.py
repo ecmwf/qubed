@@ -248,7 +248,7 @@ def test_select_multiple_values():
 
 
 def test_default():
-    """Compare FollowSelection vs Default mode"""
+    """Verify default selection mode shows the full subtree for the selected class"""
     input_qube = r"""root
 ├── class=1
 │   ├── expver=0001
