@@ -13,7 +13,7 @@ The STAC server's Polytope integration collects authentication credentials direc
 
 ## Getting Your Polytope API Key
 
-1. Visit [https://polytope.lumi.apps.dte.destination-earth.eu](https://polytope.lumi.apps.dte.destination-earth.eu)
+1. Visit the [Destination Earth Service Platform (DESP)](https://auth.destine.eu)
 2. Log in with your Destination Earth credentials
 3. Navigate to your profile or settings
 4. Generate or copy your API key
