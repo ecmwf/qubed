@@ -451,6 +451,23 @@ impl Coordinates {
                 }
 
                 if all_string {
+                    // Try to parse all strings as datetimes first (round-trip support for DateTimes).
+                    let mut dt_coords = datetime::DateTimeCoordinates::default();
+                    let mut all_datetime = true;
+                    for v in arr.iter() {
+                        if let Value::String(s) = v {
+                            if let Some(ndt) = datetime::DateTimeCoordinates::parse_from_str(s) {
+                                dt_coords.append(ndt);
+                            } else {
+                                all_datetime = false;
+                                break;
+                            }
+                        }
+                    }
+                    if all_datetime {
+                        return Ok(Coordinates::DateTimes(dt_coords));
+                    }
+
                     let mut sc = strings::StringCoordinates::default();
                     for v in arr.iter() {
                         if let Value::String(s) = v {
@@ -496,6 +513,19 @@ impl Coordinates {
                         for val in arr.iter() {
                             if let Value::String(s) = val {
                                 mixed.strings.append(s.to_string());
+                            }
+                        }
+                    }
+                }
+
+                if let Some(v) = map.get("datetimes") {
+                    if let Value::Array(arr) = v {
+                        for val in arr.iter() {
+                            if let Value::String(s) = val {
+                                if let Some(ndt) = datetime::DateTimeCoordinates::parse_from_str(s)
+                                {
+                                    mixed.datetimes.append(ndt);
+                                }
                             }
                         }
                     }
