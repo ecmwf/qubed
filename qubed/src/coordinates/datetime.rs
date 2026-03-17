@@ -160,9 +160,7 @@ impl From<&str> for DateTimeCoordinates {
             vec.push(ndt);
             DateTimeCoordinates::List(vec)
         } else {
-            let mut vec = TinyVec::new();
-            vec.push(NaiveDateTime::from_timestamp(0, 0));
-            DateTimeCoordinates::List(vec)
+            DateTimeCoordinates::default()
         }
     }
 }
