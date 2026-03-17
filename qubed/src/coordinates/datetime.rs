@@ -135,6 +135,13 @@ impl DateTimeCoordinates {
             }
         }
 
+        // Try compact datetime YYYYMMDDTHHMM
+        if s.len() == 13 {
+            if let Ok(ndt) = NaiveDateTime::parse_from_str(s, "%Y%m%dT%H%M") {
+                return Some(ndt);
+            }
+        }
+
         None
     }
 }
