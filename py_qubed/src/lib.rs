@@ -1,4 +1,6 @@
+use ::qubed::Coordinates;
 use ::qubed::Qube;
+use ::qubed::select::SelectMode;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyModule};
@@ -90,6 +92,95 @@ impl PyQube {
             let mut other_mut = bound_qube.borrow_mut();
             self.inner.append(&mut other_mut.inner);
         }
+        Ok(())
+    }
+
+    pub fn select(
+        &self,
+        request: Bound<'_, PyDict>,
+        mode: Option<String>,
+        _consume: Option<bool>,
+    ) -> PyResult<PyQube> {
+        // Collect selection data with owned Strings and Coordinates
+        let mut selection_data: Vec<(String, Coordinates)> = Vec::new();
+
+        println!("WHAT IS THE REQ IN PYTHON?");
+        println!("{:?}", request);
+
+        for (k, v) in request.iter() {
+            let key: String =
+                k.extract().map_err(|_| PyTypeError::new_err("select keys must be strings"))?;
+
+            let coords = if v.is_instance_of::<PyList>() {
+                println!("WE ACTUALLY DEALT WITH A LIST HERE??");
+                let lst = v.cast_into::<PyList>()?;
+                let mut parts: Vec<String> = Vec::with_capacity(lst.len());
+                for item in lst.iter() {
+                    // Convert any value to string representation (handles int, float, str)
+                    let py_str = item.str()?;
+                    let s: String = py_str.extract()?;
+                    parts.push(s);
+                }
+                println!("WHAT ARE THE PARTS HERE??");
+                println!("{:?}", parts);
+                Coordinates::from_string(&parts.join("/"))
+            } else {
+                println!("WE DID NOT DEAL WITH A LIST HERE??");
+                // Convert any value to string representation (handles int, float, str)
+                let py_str = v.str()?;
+                let s: String = py_str.extract()?;
+                println!("WHAT IS THE STRING VALUE HERE??");
+                println!("{:?}", s);
+                Coordinates::from_string(&s)
+            };
+
+            selection_data.push((key, coords));
+        }
+
+        let select_mode = match mode.as_deref() {
+            Some(m) if m.eq_ignore_ascii_case("prune") => SelectMode::Prune,
+            Some(m) if m.eq_ignore_ascii_case("follow_selection") => SelectMode::FollowSelection,
+            _ => SelectMode::Default,
+        };
+
+        // Convert to references for the select call
+        let pairs: Vec<(&str, Coordinates)> =
+            selection_data.iter().map(|(k, c)| (k.as_str(), c.clone())).collect();
+
+        match self.inner.select(&pairs, select_mode) {
+            Ok(q) => Ok(PyQube { inner: q }),
+            Err(e) => Err(PyTypeError::new_err(e)),
+        }
+    }
+
+    pub fn all_unique_dim_coords(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let dim_coords = self.inner.all_unique_dim_coords();
+        let py_dict = PyDict::new(py);
+
+        for (dimension, coordinates) in dim_coords {
+            let coord_str = coordinates.to_string();
+            // Split on slash if present, otherwise treat as single value
+            let values: Vec<&str> = if coord_str.is_empty() {
+                vec![]
+            } else if coord_str.contains('/') {
+                coord_str.split('/').collect()
+            } else {
+                vec![&coord_str]
+            };
+
+            let py_list = PyList::empty(py);
+            for value in values {
+                py_list.append(value)?;
+            }
+
+            py_dict.set_item(dimension, py_list)?;
+        }
+
+        Ok(py_dict.into_any().unbind())
+    }
+
+    pub fn compress(&mut self) -> PyResult<()> {
+        self.inner.compress();
         Ok(())
     }
 

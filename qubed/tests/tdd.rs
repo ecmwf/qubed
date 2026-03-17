@@ -1,3 +1,4 @@
+use qubed::Coordinates;
 use qubed::Qube;
 use qubed::select::SelectMode;
 
@@ -51,7 +52,7 @@ fn tdd_select_demo() -> Result<(), String> {
     let qube = Qube::from_ascii(input)?;
 
     // Select: class=1 and param=2
-    let selection = [("class", &[1]), ("param", &[2])];
+    let selection = [("class", Coordinates::from(1)), ("param", Coordinates::from(2))];
     let selected_qube = qube.select(&selection, SelectMode::Default)?;
 
     // Query and Assert: The selected Qube should only have class=1,
