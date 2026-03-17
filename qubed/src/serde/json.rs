@@ -462,6 +462,13 @@ mod json_tests {
         let arena = qube.to_arena_json();
         println!("{}", serde_json::to_string_pretty(&arena).unwrap());
 
+        // Assert version number is present and correct
+        assert_eq!(
+            arena.get("version").and_then(|v| v.as_str()),
+            Some("1"),
+            "Arena JSON should have version field set to '1'"
+        );
+
         // Reconstruct and verify structure equality via to_json()
         let reconstructed = Qube::from_arena_json(arena).expect("from_arena_json");
         assert_eq!(qube.to_json(), reconstructed.to_json());
