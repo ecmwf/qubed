@@ -85,9 +85,13 @@ def test_to_from_arena_json_roundtrip() -> None:
     import json
 
     parsed = json.loads(arena_json)
-    assert isinstance(parsed, list)
-    # expect at least one node entry with dim and coords
-    assert any(isinstance(item, dict) and "dim" in item and "coords" in item for item in parsed)
+    assert isinstance(parsed, dict)
+    assert "qube" in parsed
+    assert "version" in parsed
+    # expect qube to be a list with node entries containing dim and coords
+    qube_list = parsed["qube"]
+    assert isinstance(qube_list, list)
+    assert any(isinstance(item, dict) and "dim" in item and "coords" in item for item in qube_list)
 
     # Reconstruct and verify ascii equality
     reconstructed = PyQube.from_arena_json(arena_json)
