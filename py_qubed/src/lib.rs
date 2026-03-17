@@ -145,6 +145,22 @@ impl PyQube {
         Ok(())
     }
 
+    pub fn drop(&mut self, dims: &Bound<'_, PyList>) -> PyResult<()> {
+        let to_drop: Vec<String> = dims
+            .iter()
+            .map(|item| {
+                item.str()
+                    .and_then(|s| s.extract::<String>())
+                    .map_err(|_| PyTypeError::new_err("drop: dimension names must be strings"))
+            })
+            .collect::<PyResult<_>>()?;
+        self.inner.drop(to_drop).map_err(PyTypeError::new_err)
+    }
+
+    pub fn squeeze(&mut self) -> PyResult<()> {
+        self.inner.squeeze().map_err(PyTypeError::new_err)
+    }
+
     pub fn append(&mut self, other: &Bound<'_, PyQube>) -> PyResult<()> {
         let mut other_mut = other.borrow_mut();
         self.inner.append(&mut other_mut.inner);

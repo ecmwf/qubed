@@ -281,3 +281,44 @@ def test_default():
         └── param=2"""
 
     assert default_result.to_ascii() == qubed.PyQube.from_ascii(default_expected).to_ascii()
+
+
+def test_drop():
+    input_qube = r"""root
+└── class=1
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"""
+
+    q = qubed.PyQube.from_ascii(input_qube)
+    q.drop(["expver"])
+
+    expected = r"""root
+└── class=1
+    └── param=1/2"""
+
+    assert q.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
+
+
+def test_squeeze():
+    input_qube = r"""root
+└── class=1
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"""
+
+    q = qubed.PyQube.from_ascii(input_qube)
+    q.squeeze()
+
+    # class has only one value (1), so it gets squeezed out
+    expected = r"""root
+└── expver=0001/0002
+    └── param=1/2"""
+
+    assert q.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
