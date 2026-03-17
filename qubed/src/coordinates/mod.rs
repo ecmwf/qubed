@@ -119,15 +119,11 @@ impl Coordinates {
                 datetimes.contains(val)
             }
             (Coordinates::Floats(floats), CoordinateTypes::Float(val)) => floats.contains(val),
-            (Coordinates::Strings(strings), CoordinateTypes::String(val)) => {
-                strings.contains(val)
-            }
+            (Coordinates::Strings(strings), CoordinateTypes::String(val)) => strings.contains(val),
             (Coordinates::Mixed(mixed), CoordinateTypes::Integer(val)) => {
                 mixed.integers.contains(val)
             }
-            (Coordinates::Mixed(mixed), CoordinateTypes::Float(val)) => {
-                mixed.floats.contains(val)
-            }
+            (Coordinates::Mixed(mixed), CoordinateTypes::Float(val)) => mixed.floats.contains(val),
             (Coordinates::Mixed(mixed), CoordinateTypes::DateTime(val)) => {
                 mixed.datetimes.contains(val)
             }
@@ -382,19 +378,17 @@ impl Coordinates {
 
                 Value::Object(map)
             }
-            Coordinates::DateTimes(coords) => {
-                match coords {
-                    datetime::DateTimeCoordinates::Set(list) => {
-                        let vals: Vec<Value> = list
-                            .iter()
-                            .map(|dt: &NaiveDateTime| {
-                                Value::String(dt.format("%Y%m%dT%H%M").to_string())
-                            })
-                            .collect();
-                        Value::Array(vals)
-                    }
+            Coordinates::DateTimes(coords) => match coords {
+                datetime::DateTimeCoordinates::Set(list) => {
+                    let vals: Vec<Value> = list
+                        .iter()
+                        .map(|dt: &NaiveDateTime| {
+                            Value::String(dt.format("%Y%m%dT%H%M").to_string())
+                        })
+                        .collect();
+                    Value::Array(vals)
                 }
-            }
+            },
         }
     }
 
