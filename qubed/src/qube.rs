@@ -242,6 +242,119 @@ impl Qube {
         Ok(())
     }
 
+    pub fn drop<I>(&mut self, to_drop: I) -> Result<(), String>
+    where
+        I: IntoIterator,
+        I::Item: AsRef<str>,
+    {
+        let drop_set: HashSet<String> =
+            to_drop.into_iter().map(|s| s.as_ref().to_string()).collect();
+
+        let root = self.root();
+        self.drop_recurse(root, &drop_set)?;
+        self.compress();
+        Ok(())
+    }
+
+    /// Removes `node_id` from the tree, re-parenting its children to `parent_id`.
+    /// Returns the list of grandchild node IDs that were re-parented.
+    fn splice_out_node(
+        &mut self,
+        node_id: NodeIdx,
+        parent_id: NodeIdx,
+    ) -> Result<Vec<NodeIdx>, String> {
+        let node =
+            self.nodes.get(node_id).ok_or_else(|| format!("Node {:?} not found", node_id))?;
+
+        let node_dim = node.dim;
+        // Collect grandchildren before mutating
+        let grandchildren: Vec<(Dimension, Vec<NodeIdx>)> =
+            node.children.iter().map(|(d, ids)| (*d, ids.iter().copied().collect())).collect();
+
+        let all_grandchild_ids: Vec<NodeIdx> =
+            grandchildren.iter().flat_map(|(_, ids)| ids.iter().copied()).collect();
+
+        // Remove the node itself from the slotmap (does not touch its children)
+        self.nodes.remove(node_id);
+
+        // Remove node from parent's children list
+        if let Some(parent) = self.nodes.get_mut(parent_id) {
+            if let Some(children) = parent.children.get_mut(&node_dim) {
+                children.retain(|&id| id != node_id);
+                if children.is_empty() {
+                    parent.children.remove(&node_dim);
+                }
+            }
+            parent.structural_hash.store(0, Ordering::Release);
+        }
+
+        // Re-parent grandchildren to parent_id
+        for (gc_dim, gc_ids) in grandchildren {
+            for gc_id in gc_ids {
+                if let Some(gc_node) = self.nodes.get_mut(gc_id) {
+                    gc_node.parent = Some(parent_id);
+                }
+                if let Some(parent) = self.nodes.get_mut(parent_id) {
+                    parent.children.entry(gc_dim).or_insert_with(TinyVec::new).push(gc_id);
+                }
+            }
+        }
+
+        self.invalidate_ancestors(parent_id);
+        Ok(all_grandchild_ids)
+    }
+
+    fn drop_recurse(&mut self, node_id: NodeIdx, to_drop: &HashSet<String>) -> Result<(), String> {
+        // Collect child info upfront before any mutation
+        let child_info: Vec<(Dimension, Vec<NodeIdx>)> = self
+            .node_ref(node_id)
+            .ok_or_else(|| format!("Node {:?} not found", node_id))?
+            .children()
+            .iter()
+            .map(|(dim, ids)| (*dim, ids.iter().copied().collect()))
+            .collect();
+
+        let child_info: Vec<(bool, Vec<NodeIdx>)> = child_info
+            .into_iter()
+            .map(|(dim, ids)| {
+                let dim_str = self
+                    .dimension_str(&dim)
+                    .ok_or_else(|| format!("Missing dimension string for {:?}", dim))?;
+                let should_drop = to_drop.contains(dim_str);
+                Ok((should_drop, ids))
+            })
+            .collect::<Result<_, String>>()?;
+
+        for (should_drop, children) in child_info {
+            if should_drop {
+                for child_id in children {
+                    // Splice out: move grandchildren up to node_id, then recurse on them
+                    let grandchildren = self.splice_out_node(child_id, node_id)?;
+                    for gc_id in grandchildren {
+                        self.drop_recurse(gc_id, to_drop)?;
+                    }
+                }
+            } else {
+                for child_id in children {
+                    self.drop_recurse(child_id, to_drop)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn squeeze(&mut self) -> Result<(), String> {
+        let to_drop: Vec<String> = self
+            .all_unique_dim_coords()
+            .into_iter()
+            .filter(|(_, coords)| coords.len() == 1)
+            .map(|(dim, _)| dim)
+            .collect();
+
+        self.drop(to_drop)
+    }
+
     pub fn dimension(&self, dim_str: &str) -> Option<Dimension> {
         self.key_store.get(dim_str).map(Dimension)
     }
@@ -590,5 +703,125 @@ mod tests {
         qube.get_or_create_child("dim2", root, Some(3.into())).unwrap();
         let map2 = qube.all_unique_dim_coords();
         assert_eq!(map2.len(), 3);
+    }
+
+    #[test]
+    fn test_drop_single_dimension() {
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        let class1 = qube.get_or_create_child("class", root, Some(1.into())).unwrap();
+        let expver1 = qube.get_or_create_child("expver", class1, Some(1.into())).unwrap();
+        let _param1 = qube.get_or_create_child("param", expver1, Some(1.into())).unwrap();
+
+        let class2 = qube.get_or_create_child("class", root, Some(2.into())).unwrap();
+        let expver2 = qube.get_or_create_child("expver", class2, Some(2.into())).unwrap();
+        let _param2 = qube.get_or_create_child("param", expver2, Some(2.into())).unwrap();
+
+        // Drop the "expver" dimension — its children (param) should be reparented to class
+        qube.drop(vec!["expver"]).unwrap();
+
+        // Root should still have "class" children
+        let root_node = qube.node(root).unwrap();
+        assert!(root_node.children(qube.dimension("class").unwrap()).is_some());
+
+        // Both class nodes should now directly have "param" children (expver was spliced out)
+        let class1_node = qube.node(class1).unwrap();
+        assert!(class1_node.children(qube.dimension("param").unwrap()).is_some());
+
+        let class2_node = qube.node(class2).unwrap();
+        assert!(class2_node.children(qube.dimension("param").unwrap()).is_some());
+    }
+
+    #[test]
+    fn test_drop_middle_dimension_preserves_leaves() {
+        let input = r#"root
+└── class=1
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let mut qube = Qube::from_ascii(input).unwrap();
+        qube.drop(vec!["expver"]).unwrap();
+
+        let ascii = qube.to_ascii();
+        println!("resulting ascii after drop:\n{}", ascii);
+        // expver should be gone; param should be directly under class
+        assert!(!ascii.contains("expver"), "expver should be dropped, got:\n{}", ascii);
+        assert!(ascii.contains("param"), "param should still be present, got:\n{}", ascii);
+        assert!(ascii.contains("class"), "class should still be present, got:\n{}", ascii);
+    }
+
+    #[test]
+    fn test_drop_multiple_dimensions() {
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        let class1 = qube.get_or_create_child("class", root, Some(1.into())).unwrap();
+        let expver1 = qube.get_or_create_child("expver", class1, Some(1.into())).unwrap();
+        let param1 = qube.get_or_create_child("param", expver1, Some(1.into())).unwrap();
+        let type1 = qube.get_or_create_child("type", param1, Some(1.into())).unwrap();
+        qube.get_or_create_child("level", type1, Some(1.into())).unwrap();
+
+        // Drop "expver" and "type" — their children should be spliced up
+        qube.drop(vec!["expver", "type"]).unwrap();
+
+        let root_node = qube.node(root).unwrap();
+        assert!(root_node.children(qube.dimension("class").unwrap()).is_some());
+
+        // class1 should now have "param" directly (expver spliced out)
+        let class1_node = qube.node(class1).unwrap();
+        assert!(class1_node.children(qube.dimension("param").unwrap()).is_some());
+
+        // param1 should now have "level" directly (type spliced out)
+        let param1_node = qube.node(param1).unwrap();
+        assert!(param1_node.children(qube.dimension("level").unwrap()).is_some());
+    }
+
+    #[test]
+    fn test_drop_nonexistent_dimension() {
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        let class1 = qube.get_or_create_child("class", root, Some(1.into())).unwrap();
+        let _expver1 = qube.get_or_create_child("expver", class1, Some(1.into())).unwrap();
+
+        // Drop a dimension that doesn't exist - should have no effect
+        qube.drop(vec!["nonexistent"]).unwrap();
+
+        let root_node = qube.node(root).unwrap();
+        assert!(root_node.children(qube.dimension("class").unwrap()).is_some());
+
+        let class1_node = qube.node(class1).unwrap();
+        assert!(class1_node.children(qube.dimension("expver").unwrap()).is_some());
+    }
+
+    #[test]
+    fn test_squeeze() -> Result<(), String> {
+        let input = r#"root
+└── class=1
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let mut qube = Qube::from_ascii(input).unwrap();
+        qube.squeeze()?;
+
+        let ascii = qube.to_ascii();
+        println!("resulting ascii after squeeze:\n{}", ascii);
+        // class has only 1 value (1), so it should be squeezed out
+        assert!(!ascii.contains("class"), "class should be squeezed, got:\n{}", ascii);
+        // expver has 2 values, so it should remain
+        assert!(ascii.contains("expver"), "expver should remain, got:\n{}", ascii);
+        // param has 2 values, so it should remain
+        assert!(ascii.contains("param"), "param should remain, got:\n{}", ascii);
+
+        Ok(())
     }
 }
