@@ -82,7 +82,8 @@ function goToNextUrl() {
       );
     }
 
-    const any = item.querySelector("input[type='text']");
+    // Get text inputs but exclude the filter input
+    const any = item.querySelector("input[type='text']:not(.filter-input)");
     if (any && any.value !== "") {
       values.push(any.value);
     }
@@ -160,47 +161,238 @@ async function createCatalogItem(link, itemsContainer) {
       }</p>
     `;
 
-    if (false && key === "date") {
-      console.log("Date", variable, exports);
+    if (key === "date" && variable.enum && variable.enum.length > 30) {
+      console.log("Date picker enabled");
+      console.log("First few dates:", variable.enum.slice(0, 10));
 
-      itemDiv.appendChild(toHTML("<input id='date-picker'></input>"));
-      let dates = variable.enum;
+      // Create a unique ID for this date picker
+      const pickerId = `date-picker-${link.title}`;
+      const hiddenInputId = `date-input-${link.title}`;
+
+      itemDiv.appendChild(toHTML(`<input id='${pickerId}' class='date-picker-input'></input>`));
+      itemDiv.appendChild(toHTML(`<input type='text' id='${hiddenInputId}' style='display:none;' name='${link.title}'></input>`));
+      itemDiv.appendChild(toHTML(`<div class='date-picker-hint' id='${pickerId}-hint'>💡 Click a date twice to select it individually, or click two different dates to select a range.</div>`));
+
+      let dates = variable.enum.map(d => String(d));
       itemDiv.querySelector("button.all").style.display = "none";
 
-      let picker = new AirDatepicker("#date-picker", {
+      // Create a set for fast lookup (normalize to YYYY-MM-DD format)
+      const availableDatesSet = new Set(dates);
+      console.log("Available dates set size:", availableDatesSet.size);
+
+      // Parse dates from enum to get min and max dates
+      let parsedDates = dates.map(d => {
+        // Handle both formats: "YYYY-MM-DD" or "YYYYMMDD"
+        const dateStr = String(d);
+        if (dateStr.includes('-')) {
+          return new Date(dateStr);
+        } else {
+          const year = parseInt(dateStr.substring(0, 4));
+          const month = parseInt(dateStr.substring(4, 6)) - 1;
+          const day = parseInt(dateStr.substring(6, 8));
+          return new Date(year, month, day);
+        }
+      });
+
+      let minDate = new Date(Math.min(...parsedDates));
+      let maxDate = new Date(Math.max(...parsedDates));
+
+      console.log("Date range:", minDate.toISOString(), "to", maxDate.toISOString());
+
+      // Track selected dates manually for better control
+      let manuallySelectedDates = new Set();
+      let lastClickedDate = null;
+
+      let picker = new AirDatepicker(`#${pickerId}`, {
         position: "bottom center",
         inline: true,
         locale: exports.default,
-        range: true,
-        multipleDatesSeparator: " - ",
+        multipleDates: true,
+        multipleDatesSeparator: ",",
+        minDate: minDate,
+        maxDate: maxDate,
+        onSelect({ date, formattedDate, datepicker }) {
+          // Prevent default behavior - we'll handle selection manually
+        },
         onRenderCell({ date, cellType }) {
-          let isDay = cellType === "day",
-            _date =
-              String(date.getFullYear()).padStart(4, "0") +
-              String(date.getMonth()).padStart(2, "0") +
-              String(date.getDate()).padStart(2, "0"),
-            shouldChangeContent = isDay && dates.includes(_date);
+          if (cellType === "day") {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            // Check in the format that matches the input
+            let dateStr;
+            if (dates[0].includes('-')) {
+              dateStr = `${year}-${month}-${day}`;
+            } else {
+              dateStr = `${year}${month}${day}`;
+            }
+            const hasData = availableDatesSet.has(dateStr);
 
-          return {
-            classes: shouldChangeContent ? "has-data" : undefined,
-          };
+            return {
+              classes: hasData ? "has-data" : "",
+              disabled: !hasData,
+            };
+          }
+          return {};
         },
       });
+
+      // Custom click handler for date cells
+      const hintElement = document.getElementById(`${pickerId}-hint`);
+
+      // Wait for datepicker to render, then attach event handler
+      setTimeout(() => {
+        const datepickerContainer = document.querySelector(`#${pickerId}`).parentElement.querySelector('.air-datepicker');
+
+        if (datepickerContainer) {
+          datepickerContainer.addEventListener('click', (e) => {
+            const cell = e.target.closest('.air-datepicker-cell.-day-');
+            if (!cell || cell.classList.contains('-disabled-')) return;
+
+            // Get the date from the cell's data attributes
+            const dayNumber = cell.getAttribute('data-date');
+            const monthNumber = cell.getAttribute('data-month');
+            const yearNumber = cell.getAttribute('data-year');
+
+            if (!dayNumber || !monthNumber || !yearNumber) return;
+
+            const cellDate = new Date(parseInt(yearNumber), parseInt(monthNumber), parseInt(dayNumber));
+
+            const formatDate = (d) => {
+              const year = d.getFullYear();
+              const month = String(d.getMonth() + 1).padStart(2, '0');
+              const day = String(d.getDate()).padStart(2, '0');
+              if (dates[0].includes('-')) {
+                return `${year}-${month}-${day}`;
+              } else {
+                return `${year}${month}${day}`;
+              }
+            };
+
+            const clickedDateStr = formatDate(cellDate);
+
+            // Check if this date has data
+            if (!availableDatesSet.has(clickedDateStr)) return;
+
+            const isSameAsPrevious = lastClickedDate &&
+                                     cellDate.getTime() === lastClickedDate.getTime();
+
+            if (isSameAsPrevious) {
+              // Clicking same date twice - toggle individual date
+              if (manuallySelectedDates.has(clickedDateStr)) {
+                manuallySelectedDates.delete(clickedDateStr);
+                console.log("Removed date:", clickedDateStr);
+                if (hintElement) hintElement.textContent = `🗑️ Removed ${clickedDateStr}. Total: ${manuallySelectedDates.size} dates selected.`;
+              } else {
+                manuallySelectedDates.add(clickedDateStr);
+                console.log("Added single date:", clickedDateStr);
+                if (hintElement) hintElement.textContent = `✅ Added ${clickedDateStr}. Total: ${manuallySelectedDates.size} dates selected.`;
+              }
+              lastClickedDate = null; // Reset for next selection
+            } else if (lastClickedDate) {
+              // Two different dates clicked - create a range
+              const [startDate, endDate] = [lastClickedDate, cellDate].sort((a, b) => a - b);
+
+              console.log("Creating range from", formatDate(startDate), "to", formatDate(endDate));
+
+              let currentDate = new Date(startDate);
+              const rangeEnd = new Date(endDate);
+              let rangeCount = 0;
+
+              while (currentDate <= rangeEnd) {
+                const dateStr = formatDate(currentDate);
+                if (availableDatesSet.has(dateStr)) {
+                  manuallySelectedDates.add(dateStr);
+                  rangeCount++;
+                }
+                currentDate.setDate(currentDate.getDate() + 1);
+              }
+
+              console.log("Range added, total dates selected:", manuallySelectedDates.size);
+              if (hintElement) hintElement.textContent = `📅 Added range: ${rangeCount} dates. Total: ${manuallySelectedDates.size} dates selected.`;
+              lastClickedDate = null; // Reset for next selection
+            } else {
+              // First click of a potential range
+              lastClickedDate = cellDate;
+              console.log("First date clicked for range:", clickedDateStr);
+              if (hintElement) hintElement.textContent = `🎯 First date selected: ${clickedDateStr}. Click another date to create a range, or click this date again to select it individually.`;
+              return; // Don't update selection yet, wait for second click
+            }
+
+            // Update the visual selection in datepicker
+            const selectedDateObjects = Array.from(manuallySelectedDates).map(dateStr => {
+              if (dateStr.includes('-')) {
+                return new Date(dateStr);
+              } else {
+                const year = parseInt(dateStr.substring(0, 4));
+                const month = parseInt(dateStr.substring(4, 6)) - 1;
+                const day = parseInt(dateStr.substring(6, 8));
+                return new Date(year, month, day);
+              }
+            });
+
+            picker.selectDate(selectedDateObjects);
+
+            // Update hidden input
+            const hiddenInput = document.getElementById(hiddenInputId);
+            hiddenInput.value = Array.from(manuallySelectedDates).join(',');
+            console.log("Total selected dates:", manuallySelectedDates.size);
+            console.log("Selected dates:", hiddenInput.value.split(',').slice(0, 10).join(', '), '...');
+          });
+        }
+      }, 100);
+
+      console.log("Datepicker initialized");
     } else if (variable.enum && variable.enum.length > 0) {
+      // Add filter input at the top if there are many options
+      if (variable.enum.length > 5) {
+        const filterWrapper = toHTML(`
+          <div class="filter-wrapper">
+            <input type="text" class="filter-input" id="filter-${link.title}" placeholder="🔍 Filter options...">
+          </div>
+        `);
+        itemDiv.appendChild(filterWrapper);
+      }
+
+      // Add checkbox list
       const checkbox_list = renderCheckboxList(link);
       itemDiv.appendChild(checkbox_list);
+
+      // Add filter functionality if filter exists
+      if (variable.enum.length > 5) {
+        const filterInput = itemDiv.querySelector(`#filter-${link.title}`);
+        if (filterInput) {
+          filterInput.addEventListener('input', (e) => {
+            const filterText = e.target.value.toLowerCase();
+            const checkboxRows = checkbox_list.querySelectorAll('.checkbox-row');
+
+            checkboxRows.forEach(row => {
+              const label = row.querySelector('label');
+              const code = row.querySelector('label.code code');
+              const labelText = label ? label.textContent.toLowerCase() : '';
+              const codeText = code ? code.textContent.toLowerCase() : '';
+
+              if (labelText.includes(filterText) || codeText.includes(filterText)) {
+                row.style.display = '';
+              } else {
+                row.style.display = 'none';
+              }
+            });
+          });
+        }
+      }
 
       itemDiv.querySelector("button.all").addEventListener("click", () => {
         let new_state;
         if (checkbox_list.hasAttribute("disabled")) {
           checkbox_list.removeAttribute("disabled");
-          itemDiv.querySelectorAll("input").forEach((c) => {
+          itemDiv.querySelectorAll("input[type='checkbox']").forEach((c) => {
             c.removeAttribute("checked");
             c.removeAttribute("disabled");
           });
         } else {
           checkbox_list.setAttribute("disabled", "");
-          itemDiv.querySelectorAll("input").forEach((c) => {
+          itemDiv.querySelectorAll("input[type='checkbox']").forEach((c) => {
             c.setAttribute("checked", "true");
             c.setAttribute("disabled", "");
           });
@@ -277,59 +469,82 @@ function renderCatalogItems(links) {
 function renderRequestBreakdown(request, descriptions) {
   const container = document.getElementById("request-breakdown");
   const format_value = (key, value) => {
-    return `<span class="value" title="${descriptions[key]["value_descriptions"][value]}">"${value}"</span>`;
+    return `<span class="punct">"</span><span class="value" title="${descriptions[key]["value_descriptions"][value]}">${value}</span><span class="punct">"</span>`;
   };
 
   const format_values = (key, values) => {
     if (values.length === 1) {
       return format_value(key, values[0]);
     }
-    return `[${values.map((v) => format_value(key, v)).join(", ")}]`;
+    return `<span class="punct">[</span>${values.map((v) => format_value(key, v)).join(`<span class="punct">,</span> `)}<span class="punct">]</span>`;
   };
 
   let html =
-    `{\n` +
+    `<span class="punct">{</span>\n` +
     request
       .map(
         ([key, values]) =>
-          `    <span class="key" title="${descriptions[key]["description"]
-          }">"${key}"</span>: ${format_values(key, values)},`
+          `    <span class="punct">"</span><span class="key" title="${descriptions[key]["description"]
+          }">${key}</span><span class="punct">"</span><span class="punct">:</span> ${format_values(key, values)}<span class="punct">,</span>`
       )
       .join("\n") +
-    `\n}`;
+    `\n<span class="punct">}</span>`;
   container.innerHTML = html;
 }
 
 function renderMARSRequest(request, descriptions) {
   const container = document.getElementById("final_req");
   const format_value = (key, value) => {
-    return `<span class="value" title="${descriptions[key]["value_descriptions"][value]}">"${value}"</span>`;
+    return `<span class="punct">"</span><span class="value" title="${descriptions[key]["value_descriptions"][value]}">${value}</span><span class="punct">"</span>`;
   };
 
   const format_values = (key, values) => {
     if (values.length === 1) {
       return format_value(key, values[0]);
     }
-    return `[${values.map((v) => format_value(key, v)).join(", ")}]`;
+    return `<span class="punct">[</span>${values.map((v) => format_value(key, v)).join(`<span class="punct">,</span> `)}<span class="punct">]</span>`;
   };
 
+  // Add feature object to each request if polygon is selected
+  const requestsWithFeature = selectedPolygon ? request.map(obj => ({
+    ...obj,
+    feature: {
+      type: "polygon",
+      shape: selectedPolygon
+    }
+  })) : request;
+
+  // Store for copying
+  currentMARSRequests = requestsWithFeature;
+
   let html =
-  `[\n` +
-  request
+  `<span class="punct">[</span>\n` +
+  requestsWithFeature
     .map(
-      obj =>
-        `  {\n` +
-        Object.entries(obj)
+      obj => {
+        const entries = Object.entries(obj);
+        return `  <span class="punct">{</span>\n` +
+        entries
           .map(
-            ([key, values]) =>
-              `    <span class="key" title="${descriptions[key]?.description || ""
-              }">"${key}"</span>: ${format_values(key, values)},`
+            ([key, values], idx) => {
+              const isLast = idx === entries.length - 1;
+              if (key === "feature" && values && typeof values === "object" && values.type === "polygon") {
+                // Format the feature object specially
+                const shapeStr = JSON.stringify(values.shape, null, 0);
+                return `    <span class="punct">"</span><span class="key">feature</span><span class="punct">"</span><span class="punct">:</span> <span class="punct">{</span>\n` +
+                       `      <span class="punct">"</span><span class="key">type</span><span class="punct">"</span><span class="punct">:</span> <span class="punct">"</span><span class="value">${values.type}</span><span class="punct">"</span><span class="punct">,</span>\n` +
+                       `      <span class="punct">"</span><span class="key">shape</span><span class="punct">"</span><span class="punct">:</span> <span class="value">${shapeStr}</span>\n` +
+                       `    <span class="punct">}</span>${isLast ? '' : '<span class="punct">,</span>'}`;
+              }
+              return `    <span class="punct">"</span><span class="key" title="${descriptions[key]?.description || ""}">${key}</span><span class="punct">"</span><span class="punct">:</span> ${format_values(key, values)}${isLast ? '' : '<span class="punct">,</span>'}`;
+            }
           )
           .join("\n") +
-        `\n  }`
+        `\n  <span class="punct">}</span>`;
+      }
     )
-    .join(",\n") +
-  `\n]`;
+    .join(`<span class="punct">,</span>\n`) +
+  `\n<span class="punct">]</span>`;
   container.innerHTML = html;
 }
 
@@ -353,9 +568,28 @@ async function fetchCatalog(request, stacUrl) {
     const response = await fetch(stacUrl);
     const catalog = await response.json();
 
-    // Render the request breakdown in the sidebar
-    renderRequestBreakdown(request, catalog.debug.descriptions);
-    renderMARSRequest(catalog.final_object, catalog.debug.descriptions);
+    // Check if we've reached the end of the catalogue (final_object has data)
+    const hasReachedEnd = catalog.final_object && catalog.final_object.length > 0;
+
+    // Get section elements
+    const currentSelectionSection = document.getElementById("current-selection-section");
+    const marsRequestsSection = document.getElementById("mars-requests-section");
+    const nextButton = document.getElementById("next-btn");
+
+    if (hasReachedEnd) {
+      // At the end: show MARS requests, hide current selection and next button
+      currentSelectionSection.style.display = "none";
+      marsRequestsSection.style.display = "block";
+      nextButton.style.display = "none";
+      catalogCache = catalog; // Store catalog for re-rendering with features
+      renderMARSRequest(catalog.final_object, catalog.debug.descriptions);
+    } else {
+      // Not at the end: show current selection, hide MARS requests, show next button
+      currentSelectionSection.style.display = "block";
+      marsRequestsSection.style.display = "none";
+      nextButton.style.display = "flex";
+      renderRequestBreakdown(request, catalog.debug.descriptions);
+    }
 
     // Show the raw STAC in the sidebar
     renderRawSTACResponse(catalog);
@@ -364,6 +598,20 @@ async function fetchCatalog(request, stacUrl) {
     if (catalog.links) {
       console.log("Fetched STAC catalog:", stacUrl, catalog.links);
       renderCatalogItems(catalog.links);
+    }
+
+    // Show region selection at the end of catalogue
+    const regionSelection = document.getElementById("region-selection");
+    const catalogList = document.getElementById("catalog-list");
+    const polytopeSection = document.getElementById("polytope-section");
+    if (hasReachedEnd) {
+      regionSelection.style.display = "block";
+      catalogList.classList.add("region-active");
+      if (polytopeSection) polytopeSection.style.display = "block";
+    } else {
+      regionSelection.style.display = "none";
+      catalogList.classList.remove("region-active");
+      if (polytopeSection) polytopeSection.style.display = "none";
     }
 
     // Highlight the request and raw STAC
@@ -399,5 +647,331 @@ function initializeViewer() {
   stacAnchor.href = getSTACUrlFromQuery();
 }
 
+// Copy MARS requests to clipboard
+function copyMARSRequests() {
+  const copyBtn = document.getElementById("copy-mars-btn");
+  const btnText = copyBtn.querySelector(".copy-btn-text");
+
+  // Use the stored MARS requests with feature if available
+  const jsonContent = JSON.stringify(currentMARSRequests, null, 2);
+
+  navigator.clipboard.writeText(jsonContent).then(() => {
+    // Change button text temporarily
+    btnText.textContent = "Copied!";
+    copyBtn.classList.add("copied");
+
+    // Reset after 2 seconds
+    setTimeout(() => {
+      btnText.textContent = "Copy";
+      copyBtn.classList.remove("copied");
+    }, 2000);
+  }).catch(err => {
+    console.error("Failed to copy:", err);
+    btnText.textContent = "Failed";
+    setTimeout(() => {
+      btnText.textContent = "Copy";
+    }, 2000);
+  });
+}
+
+// Download JSON data as a file
+function downloadJSON(data, filename) {
+  const jsonString = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// ============================================
+// Geographic Region Selection with Map
+// ============================================
+
+let regionMap = null;
+let drawnItems = null;
+let selectedPolygon = null;
+let currentMARSRequests = []; // Store current MARS requests for copying
+let catalogCache = null; // Store catalog for re-rendering when polygon changes
+
+function initializeRegionMap() {
+  const mapElement = document.getElementById('map');
+  if (!mapElement || regionMap) return;
+
+  // Initialize map centered on the world
+  regionMap = L.map('map').setView([20, 0], 2);
+
+  // Add OpenStreetMap tile layer
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 18,
+  }).addTo(regionMap);
+
+  // Initialize the FeatureGroup to store editable layers
+  drawnItems = new L.FeatureGroup();
+  regionMap.addLayer(drawnItems);
+
+  // Initialize the draw control
+  const drawControl = new L.Control.Draw({
+    position: 'topright',
+    draw: {
+      polyline: false,
+      circle: false,
+      circlemarker: false,
+      marker: false,
+      rectangle: true,
+      polygon: {
+        allowIntersection: false,
+        showArea: true,
+        shapeOptions: {
+          color: '#0066cc',
+          weight: 2,
+          fillOpacity: 0.2
+        }
+      }
+    },
+    edit: {
+      featureGroup: drawnItems,
+      remove: true
+    }
+  });
+  regionMap.addControl(drawControl);
+
+  // Handle polygon creation
+  regionMap.on('draw:created', function (e) {
+    // Clear previous polygons
+    drawnItems.clearLayers();
+
+    const layer = e.layer;
+    drawnItems.addLayer(layer);
+
+    // Get the coordinates
+    const coordinates = layer.getLatLngs()[0].map(latlng => [
+      parseFloat(latlng.lat.toFixed(6)),
+      parseFloat(latlng.lng.toFixed(6))
+    ]);
+
+    // Close the polygon by adding the first point at the end
+    coordinates.push(coordinates[0]);
+
+    selectedPolygon = coordinates;
+    displaySelectedRegion(coordinates);
+  });
+
+  // Handle polygon edit
+  regionMap.on('draw:edited', function (e) {
+    const layers = e.layers;
+    layers.eachLayer(function (layer) {
+      const coordinates = layer.getLatLngs()[0].map(latlng => [
+        parseFloat(latlng.lat.toFixed(6)),
+        parseFloat(latlng.lng.toFixed(6))
+      ]);
+      coordinates.push(coordinates[0]);
+      selectedPolygon = coordinates;
+      displaySelectedRegion(coordinates);
+    });
+  });
+
+  // Handle polygon deletion
+  regionMap.on('draw:deleted', function (e) {
+    selectedPolygon = null;
+    document.getElementById('selected-region').style.display = 'none';
+  });
+
+  // Force map to resize properly
+  setTimeout(() => {
+    regionMap.invalidateSize();
+  }, 100);
+}
+
+function displaySelectedRegion(coordinates) {
+  const selectedRegionDiv = document.getElementById('selected-region');
+  const coordinatesDisplay = document.getElementById('region-coordinates');
+
+  const regionFeature = {
+    type: "polygon",
+    shape: coordinates
+  };
+
+  coordinatesDisplay.textContent = JSON.stringify({ feature: regionFeature }, null, 2);
+  selectedRegionDiv.style.display = 'block';
+
+  // Re-render MARS requests with the feature appended
+  if (catalogCache && catalogCache.final_object) {
+    renderMARSRequest(catalogCache.final_object, catalogCache.debug.descriptions);
+  }
+}
+
+// Event listeners for region selection
+document.addEventListener("DOMContentLoaded", () => {
+  const enableRegionBtn = document.getElementById('enable-region-btn');
+  const skipRegionBtn = document.getElementById('skip-region-btn');
+  const clearRegionBtn = document.getElementById('clear-region-btn');
+  const mapContainer = document.getElementById('map-container');
+
+  if (enableRegionBtn) {
+    enableRegionBtn.addEventListener('click', () => {
+      mapContainer.style.display = 'block';
+      enableRegionBtn.style.display = 'none';
+      skipRegionBtn.textContent = 'Continue Without Region';
+      initializeRegionMap();
+    });
+  }
+
+  if (skipRegionBtn) {
+    skipRegionBtn.addEventListener('click', () => {
+      // User chose to skip region selection - could proceed to next step
+      console.log('User skipped region selection');
+      // Here you could trigger the next action or inform the user
+    });
+  }
+
+  if (clearRegionBtn) {
+    clearRegionBtn.addEventListener('click', () => {
+      if (drawnItems) {
+        drawnItems.clearLayers();
+      }
+      selectedPolygon = null;
+      document.getElementById('selected-region').style.display = 'none';
+
+      // Re-render MARS requests without the feature
+      if (catalogCache && catalogCache.final_object) {
+        renderMARSRequest(catalogCache.final_object, catalogCache.debug.descriptions);
+      }
+    });
+  }
+});
+
+// ============================================
+// Polytope Query Handler
+// ============================================
+
+async function queryPolytope() {
+  const polytopeBtn = document.getElementById('polytope-btn');
+  const polytopeBtnText = document.getElementById('polytope-btn-text');
+  const polytopeStatus = document.getElementById('polytope-status');
+  const polytopeResults = document.getElementById('polytope-results');
+  const emailInput = document.getElementById('polytope-email');
+  const keyInput = document.getElementById('polytope-key');
+
+  if (!currentMARSRequests || currentMARSRequests.length === 0) {
+    polytopeStatus.textContent = 'No MARS requests available to query.';
+    polytopeStatus.className = 'polytope-status error';
+    polytopeStatus.style.display = 'block';
+    return;
+  }
+
+  // Validate credentials
+  const email = emailInput.value.trim();
+  const apiKey = keyInput.value.trim();
+
+  if (!email || !apiKey) {
+    polytopeStatus.textContent = 'Please provide both email and API key to query Polytope.';
+    polytopeStatus.className = 'polytope-status error';
+    polytopeStatus.style.display = 'block';
+    return;
+  }
+
+  // Disable button and show loading state
+  polytopeBtn.disabled = true;
+  polytopeBtnText.textContent = 'Querying...';
+  polytopeStatus.textContent = `Submitting ${currentMARSRequests.length} request(s) to Polytope service...`;
+  polytopeStatus.className = 'polytope-status loading';
+  polytopeStatus.style.display = 'block';
+  polytopeResults.innerHTML = '';
+  polytopeResults.style.display = 'none';
+
+  try {
+    const response = await fetch('/api/v2/polytope/query', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        requests: currentMARSRequests,
+        credentials: {
+          user_email: email,
+          user_key: apiKey
+        }
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.detail || 'Failed to query Polytope service');
+    }
+
+    // Show success message
+    polytopeStatus.textContent = `Successfully submitted ${result.total} request(s). ${result.successful} succeeded, ${result.failed} failed.`;
+    polytopeStatus.className = 'polytope-status success';
+
+    // Display detailed results
+    if (result.results && result.results.length > 0) {
+      polytopeResults.innerHTML = result.results.map((res, idx) => `
+        <div class="polytope-result-item ${res.success ? 'success' : 'error'}">
+          <div class="polytope-result-header">
+            Request ${idx + 1}: ${res.success ? '✓ Success' : '✗ Failed'}
+          </div>
+          <div class="polytope-result-detail">
+            ${res.success
+              ? `Data retrieved successfully${res.data_size ? ` (${res.data_size})` : ''}`
+              : `Error: ${res.error || 'Unknown error'}`
+            }
+          </div>
+          ${res.message ? `<div class="polytope-result-detail">${res.message}</div>` : ''}
+          ${res.success && res.json_data ? `
+            <button class="download-json-btn" data-request-idx="${idx}" style="margin-top: 0.5rem; padding: 0.4rem 0.8rem; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
+              📥 Download JSON
+            </button>
+          ` : ''}
+        </div>
+      `).join('');
+      polytopeResults.style.display = 'block';
+
+      // Add event listeners to download buttons
+      document.querySelectorAll('.download-json-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.getAttribute('data-request-idx'));
+          const resultData = result.results[idx];
+          if (resultData && resultData.json_data) {
+            downloadJSON(resultData.json_data, `polytope_request_${idx + 1}.json`);
+          }
+        });
+      });
+    }
+
+    polytopeBtnText.textContent = 'Query Complete';
+  } catch (error) {
+    console.error('Polytope query error:', error);
+    polytopeStatus.textContent = `Error: ${error.message}`;
+    polytopeStatus.className = 'polytope-status error';
+  } finally {
+    // Re-enable button after a delay
+    setTimeout(() => {
+      polytopeBtn.disabled = false;
+      polytopeBtnText.textContent = 'Query Polytope Service';
+    }, 2000);
+  }
+}
+
 // Call initializeViewer on page load
 initializeViewer();
+
+// Add event listener for copy button
+document.addEventListener("DOMContentLoaded", () => {
+  const copyBtn = document.getElementById("copy-mars-btn");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", copyMARSRequests);
+  }
+
+  // Add event listener for Polytope button
+  const polytopeBtn = document.getElementById('polytope-btn');
+  if (polytopeBtn) {
+    polytopeBtn.addEventListener('click', queryPolytope);
+  }
+});
