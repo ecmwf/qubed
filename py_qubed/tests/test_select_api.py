@@ -166,20 +166,20 @@ def test_compress():
         └── param=2"""
 
     q = qubed.PyQube.from_ascii(input_qube)
-    
+
     # Get the ASCII representation before compression
     ascii_before = q.to_ascii()
-    
+
     # Compress the qube
     q.compress()
-    
+
     # The qube should still be valid and have the same structure
     ascii_after = q.to_ascii()
-    
+
     # Verify the structure is preserved or optimized (may change due to deduplication)
     assert len(ascii_before) > 0
     assert len(ascii_after) > 0
-    
+
     # Verify datacube count is preserved
     assert len(q) > 0
 
