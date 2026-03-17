@@ -56,6 +56,15 @@ impl StringCoordinates {
             }
         }
     }
+    pub(crate) fn contains(&self, value: impl AsRef<str>) -> bool {
+        match self {
+            StringCoordinates::Set(set) => {
+                let tiny_value = TinyString::from(value.as_ref());
+                set.contains(&tiny_value)
+            }
+        }
+    }
+
     pub(crate) fn hash(&self, hasher: &mut impl std::hash::Hasher) {
         "strings".hash(hasher);
         match self {

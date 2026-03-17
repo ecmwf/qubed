@@ -78,8 +78,73 @@ impl Qube {
         for id in order.iter() {
             let nref = self.node(*id).expect("valid node");
             let dim = nref.dimension().unwrap_or("root").to_string();
-            // Preserve native types for coordinates using Coordinates -> JSON helpers
-            let coords_value = nref.coordinates().to_json_value();
+            // Build coords object with explicit type tags so consumers know the
+            // coordinate type without guessing. Examples:
+            // { "ints": [1,2,3] }, { "strings": ["od"] }, { "floats": [...] }, or mixed object.
+            let coords_value = {
+                use serde_json::{Map, Value};
+                let mut map = Map::new();
+
+                // Use the public Coordinates -> JSON helper which returns a
+                // native serde_json::Value (array/string/object/null).
+                let native = nref.coordinates().to_json_value();
+
+                match nref.coordinates() {
+                    // Represent empty coordinates as JSON null so they round-trip as `Empty`,
+                    // not as `Mixed(empty)` (which is how an empty object `{}` would be read).
+                    crate::Coordinates::Empty => Value::Null,
+                    crate::Coordinates::Integers(_) => match native {
+                        Value::Array(arr) => {
+                            map.insert("ints".to_string(), Value::Array(arr));
+                            Value::Object(map)
+                        }
+                        Value::String(s) => {
+                            // RangeSet or other textual form – preserve as string under "ints_text"
+                            map.insert("ints_text".to_string(), Value::String(s));
+                            Value::Object(map)
+                        }
+                        other => {
+                            map.insert("ints".to_string(), other);
+                            Value::Object(map)
+                        }
+                    },
+                    crate::Coordinates::Floats(_) => match native {
+                        Value::Array(arr) => {
+                            map.insert("floats".to_string(), Value::Array(arr));
+                            Value::Object(map)
+                        }
+                        other => {
+                            map.insert("floats".to_string(), other);
+                            Value::Object(map)
+                        }
+                    },
+                    crate::Coordinates::Strings(_) => match native {
+                        Value::Array(arr) => {
+                            map.insert("strings".to_string(), Value::Array(arr));
+                            Value::Object(map)
+                        }
+                        other => {
+                            map.insert("strings".to_string(), other);
+                            Value::Object(map)
+                        }
+                    },
+                    crate::Coordinates::DateTimes(_) => {
+                        // Fallback to whatever the generic serializer produces (not implemented elsewhere yet)
+                        let v = nref.coordinates().to_json_value();
+                        match v {
+                            Value::Array(arr) => {
+                                map.insert("datetimes".to_string(), Value::Array(arr));
+                                Value::Object(map)
+                            }
+                            other => Value::Object(map),
+                        }
+                    }
+                    crate::Coordinates::Mixed(_) => {
+                        // Mixed already produces an object with keys like ints/floats/strings
+                        nref.coordinates().to_json_value()
+                    }
+                }
+            };
 
             let parent_idx = nref.parent().map(|p| idx_map.get(&p).copied().unwrap());
 
@@ -103,16 +168,41 @@ impl Qube {
             nodes_json.push(Value::Object(map));
         }
 
-        Value::Array(nodes_json)
+        // Wrap the arena array with a versioned envelope so format changes
+        // can be detected by consumers.
+        let mut root_map = Map::new();
+        root_map.insert("version".to_string(), Value::String("1".to_string()));
+        root_map.insert("qube".to_string(), Value::Array(nodes_json));
+        Value::Object(root_map)
     }
 
     /// Reconstruct a Qube from an arena JSON layout created by `to_arena_json`.
     pub fn from_arena_json(value: Value) -> Result<Qube, String> {
         use std::collections::HashMap;
 
+        // Expect a versioned envelope with structure { "version": "1", "qube": [ ... ] }
         let arr = match value {
-            Value::Array(a) => a,
-            _ => return Err("Expected JSON array for arena layout".to_string()),
+            Value::Object(map) => {
+                // check version
+                let version_val = map
+                    .get("version")
+                    .ok_or_else(|| "Arena JSON missing 'version' field".to_string())?;
+                let ok = match version_val {
+                    Value::String(s) => s == "1",
+                    Value::Number(n) => n.as_u64().map(|v| v == 1).unwrap_or(false),
+                    _ => false,
+                };
+                if !ok {
+                    return Err(format!("Unsupported arena JSON version: {:?}", version_val));
+                }
+
+                // extract qube array
+                match map.get("qube") {
+                    Some(Value::Array(a)) => a.clone(),
+                    _ => return Err("Arena JSON missing 'qube' array".to_string()),
+                }
+            }
+            _ => return Err("Expected JSON object envelope for arena layout".to_string()),
         };
 
         // We will create nodes in the same order. Start with a fresh Qube which
@@ -144,9 +234,63 @@ impl Qube {
             };
 
             // create child under parent
-            // Parse coords using Coordinates::from_json_value so native JSON types
-            // (numbers/strings/mixed) are preserved.
-            let coords_parsed = Coordinates::from_json_value(coords_value)?;
+            // Interpret typed coords object if present so we deserialize into
+            // the most specific `Coordinates` variant (Integers, Strings,
+            // Floats) rather than always producing a Mixed variant. If the
+            // coords object contains a single typed key (e.g. `ints`,
+            // `strings`, `floats`) we'll pass the underlying array/string to
+            // `from_json_value`. If it contains multiple keys we pass the
+            // whole object to obtain a `Mixed` coordinates value.
+            let coords_parsed = {
+                use serde_json::Value;
+
+                // Build a Value suitable for Coordinates::from_json_value
+                let coords_for_parse: Value = match coords_value {
+                    Value::Object(map) => {
+                        // Detect typed keys
+                        let has_ints = map.get("ints").is_some();
+                        let has_ints_text = map.get("ints_text").is_some();
+                        let has_strings = map.get("strings").is_some();
+                        let has_floats = map.get("floats").is_some();
+                        let has_datetimes = map.get("datetimes").is_some();
+
+                        let typed_key_count =
+                            [has_ints, has_ints_text, has_strings, has_floats, has_datetimes]
+                                .iter()
+                                .filter(|&&b| b)
+                                .count();
+
+                        if has_ints_text && typed_key_count == 1 {
+                            // textual integer representation -> parse as string
+                            map.get("ints_text").cloned().unwrap_or(Value::Null)
+                        } else if has_ints && typed_key_count == 1 {
+                            // ints as native array -> pass array so `from_json_value`
+                            // returns `Coordinates::Integers` where possible
+                            map.get("ints").cloned().unwrap_or(Value::Null)
+                        } else if has_strings && typed_key_count == 1 {
+                            map.get("strings").cloned().unwrap_or(Value::Null)
+                        } else if has_floats && typed_key_count == 1 {
+                            map.get("floats").cloned().unwrap_or(Value::Null)
+                        } else if has_datetimes && typed_key_count == 1 {
+                            map.get("datetimes").cloned().unwrap_or(Value::Null)
+                        } else {
+                            // Mixed or unknown: pass the whole object so
+                            // `from_json_value` can create a MixedCoordinates
+                            Value::Object(map.clone())
+                        }
+                    }
+                    other => other.clone(),
+                };
+
+                let value_for_parse = match coords_value {
+                    Value::Object(map) if map.len() == 1 && map.contains_key("datetimes") => {
+                        coords_value.clone()
+                    }
+                    _ => coords_for_parse,
+                };
+
+                Coordinates::from_json_value(&value_for_parse)?
+            };
             let created = if i == 0 {
                 // first entry corresponds to root; update root coords if provided
                 // skip creating a new node; optionally set coords on root
@@ -317,6 +461,13 @@ mod json_tests {
         // Serialize arena JSON and print
         let arena = qube.to_arena_json();
         println!("{}", serde_json::to_string_pretty(&arena).unwrap());
+
+        // Assert version number is present and correct
+        assert_eq!(
+            arena.get("version").and_then(|v| v.as_str()),
+            Some("1"),
+            "Arena JSON should have version field set to '1'"
+        );
 
         // Reconstruct and verify structure equality via to_json()
         let reconstructed = Qube::from_arena_json(arena).expect("from_arena_json");
