@@ -365,9 +365,36 @@ impl Coordinates {
                     }
                 }
 
+                match &boxed.datetimes {
+                    datetime::DateTimeCoordinates::Set(list) => {
+                        if list.len() > 0 {
+                            let vals: Vec<Value> = list
+                                .iter()
+                                .map(|dt: &NaiveDateTime| {
+                                    // Serialize NaiveDateTime as an ISO-like string without timezone.
+                                    Value::String(dt.format("%Y-%m-%dT%H:%M:%S").to_string())
+                                })
+                                .collect();
+                            map.insert("datetimes".to_string(), Value::Array(vals));
+                        }
+                    }
+                }
+
                 Value::Object(map)
             }
-            Coordinates::DateTimes(_) => todo!(),
+            Coordinates::DateTimes(coords) => {
+                match coords {
+                    datetime::DateTimeCoordinates::Set(list) => {
+                        let vals: Vec<Value> = list
+                            .iter()
+                            .map(|dt: &NaiveDateTime| {
+                                Value::String(dt.format("%Y-%m-%dT%H:%M:%S").to_string())
+                            })
+                            .collect();
+                        Value::Array(vals)
+                    }
+                }
+            }
         }
     }
 
