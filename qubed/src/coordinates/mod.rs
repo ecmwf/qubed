@@ -187,6 +187,7 @@ impl Coordinates {
                 mixed.integers.hash(hasher);
                 mixed.floats.hash(hasher);
                 mixed.strings.hash(hasher);
+                mixed.datetimes.hash(hasher);
             }
             Coordinates::DateTimes(datetimes) => {
                 datetimes.hash(hasher);
