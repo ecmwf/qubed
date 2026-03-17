@@ -85,7 +85,6 @@ impl PyQube {
                 k.extract().map_err(|_| PyTypeError::new_err("select keys must be strings"))?;
 
             let coords = if v.is_instance_of::<PyList>() {
-                println!("WE ACTUALLY DEALT WITH A LIST HERE??");
                 let lst = v.cast_into::<PyList>()?;
                 let mut parts: Vec<String> = Vec::with_capacity(lst.len());
                 for item in lst.iter() {
