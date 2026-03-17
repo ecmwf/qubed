@@ -52,7 +52,7 @@ impl Coordinates {
             return Coordinates::Empty;
         }
         let mut coords = Coordinates::Empty;
-        let split: Vec<&str> = s.split('|').collect();
+        let split: Vec<&str> = s.split('/').collect();
 
         for part in split {
             // Check for leading zeros to preserve formatting (e.g., "0001")

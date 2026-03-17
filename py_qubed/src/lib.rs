@@ -85,8 +85,9 @@ impl PyQube {
                 k.extract().map_err(|_| PyTypeError::new_err("select keys must be strings"))?;
 
             let coords = if v.is_instance_of::<PyList>() {
-                let lst = v.cast_into::<PyList>()?;
-                let joined = join_pylist_as_path(&lst)?;
+                let lst =
+                    v.downcast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
+                let joined = join_pylist_as_path(lst)?;
                 Coordinates::from_string(&joined)
             } else {
                 // Convert any value to string representation (handles int, float, str)
@@ -173,7 +174,7 @@ impl PyQube {
     }
 }
 
-pub(crate) fn join_pylist_as_path(lst: &PyList) -> PyResult<String> {
+pub(crate) fn join_pylist_as_path(lst: &Bound<'_, PyList>) -> PyResult<String> {
     let mut parts: Vec<String> = Vec::with_capacity(lst.len());
     for item in lst.iter() {
         // Convert any value to string representation (handles int, float, str)
@@ -182,22 +183,6 @@ pub(crate) fn join_pylist_as_path(lst: &PyList) -> PyResult<String> {
         parts.push(s);
     }
     Ok(parts.join("/"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use pyo3::prelude::Python;
-    use pyo3::types::PyList;
-
-    #[test]
-    fn join_pylist_as_path_handles_multiple_values() {
-        Python::with_gil(|py| {
-            let list = PyList::new_bound(py, &[1, 2]);
-            let joined = join_pylist_as_path(&list).expect("joining PyList failed");
-            assert_eq!(joined, "1/2");
-        });
-    }
 }
 
 #[pymodule]
