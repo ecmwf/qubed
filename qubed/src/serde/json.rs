@@ -282,7 +282,14 @@ impl Qube {
                     other => other.clone(),
                 };
 
-                Coordinates::from_json_value(&coords_for_parse)?
+                let value_for_parse = match coords_value {
+                    Value::Object(map) if map.len() == 1 && map.contains_key("datetimes") => {
+                        coords_value.clone()
+                    }
+                    _ => coords_for_parse,
+                };
+
+                Coordinates::from_json_value(&value_for_parse)?
             };
             let created = if i == 0 {
                 // first entry corresponds to root; update root coords if provided
