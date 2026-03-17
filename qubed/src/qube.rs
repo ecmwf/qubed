@@ -317,10 +317,13 @@ impl Qube {
         let child_info: Vec<(bool, Vec<NodeIdx>)> = child_info
             .into_iter()
             .map(|(dim, ids)| {
-                let should_drop = to_drop.contains(self.dimension_str(&dim).unwrap_or(""));
-                (should_drop, ids)
+                let dim_str = self
+                    .dimension_str(&dim)
+                    .ok_or_else(|| format!("Missing dimension string for {:?}", dim))?;
+                let should_drop = to_drop.contains(dim_str);
+                Ok((should_drop, ids))
             })
-            .collect();
+            .collect::<Result<_, String>>()?;
 
         for (should_drop, children) in child_info {
             if should_drop {
