@@ -95,7 +95,10 @@ impl Coordinates {
             Coordinates::Strings(strings) => strings.len(),
             Coordinates::DateTimes(datetimes) => datetimes.len(),
             Coordinates::Mixed(mixed) => {
-                mixed.integers.len() + mixed.floats.len() + mixed.strings.len()
+                mixed.integers.len()
+                    + mixed.floats.len()
+                    + mixed.strings.len()
+                    + mixed.datetimes.len()
             }
         }
     }
