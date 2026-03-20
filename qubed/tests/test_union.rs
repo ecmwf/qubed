@@ -48,7 +48,6 @@ fn union_almost_identical_qubes() {
     println!("{:#?}", Qube::to_ascii(&qube_a));
 
     let hash_a = qube_a.node(qube_a.root()).unwrap().structural_hash();
-    // let hash_b = qube_b.node(qube_b.root()).unwrap().structural_hash();
 
     assert_ne!(
         hash_a, hash_b,
@@ -104,10 +103,32 @@ fn union_different_qubes() {
     println!("{:#?}", Qube::to_ascii(&qube_a));
 
     let hash_a = qube_a.node(qube_a.root()).unwrap().structural_hash();
-    // let hash_b = qube_b.node(qube_b.root()).unwrap().structural_hash();
 
     assert_ne!(
         hash_a, hash_b,
         "different trees (even with small differences) must have different hashes"
     );
+}
+
+#[test]
+fn append_to_empty_qube_produces_other() {
+    let mut empty = Qube::new();
+    let input = r#"root
+└── class=1
+    ├── expver=0001
+    │   └── param=1/2
+    └── expver=0002
+        └── param=1/2"#;
+
+    let mut other = Qube::from_ascii(input).unwrap();
+    let expected_ascii = other.to_ascii();
+
+    empty.append(&mut other);
+
+    assert_eq!(
+        empty.to_ascii(),
+        expected_ascii,
+        "appending to an empty Qube should yield the other Qube's content"
+    );
+    assert!(other.is_empty(), "other should be empty after append");
 }

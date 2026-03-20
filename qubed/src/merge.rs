@@ -141,6 +141,15 @@ impl Qube {
         // This method starts at the root of both Qubes and recursively merges their nodes.
         // After the union, the tree is compressed to remove duplicates and empty nodes.
 
+        // Fast-path: if self is empty, just take the content of other directly.
+        if self.is_empty() {
+            let other_root = other.root();
+            let self_root = self.root();
+            self.copy_subtree(other, other_root, self_root);
+            *other = Qube::new();
+            return;
+        }
+
         let self_root_id = self.root();
         let other_root_id = other.root();
         self.node_merge(other, self_root_id, other_root_id);
