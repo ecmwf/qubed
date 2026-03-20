@@ -8,10 +8,22 @@ qubed = { path = "../qubed" }
 serde = "1.0.228"
 serde_json = "1.0.145"
 rsfdb = { git = "https://github.com/ecmwf/rsfdb" }
+anyhow = "1"
+chrono = "0.4"
+clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
 
 [lib]
 path = "src/lib.rs"
 crate-type = ["rlib"]
+
+[[bin]]
+name = "fdb_db_reader"
+path = "bin/fdb_db_reader.rs"
+
+[[bin]]
+name = "fdb_scanner"
+path = "bin/fdb_scanner.rs"
 
 [patch.'https://github.com/ecmwf/rsfdb']
 rsfdb = { path = "../rsfdb" }
