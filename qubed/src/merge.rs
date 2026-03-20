@@ -147,6 +147,8 @@ impl Qube {
             let self_root = self.root();
             self.copy_subtree(other, other_root, self_root);
             *other = Qube::new();
+            // Ensure append behavior is consistent: always compress after merging.
+            self.compress();
             return;
         }
 
