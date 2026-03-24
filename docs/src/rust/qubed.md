@@ -58,10 +58,14 @@ let q = Qube::from_json(json!({
 | Method | Signature | Description |
 |---|---|---|
 | `create_child` | `fn create_child(&mut self, key: &str, parent: NodeIdx, coords: Option<Coordinates>) -> Result<NodeIdx, String>` | Create a child node. Returns existing node if an identical child already exists. |
+| `get_or_create_child` | `fn get_or_create_child(&mut self, key: &str, parent_id: NodeIdx, coordinates: Option<Coordinates>) -> Result<NodeIdx, String>` | Return the existing child with the given dimension+coordinates, or create a new one. |
+| `check_if_new_child` | `fn check_if_new_child(&mut self, key: &str, parent_id: NodeIdx, coordinates: Option<Coordinates>) -> Result<bool, String>` | Return `true` if no child with the given dimension+coordinates exists yet. |
 | `remove_node` | `fn remove_node(&mut self, id: NodeIdx) -> Result<(), String>` | Remove a node and all its descendants |
 | `append` | `fn append(&mut self, other: &mut Qube)` | Union: merge `other` into `self`, compress, then clear `other` |
 | `append_many` | `fn append_many(&mut self, others: &mut Vec<Qube>)` | Merge many Qubes with periodic compression (every 500) |
 | `append_datacube` | `fn append_datacube(&mut self, dc: Datacube, order: Option<&[String]>, accept_existing_order: bool)` | Append a single Datacube |
+| `drop` | `fn drop<I>(&mut self, to_drop: I) -> Result<(), String>` | Remove one or more dimensions, re-parenting their children, then compress |
+| `squeeze` | `fn squeeze(&mut self) -> Result<(), String>` | Drop every dimension whose union of values has length 1 |
 
 **Example — building programmatically:**
 ```rust
@@ -84,6 +88,32 @@ let mut a = Qube::from_ascii("root\n└── class=od, param=1").unwrap();
 let mut b = Qube::from_ascii("root\n└── class=rd, param=2").unwrap();
 a.append(&mut b);
 // a now contains both branches, compressed; b is empty
+```
+
+**Example — drop:**
+```rust
+let mut q = Qube::from_ascii(r#"root
+└── class=1
+    ├── expver=0001
+    │   └── param=1/2
+    └── expver=0002
+        └── param=1/2"#).unwrap();
+
+q.drop(vec!["expver"]).unwrap();
+// expver is removed; param nodes are re-parented under class
+```
+
+**Example — squeeze:**
+```rust
+let mut q = Qube::from_ascii(r#"root
+└── class=1
+    ├── expver=0001
+    │   └── param=1/2
+    └── expver=0002
+        └── param=1/2"#).unwrap();
+
+q.squeeze().unwrap();
+// class=1 is the only value for that dimension, so it is dropped
 ```
 
 ### Compression

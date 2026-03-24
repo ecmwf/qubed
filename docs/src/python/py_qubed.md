@@ -125,6 +125,81 @@ base.append_many(qubes)
 
 ---
 
+### Manipulation
+
+#### `compress() -> None`
+
+Compress the Qube in-place. Merges structurally identical sibling nodes, removes empty nodes, and deduplicates. Called automatically by `append` and `append_many`.
+
+```python
+q.compress()
+```
+
+#### `drop(dims: list[str]) -> None`
+
+Remove one or more dimensions from the tree. Children of removed nodes are re-parented to the grandparent, preserving the rest of the structure. The result is automatically compressed.
+
+```python
+q = PyQube.from_ascii("""root
+└── class=1
+    ├── expver=0001
+    │   └── param=1/2
+    └── expver=0002
+        └── param=1/2""")
+
+q.drop(["expver"])
+print(q)
+# root
+# └── class=1
+#     └── param=1/2
+```
+
+#### `squeeze() -> None`
+
+Drop all dimensions that have only a single coordinate value. Equivalent to calling `drop` on every dimension whose union of values has length 1.
+
+```python
+q = PyQube.from_ascii("""root
+└── class=1
+    ├── expver=0001
+    │   └── param=1/2
+    └── expver=0002
+        └── param=1/2""")
+
+q.squeeze()
+print(q)
+# root
+# └── expver=0001/0002
+#     └── param=1/2
+```
+
+---
+
+### Query
+
+#### `all_unique_dim_coords() -> dict[str, list[str]]`
+
+Return a dictionary mapping each dimension name to a list of all coordinate values that appear anywhere in the Qube.
+
+```python
+coords = q.all_unique_dim_coords()
+# {'class': ['1'], 'expver': ['0001', '0002'], 'param': ['1', '2']}
+```
+
+#### `select(request: dict, mode: str | None, consume: bool | None) -> PyQube`
+
+Return a new Qube containing only the identifiers that satisfy the request. Each key in `request` is a dimension name; values may be a single string/int or a list.
+
+`mode` controls behaviour for dimensions absent in a branch:
+- `None` / any other string — default: keep branches that have at least one matching value.
+- `"prune"` — additionally remove branches that are missing any requested dimension entirely.
+
+```python
+selected = q.select({"class": [1], "param": [1, 2]}, None, None)
+```
+
+---
+
 ### Special Methods
 
 | Method | Description |

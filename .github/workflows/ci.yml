@@ -58,12 +58,12 @@ jobs:
       - name: Build qubed_meteo wheel
         run: uv tool run maturin build -m py_qubed_meteo/Cargo.toml
 
-      # Install built wheels and run package-local pytest suites.
+      # Install built wheels into an isolated uv-managed venv and run pytest.
       - name: Run Python binding tests
         run: |
-          python -m pip install pytest
-          python -m pip install target/wheels/qubed-*.whl target/wheels/qubed_meteo-*.whl
-          python -m pytest -q py_qubed/tests py_qubed_meteo/tests
+          uv venv .ci-venv
+          uv pip install --python .ci-venv pytest target/wheels/qubed-*.whl target/wheels/qubed_meteo-*.whl
+          uv run --python .ci-venv pytest -q py_qubed/tests py_qubed_meteo/tests
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
