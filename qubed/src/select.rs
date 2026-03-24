@@ -100,7 +100,11 @@ impl Qube {
                     self.select_recurse(selection, result, new_parents)?;
                 }
             } else {
-                // Dimension not in selection, so we take all children
+                // Dimension not in selection, so we take all children.
+                // However, we must only keep a child in the result if the
+                // recursive call into it actually produced something — otherwise
+                // we end up with empty branches for nodes whose descendants
+                // contain none of the selected values.
                 let source_children: Vec<_> = match source_node.children(*dimension) {
                     Some(iter) => iter.collect(),
                     None => continue, // Skip this dimension if no children
@@ -122,6 +126,24 @@ impl Qube {
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
                     self.select_recurse(selection, result, new_parents)?;
+
+                    // If the newly created result node ended up with no children,
+                    // and the source node was NOT a leaf (i.e., had children of
+                    // its own), then the subtree contained nothing matching the
+                    // selection.  Remove the placeholder so it doesn't pollute
+                    // the result.  Leaf nodes (source_child_count == 0) are
+                    // always kept — their coordinates are the payload.
+                    let source_child_count = self
+                        .node(child_id)
+                        .ok_or_else(|| format!("Source node {:?} not found", child_id))?
+                        .children_count();
+                    let result_child_count = result
+                        .node(new_child)
+                        .ok_or_else(|| format!("Result node {:?} not found", new_child))?
+                        .children_count();
+                    if source_child_count > 0 && result_child_count == 0 {
+                        result.remove_node(new_child).ok();
+                    }
                 }
             }
         }
@@ -270,6 +292,69 @@ mod tests {
         let result = Qube::from_ascii(result).unwrap();
         assert_eq!(selected_qube.to_ascii(), result.to_ascii());
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_drops_branches_without_matching_deep_key() -> Result<(), String> {
+        // The selected key (param) is not at the top level — expver sits above it.
+        // Branches whose descendants contain none of the selected param values must
+        // be removed, not left as empty placeholders in the result.
+        let input = r#"root
+├── expver=0001
+│   ├── param=1
+│   └── param=2
+└── expver=0002
+    ├── param=3
+    └── param=4"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+        let selected = qube.select(&[("param", &[1][..])], SelectMode::Default)?;
+
+        let expected = r#"root
+└── expver=0001
+    └── param=1"#;
+        let expected_qube = Qube::from_ascii(expected).unwrap();
+
+        assert_eq!(
+            selected.to_ascii(),
+            expected_qube.to_ascii(),
+            "expver=0002 (no param=1 descendants) should be absent from the result"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_deep_key_multi_level_unselected_prefix() -> Result<(), String> {
+        // class and expver are both above the selected dimension (param).
+        // Only the branches that lead to a matching param value should survive.
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=3
+│       └── param=4
+└── class=2
+    └── expver=0001
+        ├── param=5
+        └── param=6"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+        let selected = qube.select(&[("param", &[1][..])], SelectMode::Default)?;
+
+        let expected = r#"root
+└── class=1
+    └── expver=0001
+        └── param=1"#;
+        let expected_qube = Qube::from_ascii(expected).unwrap();
+
+        assert_eq!(
+            selected.to_ascii(),
+            expected_qube.to_ascii(),
+            "only class=1/expver=0001 contains param=1; all other branches must be pruned"
+        );
         Ok(())
     }
 

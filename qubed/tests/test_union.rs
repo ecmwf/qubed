@@ -121,15 +121,22 @@ fn append_to_empty_qube_produces_other() {
         └── param=1/2"#;
 
     let mut other = Qube::from_ascii(input).unwrap();
-    let expected_hash = other.node(other.root()).unwrap().structural_hash();
 
     empty.append(&mut other);
 
-    let empty_hash = empty.node(empty.root()).unwrap().structural_hash();
+    // The result must contain all the original identifiers.
+    // Note: append always compresses, so structurally identical siblings
+    // (both expver branches have the same param subtree) get merged.
+    let expected = r#"root
+└── class=1
+    └── expver=0001/0002
+        └── param=1/2"#;
+    let expected_qube = Qube::from_ascii(expected).unwrap();
 
     assert_eq!(
-        empty_hash, expected_hash,
-        "appending to an empty Qube should yield the other Qube's content (semantically)"
+        empty.to_ascii(),
+        expected_qube.to_ascii(),
+        "appending to an empty Qube should yield the other Qube's content (post-compress)"
     );
     assert!(other.is_empty(), "other should be empty after append");
 }
