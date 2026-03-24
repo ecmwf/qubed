@@ -121,21 +121,14 @@ fn append_to_empty_qube_produces_other() {
         └── param=1/2"#;
 
     let mut other = Qube::from_ascii(input).unwrap();
-    let expected_hash = other
-        .node(other.root())
-        .unwrap()
-        .structural_hash();
+    let expected_hash = other.node(other.root()).unwrap().structural_hash();
 
     empty.append(&mut other);
 
-    let empty_hash = empty
-        .node(empty.root())
-        .unwrap()
-        .structural_hash();
+    let empty_hash = empty.node(empty.root()).unwrap().structural_hash();
 
     assert_eq!(
-        empty_hash,
-        expected_hash,
+        empty_hash, expected_hash,
         "appending to an empty Qube should yield the other Qube's content (semantically)"
     );
     assert!(other.is_empty(), "other should be empty after append");
