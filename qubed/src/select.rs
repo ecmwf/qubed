@@ -159,7 +159,11 @@ impl Qube {
                         .ok_or_else(|| format!("Result node {:?} not found", new_child))?
                         .children_count();
                     if source_child_count > 0 && result_child_count == 0 {
-                        result.remove_node(new_child).ok();
+                        result
+                            .remove_node(new_child)
+                            .map_err(|e| {
+                                format!("Failed to remove result node {:?}: {:?}", new_child, e)
+                            })?;
                     }
                 }
             }
