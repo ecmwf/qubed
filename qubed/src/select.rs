@@ -463,9 +463,9 @@ mod tests {
     #[test]
     fn test_select_irregular_tree_dimension_order2() -> Result<(), String> {
         // The tree is "irregular": class appears at depth 1 in one branch but
-        // at depth 2 (below expver) in another.  Selecting class=1 should keep
-        // only the branch where class=1 appears and prune the expver=0003 branch
-        // entirely because its only class value (class=2) does not match.
+        // at depth 2 (below expver) in another. Selecting expver=0002 should keep
+        // only the parts of the tree where expver=0002 appears and prune the
+        // expver=0003-only branch entirely because it does not match the selection.
         let input = r#"root
 ├── class=1
 │   ├── expver=0001
