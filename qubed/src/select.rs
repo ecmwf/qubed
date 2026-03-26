@@ -114,8 +114,8 @@ impl Qube {
                         .children_count();
                     if source_child_count > 0 && result_child_count == 0 {
                         result.remove_node(new_child).map_err(|e| {
-                                format!("Failed to remove result node {:?}: {:?}", new_child, e)
-                            })?;
+                            format!("Failed to remove result node {:?}: {:?}", new_child, e)
+                        })?;
                     }
                 }
             } else {
@@ -161,11 +161,9 @@ impl Qube {
                         .ok_or_else(|| format!("Result node {:?} not found", new_child))?
                         .children_count();
                     if source_child_count > 0 && result_child_count == 0 {
-                        result
-                            .remove_node(new_child)
-                            .map_err(|e| {
-                                format!("Failed to remove result node {:?}: {:?}", new_child, e)
-                            })?;
+                        result.remove_node(new_child).map_err(|e| {
+                            format!("Failed to remove result node {:?}: {:?}", new_child, e)
+                        })?;
                     }
                 }
             }
@@ -197,8 +195,8 @@ impl Qube {
             if count < has_none_of.len() {
                 drop(node); // Explicitly drop to release borrow
                 self.remove_node(node_id).map_err(|e| {
-                                format!("Failed to remove result node {:?}: {:?}", new_child, e)
-                            })?;
+                    format!("Failed to remove result node {:?}: {:?}", new_child, e)
+                })?;
                 return;
             }
 
