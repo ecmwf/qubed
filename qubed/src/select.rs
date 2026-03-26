@@ -113,7 +113,9 @@ impl Qube {
                         .ok_or_else(|| format!("Result node {:?} not found", new_child))?
                         .children_count();
                     if source_child_count > 0 && result_child_count == 0 {
-                        result.remove_node(new_child).ok();
+                        result.remove_node(new_child).map_err(|e| {
+                                format!("Failed to remove result node {:?}: {:?}", new_child, e)
+                            })?;
                     }
                 }
             } else {
@@ -194,7 +196,9 @@ impl Qube {
             // If missing dimensions, we'll remove this node
             if count < has_none_of.len() {
                 drop(node); // Explicitly drop to release borrow
-                self.remove_node(node_id).ok();
+                self.remove_node(node_id).map_err(|e| {
+                                format!("Failed to remove result node {:?}: {:?}", new_child, e)
+                            })?;
                 return;
             }
 
@@ -505,7 +509,7 @@ mod tests {
     fn test_select_irregular_tree_dimension_order3() -> Result<(), String> {
         // The tree is "irregular": class appears at depth 1 in one branch but
         // at depth 2 (below expver) in another.  Selecting class=1 should keep
-        // only the branch where class=1 appears and prune the expver=0003 branch
+        // only the branch where class=1 appears and prune the expver=3 branch
         // entirely because its only class value (class=2) does not match.
         let input = r#"root
 ├── class=1
@@ -533,7 +537,7 @@ mod tests {
         assert_eq!(
             selected.to_ascii(),
             expected_qube.to_ascii(),
-            "only one expver=0002 branch must be kept"
+            "only one expver=2 branch must be kept"
         );
         Ok(())
     }
