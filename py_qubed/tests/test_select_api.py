@@ -66,6 +66,7 @@ def test_select_2():
 
     assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
 
+
 def test_select_3():
     input_qube = r"""root
 ├── class=1
@@ -183,6 +184,7 @@ def test_compress():
     # Verify datacube count is preserved
     assert len(q) > 0
 
+
 def test_compress_2():
     input_qube = r"""root
 └── class=2
@@ -190,20 +192,20 @@ def test_compress_2():
         └── param=2"""
 
     q = qubed.PyQube.from_ascii(input_qube)
-    
+
     # Get the ASCII representation before compression
     ascii_before = q.to_ascii()
-    
+
     # Compress the qube
     q.compress()
-    
+
     # The qube should still be valid and have the same structure
     ascii_after = q.to_ascii()
-    
+
     # Verify the structure is preserved or optimized (may change due to deduplication)
     assert len(ascii_before) > 0
     assert len(ascii_after) > 0
-    
+
     # Verify datacube count is preserved
     assert len(q) > 0
 
@@ -280,7 +282,10 @@ def test_default():
         ├── param=1
         └── param=2"""
 
-    assert default_result.to_ascii() == qubed.PyQube.from_ascii(default_expected).to_ascii()
+    assert (
+        default_result.to_ascii()
+        == qubed.PyQube.from_ascii(default_expected).to_ascii()
+    )
 
 
 def test_drop():
@@ -322,3 +327,53 @@ def test_squeeze():
     └── param=1/2"""
 
     assert q.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
+
+
+def test_select_drops_branches_without_matching_deep_key():
+    """Branches whose descendants contain none of the selected values must be removed."""
+    input_qube = r"""root
+├── expver=0001
+│   ├── param=1
+│   └── param=2
+└── expver=0002
+    ├── param=3
+    └── param=4"""
+
+    q = qubed.PyQube.from_ascii(input_qube)
+    selected = q.select({"param": [1]}, None, None)
+
+    expected = r"""root
+└── expver=0001
+    └── param=1"""
+
+    assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii(), (
+        "expver=0002 (no param=1 descendants) should be absent from the result"
+    )
+
+
+def test_select_deep_key_multi_level_unselected_prefix():
+    """Only branches leading to a matching value survive, even with multiple unselected levels above."""
+    input_qube = r"""root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=3
+│       └── param=4
+└── class=2
+    └── expver=0001
+        ├── param=5
+        └── param=6"""
+
+    q = qubed.PyQube.from_ascii(input_qube)
+    selected = q.select({"param": [1]}, None, None)
+
+    expected = r"""root
+└── class=1
+    └── expver=0001
+        └── param=1"""
+
+    assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii(), (
+        "only class=1/expver=0001 contains param=1; all other branches must be pruned"
+    )

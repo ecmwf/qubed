@@ -98,9 +98,32 @@ impl Qube {
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
                     self.select_recurse(selection, result, new_parents)?;
+
+                    // If the newly created result node ended up with no children,
+                    // and the source node was NOT a leaf (i.e., had children of its
+                    // own), then no further selected dimensions matched anywhere
+                    // beneath it.  Remove the placeholder so it doesn't pollute the
+                    // result.  Leaf nodes (source_child_count == 0) are always kept.
+                    let source_child_count = self
+                        .node(child_id)
+                        .ok_or_else(|| format!("Source node {:?} not found", child_id))?
+                        .children_count();
+                    let result_child_count = result
+                        .node(new_child)
+                        .ok_or_else(|| format!("Result node {:?} not found", new_child))?
+                        .children_count();
+                    if source_child_count > 0 && result_child_count == 0 {
+                        result.remove_node(new_child).map_err(|e| {
+                            format!("Failed to remove result node {:?}: {:?}", new_child, e)
+                        })?;
+                    }
                 }
             } else {
-                // Dimension not in selection, so we take all children
+                // Dimension not in selection, so we take all children.
+                // However, we must only keep a child in the result if the
+                // recursive call into it actually produced something — otherwise
+                // we end up with empty branches for nodes whose descendants
+                // contain none of the selected values.
                 let source_children: Vec<_> = match source_node.children(*dimension) {
                     Some(iter) => iter.collect(),
                     None => continue, // Skip this dimension if no children
@@ -122,6 +145,26 @@ impl Qube {
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
                     self.select_recurse(selection, result, new_parents)?;
+
+                    // If the newly created result node ended up with no children,
+                    // and the source node was NOT a leaf (i.e., had children of
+                    // its own), then the subtree contained nothing matching the
+                    // selection.  Remove the placeholder so it doesn't pollute
+                    // the result.  Leaf nodes (source_child_count == 0) are
+                    // always kept — their coordinates are the payload.
+                    let source_child_count = self
+                        .node(child_id)
+                        .ok_or_else(|| format!("Source node {:?} not found", child_id))?
+                        .children_count();
+                    let result_child_count = result
+                        .node(new_child)
+                        .ok_or_else(|| format!("Result node {:?} not found", new_child))?
+                        .children_count();
+                    if source_child_count > 0 && result_child_count == 0 {
+                        result.remove_node(new_child).map_err(|e| {
+                            format!("Failed to remove result node {:?}: {:?}", new_child, e)
+                        })?;
+                    }
                 }
             }
         }
@@ -151,7 +194,9 @@ impl Qube {
             // If missing dimensions, we'll remove this node
             if count < has_none_of.len() {
                 drop(node); // Explicitly drop to release borrow
-                self.remove_node(node_id).ok();
+                self.remove_node(node_id).map_err(|e| {
+                    format!("Failed to remove result node {:?}: {:?}", new_child, e)
+                })?;
                 return;
             }
 
@@ -274,6 +319,69 @@ mod tests {
     }
 
     #[test]
+    fn test_select_drops_branches_without_matching_deep_key() -> Result<(), String> {
+        // The selected key (param) is not at the top level — expver sits above it.
+        // Branches whose descendants contain none of the selected param values must
+        // be removed, not left as empty placeholders in the result.
+        let input = r#"root
+├── expver=0001
+│   ├── param=1
+│   └── param=2
+└── expver=0002
+    ├── param=3
+    └── param=4"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+        let selected = qube.select(&[("param", &[1][..])], SelectMode::Default)?;
+
+        let expected = r#"root
+└── expver=0001
+    └── param=1"#;
+        let expected_qube = Qube::from_ascii(expected).unwrap();
+
+        assert_eq!(
+            selected.to_ascii(),
+            expected_qube.to_ascii(),
+            "expver=0002 (no param=1 descendants) should be absent from the result"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_deep_key_multi_level_unselected_prefix() -> Result<(), String> {
+        // class and expver are both above the selected dimension (param).
+        // Only the branches that lead to a matching param value should survive.
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=3
+│       └── param=4
+└── class=2
+    └── expver=0001
+        ├── param=5
+        └── param=6"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+        let selected = qube.select(&[("param", &[1][..])], SelectMode::Default)?;
+
+        let expected = r#"root
+└── class=1
+    └── expver=0001
+        └── param=1"#;
+        let expected_qube = Qube::from_ascii(expected).unwrap();
+
+        assert_eq!(
+            selected.to_ascii(),
+            expected_qube.to_ascii(),
+            "only class=1/expver=0001 contains param=1; all other branches must be pruned"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_prune() -> Result<(), String> {
         let input = r#"root
 ├── class=1
@@ -311,6 +419,124 @@ mod tests {
 
         assert_eq!(qube.to_ascii(), result);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_irregular_tree_dimension_order() -> Result<(), String> {
+        // The tree is "irregular": class appears at depth 1 in one branch but
+        // at depth 2 (below expver) in another.  Selecting class=1 should keep
+        // only the branch where class=1 appears and prune the expver=0003 branch
+        // entirely because its only class value (class=2) does not match.
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=3
+│       └── param=4
+└── expver=0003
+    └── class=2
+        ├── param=5
+        └── param=6"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+        let selected = qube.select(&[("class", &[1][..])], SelectMode::Default)?;
+
+        let expected = r#"root
+└── class=1
+    ├── expver=0001
+    │   ├── param=1
+    │   └── param=2
+    └── expver=0002
+        ├── param=3
+        └── param=4"#;
+        let expected_qube = Qube::from_ascii(expected).unwrap();
+
+        assert_eq!(
+            selected.to_ascii(),
+            expected_qube.to_ascii(),
+            "expver=0003 branch (containing only class=2) must be pruned entirely"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_irregular_tree_dimension_order2() -> Result<(), String> {
+        // The tree is "irregular": class appears at depth 1 in one branch but
+        // at depth 2 (below expver) in another. Selecting expver=0002 should keep
+        // only the parts of the tree where expver=0002 appears and prune the
+        // expver=0003-only branch entirely because it does not match the selection.
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=3
+│       └── param=4
+└── expver=0002/0003
+    └── class=2
+        ├── param=5
+        └── param=6"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+        let selected = qube.select(&[("expver", &["0002"][..])], SelectMode::Default)?;
+
+        let expected = r#"root
+├── class=1
+│   └── expver=0002
+│       ├── param=3
+│       └── param=4
+└── expver=0002
+    └── class=2
+        ├── param=5
+        └── param=6"#;
+        let expected_qube = Qube::from_ascii(expected).unwrap();
+
+        assert_eq!(
+            selected.to_ascii(),
+            expected_qube.to_ascii(),
+            "expver=0002 branches must be both kept"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_irregular_tree_dimension_order3() -> Result<(), String> {
+        // The tree is "irregular": class appears at depth 1 in one branch but
+        // at depth 2 (below expver) in another.  Selecting class=1 should keep
+        // only the branch where class=1 appears and prune the expver=3 branch
+        // entirely because its only class value (class=2) does not match.
+        let input = r#"root
+├── class=1
+│   ├── expver=1
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=2
+│       ├── param=3
+│       └── param=4
+└── expver=2/3
+    └── class=2
+        ├── param=5
+        └── param=6"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+        let selected =
+            qube.select(&[("expver", &[2][..]), ("param", &[5][..])], SelectMode::Default)?;
+
+        let expected = r#"root
+└── expver=2
+    └── class=2
+        └── param=5"#;
+        let expected_qube = Qube::from_ascii(expected).unwrap();
+
+        assert_eq!(
+            selected.to_ascii(),
+            expected_qube.to_ascii(),
+            "only one expver=2 branch must be kept"
+        );
         Ok(())
     }
 }
