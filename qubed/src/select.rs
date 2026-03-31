@@ -194,9 +194,8 @@ impl Qube {
             // If missing dimensions, we'll remove this node
             if count < has_none_of.len() {
                 drop(node); // Explicitly drop to release borrow
-                self.remove_node(node_id).map_err(|e| {
-                    format!("Failed to remove result node {:?}: {:?}", new_child, e)
-                })?;
+                self.remove_node(node_id)
+                    .map_err(|e| format!("Failed to remove result node {:?}: {:?}", node_id, e));
                 return;
             }
 
