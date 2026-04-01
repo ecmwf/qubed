@@ -58,21 +58,26 @@ if [[ -n "${SELECTOR:-}" && -n "${FILEPATH:-}" ]]; then
     SCHEDULE="${SCHEDULE:-37 */3 * * *}"
     FULL_SCHEDULE="${FULL_SCHEDULE:-0 2 * * *}"
     LAST_N_DAYS="${LAST_N_DAYS:-14}"
-    API_ARG="${API:+--api "$API"}"
+    # Build the optional --api flag; empty when API env var is not set.
+    if [[ -n "${API:-}" ]]; then
+        API_ARG="--api ${API}"
+    else
+        API_ARG=""
+    fi
 
     echo "Generating crontab from environment variables..."
     cat > /etc/cron.d/fdb_scanner <<CRONTAB
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-LD_LIBRARY_PATH=/usr/local/lib/fdb
+LD_LIBRARY_PATH=/usr/local/lib
 FDB5_CONFIG_FILE=${FDB5_CONFIG_FILE:-/config/fdb_config.yaml}
 ${API_KEY:+API_KEY=${API_KEY}}
 
 # Partial scan
-${SCHEDULE} root /usr/local/bin/fdb_scanner --quiet --last-n-days ${LAST_N_DAYS} --selector "${SELECTOR}" --filepath "${FILEPATH}" --fdb-config ${FDB5_CONFIG_FILE:-/config/fdb_config.yaml} --api-secret /config/api.secret ${API_ARG:-} >> /logs/scanner-partial.log 2>&1
+${SCHEDULE} root /usr/local/bin/fdb_scanner --quiet --last-n-days ${LAST_N_DAYS} --selector "${SELECTOR}" --filepath "${FILEPATH}" --fdb-config ${FDB5_CONFIG_FILE:-/config/fdb_config.yaml} --api-secret /config/api.secret ${API_ARG} >> /logs/scanner-partial.log 2>&1
 
 # Full scan
-${FULL_SCHEDULE} root /usr/local/bin/fdb_scanner --quiet --full --selector "${SELECTOR}" --filepath "${FILEPATH}" --fdb-config ${FDB5_CONFIG_FILE:-/config/fdb_config.yaml} --api-secret /config/api.secret ${API_ARG:-} >> /logs/scanner-full.log 2>&1
+${FULL_SCHEDULE} root /usr/local/bin/fdb_scanner --quiet --full --selector "${SELECTOR}" --filepath "${FILEPATH}" --fdb-config ${FDB5_CONFIG_FILE:-/config/fdb_config.yaml} --api-secret /config/api.secret ${API_ARG} >> /logs/scanner-full.log 2>&1
 CRONTAB
     chmod 0644 /etc/cron.d/fdb_scanner
     crontab /etc/cron.d/fdb_scanner

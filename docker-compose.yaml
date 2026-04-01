@@ -1,63 +1,79 @@
 services:
+
+  # ── omnicat ────────────────────────────────────────────────────────────────
+  # Serves the Qube catalogue over HTTP.
+  # fdb_scanner POSTs new data to it live via POST /api/v2/union/.
+  # On restart it reloads the persisted JSON files from the shared volume.
+  omnicat:
+    container_name: omnicat
+    build:
+      # Build context is the repo root so the Dockerfile can COPY both the
+      # omnicat/ subtree and the qubed source.
+      context: .
+      dockerfile: omnicat/Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      # Shared volume: scanner writes JSON here; omnicat reads it on startup.
+      - qube_data:/data
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8001"
+      LOG_LEVEL: "INFO"
+      TITLE: "Qubed Catalogue Browser"
+      # Point omnicat at the shared volume for Qube JSON files.
+      QUBED_DATA_PREFIX: /data
+      # Use the same API key as the scanner so the union endpoint is protected.
+      API_KEY: "${API_KEY:-dummy-token-for-testing}"
+    networks:
+      - qubed_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL",
+             "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/')\""]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  # ── fdb_scanner ────────────────────────────────────────────────────────────
+  # Scans FDB archives and:
+  #   • POSTs each chunk live to omnicat's /api/v2/union/ endpoint.
+  #   • Saves a merged JSON snapshot to /data (the shared volume) so omnicat
+  #     can reload it if it restarts.
   fdb_scanner:
     container_name: fdb_scanner
     build:
-    #   # Build context = qubed_fdb_gen/ (the workspace root)
-    #   # because all COPY paths in the Dockerfile are relative to it.
-    #   context: .
-    #   dockerfile: qubed/qubed_meteo/Dockerfile
-    # # restart: unless-stopped  # disabled during testing so container exits cleanly
-    # # --- Runtime volumes ---
-    # # /config  — fdb_config.yaml (required) + api.secret or API_KEY env var
-    # # /data    — where the scanner writes the output JSON (visible on host at ./data/)
-    # # /logs    — cron log output (tail these to watch progress)
-    # volumes:
-    #   - ./config:/config:ro
-    #   - ./data:/data
-    #   - ./logs:/logs
-    # environment:
-    #   FDB5_CONFIG_FILE: /config/fdb_config.yaml
-    #   # Dummy token — POST to the qubed API will warn but not abort.
-    #   # Replace with a real token when you want data to appear in the API.
-    #   API_KEY: "dummy-token-for-testing"
-
-    #   # --- Small test scan ---
-    #   # Setting SELECTOR + FILEPATH makes the entrypoint replace the baked-in
-    #   # crontab (which scans two datasets every 3 hours) with a single job.
-    #   SELECTOR: "class=d1,dataset=climate-dt,generation=1"
-    #   FILEPATH: /data/climate-dt.json
-    #   # Scan only the last 2 days — fast enough to verify the binary works.
-    #   LAST_N_DAYS: "2"
-    #   # Run once per minute so you don't have to wait for the first trigger.
-    #   SCHEDULE: "* * * * *"
-    #   # Push the full-scan well into the future so it doesn't run during testing.
-    #   FULL_SCHEDULE: "0 3 1 1 *"
       # Build context = qubed_fdb_gen/ (the workspace root)
-  # because all COPY paths in the Dockerfile are relative to it.
+      # because all COPY paths in the Dockerfile are relative to it.
       context: .
       dockerfile: qubed/qubed_meteo/Dockerfile
-    # restart: unless-stopped  # disabled during testing so container exits cleanly
-    # --- Runtime volumes ---
-    # /config  — fdb_config.yaml (required) + api.secret or API_KEY env var
-    # /data    — where the scanner writes the output JSON (visible on host at ./data/)
-    # /logs    — cron log output (tail these to watch progress)
+    depends_on:
+      omnicat:
+        condition: service_healthy
     volumes:
       - ./config:/config:ro
-      - ./data:/data
+      # Shared volume: JSON output lands here and is visible to omnicat.
+      - qube_data:/data
       - ./logs:/logs
     environment:
       FDB5_CONFIG_FILE: /config/fdb_config.yaml
-      # Dummy token — POST to the qubed API will warn but not abort.
-      # Replace with a real token when you want data to appear in the API.
-      API_KEY: "dummy-token-for-testing"
-      # --- Small test scan ---
-      # Setting SELECTOR + FILEPATH makes the entrypoint replace the baked-in
-      # crontab (which scans two datasets every 3 hours) with a single job.
+      API_KEY: "${API_KEY:-dummy-token-for-testing}"
+      # POST to the local omnicat container instead of the public LUMI endpoint.
+      API: "http://omnicat:8001/api/v2"
       SELECTOR: "class=d1,dataset=extremes-dt,stream=oper,levtype=sfc"
       FILEPATH: /data/extremes-dt.json
-      # Scan only the last 2 days — fast enough to verify the binary works.
       LAST_N_DAYS: "2"
-      # Run once per minute so you don't have to wait for the first trigger.
       SCHEDULE: "* * * * *"
-      # Push the full-scan well into the future so it doesn't run during testing.
       FULL_SCHEDULE: "0 3 1 1 *"
+    networks:
+      - qubed_net
+
+# ── Shared infrastructure ──────────────────────────────────────────────────
+
+volumes:
+  # Named volume shared between fdb_scanner (writer) and omnicat (reader).
+  qube_data:
+
+networks:
+  qubed_net:
