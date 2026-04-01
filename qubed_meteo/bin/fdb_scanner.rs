@@ -300,7 +300,7 @@ fn make_coords_from_slash_list(val: &str) -> Option<qubed::Coordinates> {
 
 fn post_qube(client: &Client, api: &str, qube: &Qube, secret: &str) -> Result<(), String> {
     let url = format!("{}/union/", api);
-    let body = qube.to_json();
+    let body = qube.to_arena_json();
 
     let resp = client
         .post(&url)
@@ -325,7 +325,7 @@ fn load_qube(path: &Path) -> Qube {
             let mut buf = String::new();
             if f.read_to_string(&mut buf).is_ok() {
                 if let Ok(v) = serde_json::from_str::<Value>(&buf) {
-                    if let Ok(q) = Qube::from_json(v) {
+                    if let Ok(q) = Qube::from_arena_json(v) {
                         return q;
                     }
                 }
@@ -340,7 +340,7 @@ fn load_qube(path: &Path) -> Qube {
 fn save_qube(path: &Path, qube: &Qube) -> Result<(), String> {
     let f = File::create(path).map_err(|e| format!("Cannot create {:?}: {}", path, e))?;
     let w = BufWriter::new(f);
-    serde_json::to_writer(w, &qube.to_json()).map_err(|e| format!("JSON write error: {}", e))
+    serde_json::to_writer(w, &qube.to_arena_json()).map_err(|e| format!("JSON write error: {}", e))
 }
 
 fn save_tmp(path: &Path, qube: &Qube) -> Result<(), String> {
@@ -561,10 +561,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 fn merge_qubes(mut a: Qube, b: Qube) -> Result<Qube, String> {
     // Walk every leaf path in `b` and insert it into `a`.
-    let b_json = b.to_json();
+    let b_json = b.to_arena_json();
 
     // Re-parse b into a temporary Qube, then copy its nodes into a.
-    let b_reparsed = Qube::from_json(b_json)?;
+    let b_reparsed = Qube::from_arena_json(b_json)?;
     let b_root = b_reparsed.root();
     let a_root = a.root();
     insert_all_leaves(&b_reparsed, b_root, &mut a, a_root)?;
