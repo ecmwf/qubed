@@ -20,38 +20,14 @@ FDB5_CONFIG_FILE=/config/fdb_config.yaml
 # Partial scan — every 3 hours, scan the last 14 days.
 # Keeps the qubed API up to date with recently ingested data.
 # ---------------------------------------------------------------------------
-37 */3 * * * root /usr/local/bin/fdb_scanner \
-    --quiet \
-    --last-n-days 14 \
-    --selector "class=d1,dataset=climate-dt,generation=1" \
-    --filepath /data/climate-dt.json \
-    --api-secret /config/api.secret \
-    >> /logs/climate-dt-partial.log 2>&1
+37 */3 * * * root /usr/local/bin/fdb_scanner --quiet --last-n-days 14 --selector "class=d1,dataset=climate-dt,generation=1" --filepath /data/climate-dt.json --fdb-config /config/fdb_config.yaml --api-secret /config/api.secret >> /logs/climate-dt-partial.log 2>&1
 
-37 */3 * * * root /usr/local/bin/fdb_scanner \
-    --quiet \
-    --last-n-days 14 \
-    --selector "class=d1,dataset=extremes-dt,generation=1" \
-    --filepath /data/extremes-dt.json \
-    --api-secret /config/api.secret \
-    >> /logs/extremes-dt-partial.log 2>&1
+37 */3 * * * root /usr/local/bin/fdb_scanner --quiet --last-n-days 14 --selector "class=d1,dataset=extremes-dt,generation=1" --filepath /data/extremes-dt.json --fdb-config /config/fdb_config.yaml --api-secret /config/api.secret >> /logs/extremes-dt-partial.log 2>&1
 
 # ---------------------------------------------------------------------------
 # Full scan — once a day at 02:00 UTC, rebuild the complete qube.
 # Catches any backfilled or corrected data that partial scans would miss.
 # ---------------------------------------------------------------------------
-0 2 * * * root /usr/local/bin/fdb_scanner \
-    --quiet \
-    --full \
-    --selector "class=d1,dataset=climate-dt,generation=1" \
-    --filepath /data/climate-dt.json \
-    --api-secret /config/api.secret \
-    >> /logs/climate-dt-full.log 2>&1
+0 2 * * * root /usr/local/bin/fdb_scanner --quiet --full --selector "class=d1,dataset=climate-dt,generation=1" --filepath /data/climate-dt.json --fdb-config /config/fdb_config.yaml --api-secret /config/api.secret >> /logs/climate-dt-full.log 2>&1
 
-0 2 * * * root /usr/local/bin/fdb_scanner \
-    --quiet \
-    --full \
-    --selector "class=d1,dataset=extremes-dt,generation=1" \
-    --filepath /data/extremes-dt.json \
-    --api-secret /config/api.secret \
-    >> /logs/extremes-dt-full.log 2>&1
+0 2 * * * root /usr/local/bin/fdb_scanner --quiet --full --selector "class=d1,dataset=extremes-dt,generation=1" --filepath /data/extremes-dt.json --fdb-config /config/fdb_config.yaml --api-secret /config/api.secret >> /logs/extremes-dt-full.log 2>&1

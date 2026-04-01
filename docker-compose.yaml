@@ -1,0 +1,63 @@
+services:
+  fdb_scanner:
+    container_name: fdb_scanner
+    build:
+    #   # Build context = qubed_fdb_gen/ (the workspace root)
+    #   # because all COPY paths in the Dockerfile are relative to it.
+    #   context: .
+    #   dockerfile: qubed/qubed_meteo/Dockerfile
+    # # restart: unless-stopped  # disabled during testing so container exits cleanly
+    # # --- Runtime volumes ---
+    # # /config  — fdb_config.yaml (required) + api.secret or API_KEY env var
+    # # /data    — where the scanner writes the output JSON (visible on host at ./data/)
+    # # /logs    — cron log output (tail these to watch progress)
+    # volumes:
+    #   - ./config:/config:ro
+    #   - ./data:/data
+    #   - ./logs:/logs
+    # environment:
+    #   FDB5_CONFIG_FILE: /config/fdb_config.yaml
+    #   # Dummy token — POST to the qubed API will warn but not abort.
+    #   # Replace with a real token when you want data to appear in the API.
+    #   API_KEY: "dummy-token-for-testing"
+
+    #   # --- Small test scan ---
+    #   # Setting SELECTOR + FILEPATH makes the entrypoint replace the baked-in
+    #   # crontab (which scans two datasets every 3 hours) with a single job.
+    #   SELECTOR: "class=d1,dataset=climate-dt,generation=1"
+    #   FILEPATH: /data/climate-dt.json
+    #   # Scan only the last 2 days — fast enough to verify the binary works.
+    #   LAST_N_DAYS: "2"
+    #   # Run once per minute so you don't have to wait for the first trigger.
+    #   SCHEDULE: "* * * * *"
+    #   # Push the full-scan well into the future so it doesn't run during testing.
+    #   FULL_SCHEDULE: "0 3 1 1 *"
+      # Build context = qubed_fdb_gen/ (the workspace root)
+  # because all COPY paths in the Dockerfile are relative to it.
+      context: .
+      dockerfile: qubed/qubed_meteo/Dockerfile
+    # restart: unless-stopped  # disabled during testing so container exits cleanly
+    # --- Runtime volumes ---
+    # /config  — fdb_config.yaml (required) + api.secret or API_KEY env var
+    # /data    — where the scanner writes the output JSON (visible on host at ./data/)
+    # /logs    — cron log output (tail these to watch progress)
+    volumes:
+      - ./config:/config:ro
+      - ./data:/data
+      - ./logs:/logs
+    environment:
+      FDB5_CONFIG_FILE: /config/fdb_config.yaml
+      # Dummy token — POST to the qubed API will warn but not abort.
+      # Replace with a real token when you want data to appear in the API.
+      API_KEY: "dummy-token-for-testing"
+      # --- Small test scan ---
+      # Setting SELECTOR + FILEPATH makes the entrypoint replace the baked-in
+      # crontab (which scans two datasets every 3 hours) with a single job.
+      SELECTOR: "class=d1,dataset=extremes-dt,stream=oper,levtype=sfc"
+      FILEPATH: /data/extremes-dt.json
+      # Scan only the last 2 days — fast enough to verify the binary works.
+      LAST_N_DAYS: "2"
+      # Run once per minute so you don't have to wait for the first trigger.
+      SCHEDULE: "* * * * *"
+      # Push the full-scan well into the future so it doesn't run during testing.
+      FULL_SCHEDULE: "0 3 1 1 *"

@@ -1,108 +1,158 @@
 # =============================================================================
-# Stage 1 – build the fdb_scanner binary
+# Stage 1 – build the gribjump bundle (eckit / eccodes / metkit / fdb5 / gribjump)
 # =============================================================================
-# We need the FDB5 / eckit / metkit / eccodes shared libraries available at
-# both compile time (for rsfdb's dlopen path detection) and run time.
-# The gribjump_bundle build tree already ships them; we copy the relevant
-# subset into the final image so the runtime stage stays lean.
-#
-# If you build this image inside the repository tree you can supply the
-# pre-built .so files as build context.  If you prefer a fully self-contained
-# build, swap the COPY below for a cmake/make build of fdb5 (see the sibling
-# Dockerfile at gribjump_bundle/fdb5/containerfiles/…).
+# Building from source inside Docker means the .so files link against exactly
+# the same system libraries that will be present in the runtime image —
+# no missing libopenjp2, libldap, etc.
 # =============================================================================
 
-FROM ubuntu:24.04 AS builder
+FROM ubuntu:24.04 AS bundle_builder
+
+ARG NINJA_VERSION=1.12.1
+ARG CMAKE_VERSION=3.31.6
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Build deps: C/C++ toolchain + libraries that eckit/eccodes/fdb5 need at
+# compile time. These are the same deps as the sibling build-env Dockerfile.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+        curl \
+        wget \
+        ca-certificates \
+        pkg-config \
+        gfortran \
+        bison \
+        flex \
+        ninja-build \
+        cmake \
+        libeigen3-dev \
+        libncurses-dev \
+        libqhull-dev \
+        libcurl4-openssl-dev \
+        libssl-dev \
+        libopenjp2-7-dev \
+        libaec-dev \
+        python3 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /bundle
+
+# Copy the full gribjump bundle source (CMakeLists.txt + all sub-projects)
+COPY gribjump_bundle/ /bundle/
+
+# Run the same build_script.sh logic, installing into /usr/local so the
+# runtime stage can simply copy /usr/local/lib and /usr/local/share.
+RUN rm -rf /bundle/build \
+    && mkdir -p /bundle/build \
+    && cd /bundle/build \
+    && cmake .. -G Ninja \
+        -DENABLE_ECKIT_GEO=OFF \
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        -DENABLE_FORTRAN=OFF \
+        -DENABLE_MEMFS=ON \
+        -DENABLE_ECCODES_THREADS=ON \
+        -DENABLE_AEC=ON \
+        -DENABLE_PYTHON_API_TESTS=OFF \
+        -DENABLE_FDB_BUILD_TOOLS=ON \
+        -DENABLE_TESTING=OFF \
+    && ninja \
+    && ninja install
+
+# =============================================================================
+# Stage 2 – build the fdb_scanner Rust binary
+# =============================================================================
+
+FROM ubuntu:24.04 AS rust_builder
 
 ARG RUST_VERSION=stable
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# --- System packages needed to compile Rust crates that link against OpenSSL
+# Rust needs OpenSSL dev headers (for reqwest) plus the FDB5 runtime libs
+# to satisfy the dynamic linker during cargo build.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         curl \
         ca-certificates \
         pkg-config \
         libssl-dev \
+        libopenjp2-7 \
+        libaec0 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# --- Install Rust toolchain
+# Pull the installed ECMWF libs from the bundle stage.
+COPY --from=bundle_builder /usr/local/lib/     /usr/local/lib/
+COPY --from=bundle_builder /usr/local/include/ /usr/local/include/
+
+RUN ldconfig
+
+# Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile minimal
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /build
 
-# --- Copy the pre-built FDB5 shared libraries from the host build tree.
-#     Adjust the source path if your build root differs.
-#     We copy them flat into /usr/local/lib/fdb/ so the runtime ldconfig
-#     step below will find them directly.
-COPY gribjump_bundle/build/lib/ /usr/local/lib/fdb/
+COPY rsfindlibs/ /build/rsfindlibs/
+COPY rsfdb/      /build/rsfdb/
+COPY qubed/      /build/qubed/
 
-# Make the dynamic linker aware of them during the Rust build.
-# rsfindlibs searches <root>/lib/libfdb5.so for each LD_LIBRARY_PATH entry,
-# so we expose both /usr/local (which has lib/fdb/libfdb5.so via the copy
-# above) and /usr/local/lib/fdb directly for the ldconfig fallback path.
-ENV LD_LIBRARY_PATH="/usr/local/lib/fdb:/usr/local:${LD_LIBRARY_PATH}"
-RUN echo "/usr/local/lib/fdb" > /etc/ld.so.conf.d/fdb.conf && ldconfig
+ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
-# --- Copy only what is needed to compile the workspace
-#     (avoids invalidating the layer on unrelated changes)
-COPY rsfindlibs/  /build/rsfindlibs/
-COPY rsfdb/       /build/rsfdb/
-COPY qubed/       /build/qubed/
-
-# --- Build the release binary
 RUN cargo build \
         --release \
         --bin fdb_scanner \
         --manifest-path /build/qubed/Cargo.toml
 
 # =============================================================================
-# Stage 2 – minimal runtime image
+# Stage 3 – minimal runtime image
 # =============================================================================
 
 FROM ubuntu:24.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Runtime system libraries that the ECMWF .so files link against.
+# Because we built from source against Ubuntu 24.04 system libs, every
+# dependency is available via apt — no manual .so copying or LD_LIBRARY_PATH
+# guesswork needed.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        # cron daemon
         cron \
-        # CA certificates for HTTPS calls to the qubed API
         ca-certificates \
-        # Useful for debugging inside the container
         curl \
+        libopenjp2-7 \
+        libaec0 \
+        libcurl4t64 \
+        libssl3t64 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# --- FDB5 runtime libraries (just the .so files, no build tools)
-COPY --from=builder /usr/local/lib/fdb/ /usr/local/lib/fdb/
-RUN echo "/usr/local/lib/fdb" > /etc/ld.so.conf.d/fdb.conf && ldconfig
+# ECMWF shared libraries (built against this image's system libs)
+COPY --from=bundle_builder /usr/local/lib/     /usr/local/lib/
+# MEMFS is enabled so eccodes definitions are embedded in the library binary;
+# no /usr/local/share/eccodes directory is needed at runtime.
 
-# --- The scanner binary
-COPY --from=builder /build/qubed/target/release/fdb_scanner /usr/local/bin/fdb_scanner
+RUN ldconfig
 
-# --- Cron script and crontab
-COPY qubed_meteo/docker/cron-entrypoint.sh  /usr/local/bin/cron-entrypoint.sh
-COPY qubed_meteo/docker/fdb_scanner.crontab /etc/cron.d/fdb_scanner
+# The scanner binary
+COPY --from=rust_builder /build/qubed/target/release/fdb_scanner /usr/local/bin/fdb_scanner
+
+# Cron script and crontab
+COPY qubed/qubed_meteo/docker/cron-entrypoint.sh  /usr/local/bin/cron-entrypoint.sh
+COPY qubed/qubed_meteo/docker/fdb_scanner.crontab /etc/cron.d/fdb_scanner
 
 RUN chmod +x /usr/local/bin/cron-entrypoint.sh /usr/local/bin/fdb_scanner \
     && chmod 0644 /etc/cron.d/fdb_scanner \
-    # cron requires a newline at the end of the file
     && crontab /etc/cron.d/fdb_scanner
 
-# --- Runtime directories
-#     /config  — mount a volume here with fdb_config.yaml and api.secret
-#     /data    — mount a volume here for persisted JSON output
-#     /logs    — cron job log output
+# Runtime directories
 RUN mkdir -p /config /data /logs
 
-# The scanner reads these from the environment or from /config files.
-# Override at `docker run` time with -e or --env-file.
 ENV FDB5_CONFIG_FILE=/config/fdb_config.yaml
-ENV LD_LIBRARY_PATH="/usr/local/lib/fdb:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
 VOLUME ["/config", "/data", "/logs"]
 
 ENTRYPOINT ["/usr/local/bin/cron-entrypoint.sh"]
+

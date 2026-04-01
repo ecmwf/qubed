@@ -69,24 +69,10 @@ FDB5_CONFIG_FILE=${FDB5_CONFIG_FILE:-/config/fdb_config.yaml}
 ${API_KEY:+API_KEY=${API_KEY}}
 
 # Partial scan
-${SCHEDULE} root /usr/local/bin/fdb_scanner \\
-    --quiet \\
-    --last-n-days ${LAST_N_DAYS} \\
-    --selector "${SELECTOR}" \\
-    --filepath "${FILEPATH}" \\
-    --api-secret /config/api.secret \\
-    ${API_ARG:-} \\
-    >> /logs/scanner-partial.log 2>&1
+${SCHEDULE} root /usr/local/bin/fdb_scanner --quiet --last-n-days ${LAST_N_DAYS} --selector "${SELECTOR}" --filepath "${FILEPATH}" --fdb-config ${FDB5_CONFIG_FILE:-/config/fdb_config.yaml} --api-secret /config/api.secret ${API_ARG:-} >> /logs/scanner-partial.log 2>&1
 
 # Full scan
-${FULL_SCHEDULE} root /usr/local/bin/fdb_scanner \\
-    --quiet \\
-    --full \\
-    --selector "${SELECTOR}" \\
-    --filepath "${FILEPATH}" \\
-    --api-secret /config/api.secret \\
-    ${API_ARG:-} \\
-    >> /logs/scanner-full.log 2>&1
+${FULL_SCHEDULE} root /usr/local/bin/fdb_scanner --quiet --full --selector "${SELECTOR}" --filepath "${FILEPATH}" --fdb-config ${FDB5_CONFIG_FILE:-/config/fdb_config.yaml} --api-secret /config/api.secret ${API_ARG:-} >> /logs/scanner-full.log 2>&1
 CRONTAB
     chmod 0644 /etc/cron.d/fdb_scanner
     crontab /etc/cron.d/fdb_scanner
