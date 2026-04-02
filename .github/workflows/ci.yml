@@ -47,6 +47,10 @@ jobs:
 
       - name: Check Rust formatting
         run: cargo fmt -- --check
+      
+      - name: Configure git authentication
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: Run Rust tests
         run: cargo test --workspace
