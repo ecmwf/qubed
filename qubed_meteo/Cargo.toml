@@ -24,9 +24,3 @@ path = "bin/fdb_db_reader.rs"
 name = "fdb_scanner"
 path = "bin/fdb_scanner.rs"
 
-[patch.'https://github.com/ecmwf/rsfdb']
-rsfdb = { path = "../rsfdb" }
-
-[patch.'https://github.com/ecmwf-projects/rsfindlibs']
-rsfindlibs = { path = "../rsfindlibs" }
-
