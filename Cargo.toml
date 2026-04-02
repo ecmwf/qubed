@@ -8,8 +8,3 @@ members = [
     "py_qubed_meteo",
 ]
 
-[patch.'https://github.com/ecmwf/rsfdb']
-rsfdb = { path = "../rsfdb" }
-
-[patch.'https://github.com/ecmwf-projects/rsfindlibs']
-rsfindlibs = { path = "../rsfindlibs" }

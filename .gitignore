@@ -38,3 +38,5 @@ fdb
 # Added by cargo
 
 /target
+
+.cargo

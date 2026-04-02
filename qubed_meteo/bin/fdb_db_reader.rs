@@ -3,8 +3,8 @@ use qubed_meteo::adapters::fdb::FromFDBList;
 use rsfdb::{FDB, request::Request};
 use serde_json::json;
 use std::env;
-use std::time::Instant;
 use std::fs::File;
+use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Ensure FDB config is set so the internal listing can open the DB
@@ -18,7 +18,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lib_path = PathBuf::from("xxx"); // Adjust this path to point to the directory containing FDB shared libraries
 
     unsafe {
-        std::env::set_var("DYLD_LIBRARY_PATH", lib_path.to_str().expect("Invalid path to shared libraries"));
+        std::env::set_var(
+            "DYLD_LIBRARY_PATH",
+            lib_path.to_str().expect("Invalid path to shared libraries"),
+        );
     }
 
     let request_map = json!({
@@ -46,5 +49,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     serde_json::to_writer(file, &qube.to_arena_json())?;
 
     Ok(())
-
 }
