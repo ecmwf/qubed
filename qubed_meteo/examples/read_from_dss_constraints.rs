@@ -1,9 +1,12 @@
 use qubed::Qube;
 use qubed_meteo::adapters::dss_constraints::FromDssConstraints;
+use std::fs::File;
 use std::time::Instant;
 
 fn main() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/data/medium2_era5_constraints.json");
+    // let path = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/data/medium2_era5_constraints.json");
+    let path =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/examples/data/constraints_cads_s2s_reforecasts.json");
 
     let dss_json = std::fs::read_to_string(path).expect("Failed to read DSS constraints JSON file");
 
@@ -12,7 +15,7 @@ fn main() {
 
     let start_time = Instant::now();
 
-    let qube = Qube::from_dss_constraints(&dss_json);
+    let qube = Qube::from_dss_constraints(&dss_json).expect("Failed to build Qube from FDB list");
 
     // Stop the timer
     let duration = start_time.elapsed();
@@ -20,7 +23,11 @@ fn main() {
     // Print the time taken
     println!("Time taken to construct Qube: {:?}", duration);
 
-    println!("Constructed Qube: {:?}", qube.unwrap().to_ascii());
+    println!("Constructed Qube: {:?}", qube.to_ascii());
+
+    let file =
+        File::create("s2s_reforecasts_constraints_eg.json").expect("Failed to create JSON file");
+    serde_json::to_writer(file, &qube.to_arena_json()).expect("Failed to write Qube to JSON file");
 }
 
 // #[cfg(test)]
