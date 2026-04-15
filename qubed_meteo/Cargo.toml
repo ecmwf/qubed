@@ -13,6 +13,18 @@ rsfdb = { git = "https://github.com/ecmwf/rsfdb" }
 path = "src/lib.rs"
 crate-type = ["rlib"]
 
+[[bin]]
+name = "fdb_db_reader"
+path = "bin/fdb_db_reader.rs"
+
+[[bin]]
+name = "fdb_scanner"
+path = "bin/fdb_scanner.rs"
+
+[[bin]]
+name = "fdb_scanner_manual"
+path = "bin/fdb_scanner_manual.rs"
+
 [patch.'https://github.com/ecmwf/rsfdb']
 rsfdb = { path = "../rsfdb" }
 
