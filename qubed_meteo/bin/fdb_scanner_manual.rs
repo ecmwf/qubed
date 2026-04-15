@@ -1,8 +1,9 @@
 //! fdb_scanner_manual — Manual FDB scanning with selector and date range support
 //!
-//! Scans an FDB archive using the native `rsfdb` Rust bindings and builds a [`Qube`]
-//! that is then merged with the current Qube fetched from the qubed REST API and
-//! posted back, ensuring the API always holds the union of old + new data.
+//! Scans an FDB archive using the native `fdb` Rust bindings (statically linked
+//! against the C++ FDB5 library) and builds a [`Qube`] that is then merged with
+//! the current Qube fetched from the qubed REST API and posted back, ensuring
+//! the API always holds the union of old + new data.
 //!
 //! Key ordering mirrors `fdb_scanner.rs` / `scan.py`.
 //!
@@ -14,7 +15,6 @@
 //!     --from-date 20260326 \
 //!     --to-date 20260410 \
 //!     --fdb-config /path/to/fdb_config.yaml \
-//!     --fdb-lib-path /path/to/gribjump_bundle/build \
 //!     --api http://omnicat.lumi.apps.dte.destination-earth.eu/api/v2 \
 //!     --api-secret /path/to/api.secret
 //! ```
@@ -23,19 +23,27 @@
 //! ```
 //! fdb_scanner_manual \
 //!     --selector "class=d1,dataset=climate-dt" \
-//!     --fdb-config /path/to/fdb_config.yaml \
-//!     --fdb-lib-path /path/to/gribjump_bundle/build
+//!     --fdb-config /path/to/fdb_config.yaml
+//! ```
+//!
+//! Compact output (mirrors fdb-list --compact):
+//! ```
+//! fdb_scanner_manual \
+//!     --selector "class=d1,dataset=climate-dt" \
+//!     --compact \
+//!     --fdb-config /path/to/fdb_config.yaml
 //! ```
 
 use chrono::{Duration, NaiveDate};
 use clap::Parser;
+use fdb::{Fdb, ListOptions, Request};
 use qubed::Qube;
 use reqwest::blocking::Client;
-use rsfdb::{FDB, request::Request};
 use serde_json::Value;
 use std::{
     env,
     fs::{self, File},
+    io,
     path::{Path, PathBuf},
     time::Instant,
 };
@@ -101,10 +109,6 @@ struct Args {
     #[arg(long, default_value = "../../config/fdb_config.yaml")]
     fdb_config: PathBuf,
 
-    /// Path to the FDB shared libraries (also settable via DYLD_LIBRARY_PATH / LD_LIBRARY_PATH).
-    #[arg(long, default_value = "../../gribjump_bundle/build")]
-    fdb_lib_path: PathBuf,
-
     /// qubed API base URL.  The Qube is always fetched from here, merged, and posted back.
     #[arg(long, default_value = "http://omnicat.lumi.apps.dte.destination-earth.eu/api/v2")]
     api: String,
@@ -121,18 +125,20 @@ struct Args {
     /// Suppress per-item progress output.
     #[arg(long)]
     quiet: bool,
+
+    /// Print a compact MARS-request aggregation (mirrors `fdb-list --compact`) and exit.
+    /// No Qube is built or posted when this flag is set.
+    #[arg(long)]
+    compact: bool,
 }
 
 // ---------------------------------------------------------------------------
 // Environment setup
 // ---------------------------------------------------------------------------
 
-fn setup_fdb_environment(config_path: &Path, lib_path: &Path, quiet: bool) -> Result<(), String> {
+fn setup_fdb_environment(config_path: &Path, quiet: bool) -> Result<(), String> {
     if !config_path.exists() {
         return Err(format!("FDB config does not exist: {:?}", config_path));
-    }
-    if !lib_path.exists() {
-        return Err(format!("FDB lib path does not exist: {:?}", lib_path));
     }
 
     let config_str =
@@ -140,29 +146,6 @@ fn setup_fdb_environment(config_path: &Path, lib_path: &Path, quiet: bool) -> Re
     unsafe { env::set_var("FDB5_CONFIG_FILE", config_str) };
     if !quiet {
         println!("Set FDB5_CONFIG_FILE={}", config_str);
-    }
-
-    let lib_str = lib_path.to_str().ok_or_else(|| "Invalid lib path (non-UTF-8)".to_string())?;
-
-    #[cfg(target_os = "macos")]
-    {
-        unsafe { env::set_var("DYLD_LIBRARY_PATH", lib_str) };
-        if !quiet {
-            println!("Set DYLD_LIBRARY_PATH={}", lib_str);
-        }
-    }
-    #[cfg(target_os = "linux")]
-    {
-        unsafe { env::set_var("LD_LIBRARY_PATH", lib_str) };
-        if !quiet {
-            println!("Set LD_LIBRARY_PATH={}", lib_str);
-        }
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    {
-        if !quiet {
-            println!("Warning: unsupported OS for library path setup");
-        }
     }
     Ok(())
 }
@@ -180,8 +163,26 @@ fn from_ecmwf_date(s: &str) -> Option<NaiveDate> {
 }
 
 // ---------------------------------------------------------------------------
-// Selector string → JSON object
+// Selector string → fdb::Request
+//
+// The selector is a comma-separated list of key=value pairs.
+// Returns both the parsed `Request` (for FDB) and a `Value` map (for
+// filename generation and diagnostics).
 // ---------------------------------------------------------------------------
+
+fn selector_to_request(selector: &str, extra_date: Option<&str>) -> Result<Request, String> {
+    let mut req = Request::new();
+    for pair in selector.split(',') {
+        let pair = pair.trim();
+        let (k, v) =
+            pair.split_once('=').ok_or_else(|| format!("Invalid selector pair: '{}'", pair))?;
+        req = req.with(k.trim(), v.trim());
+    }
+    if let Some(date) = extra_date {
+        req = req.with("date", date);
+    }
+    Ok(req)
+}
 
 fn selector_to_json(selector: &str) -> Result<Value, String> {
     let mut map = serde_json::Map::new();
@@ -226,65 +227,65 @@ fn make_coords_from_slash_list(val: &str) -> Option<qubed::Coordinates> {
 // Shared by both scan_span and scan_fdb_no_date.
 // ---------------------------------------------------------------------------
 
-fn build_qube_from_iter(
-    list_iter: impl Iterator<Item = rsfdb::listiterator::ListItem>,
-    quiet: bool,
-) -> Result<Qube, String> {
+fn build_qube_from_iter(list_iter: fdb::ListIterator, quiet: bool) -> Result<Qube, String> {
     let mut qube = Qube::new();
     let root = qube.root();
     let mut item_count = 0usize;
     let mut leaf_count = 0usize;
 
-    for item in list_iter {
+    for result in list_iter {
+        let item = result.map_err(|e| format!("FDB list iterator error: {:?}", e))?;
         item_count += 1;
-        if let Some(metadata) = item.request {
-            let mut kv_map: std::collections::HashMap<String, String> =
-                std::collections::HashMap::new();
-            for kv in metadata.iter() {
-                kv_map.insert(kv.key.clone(), kv.value.clone());
-            }
 
-            // Drop year/month when date is present (mirrors fdb_scanner.rs).
-            if kv_map.contains_key("date") {
-                for drop_key in KEYS_TO_DROP {
-                    kv_map.remove(*drop_key);
-                }
-            }
-            if kv_map.is_empty() {
-                continue;
-            }
-
-            // Emit in canonical KEY_ORDER; any unknown keys appended last.
-            let mut ordered_keys: Vec<String> = KEY_ORDER
-                .iter()
-                .filter(|k| kv_map.contains_key(**k))
-                .map(|k| k.to_string())
-                .collect();
-            for k in kv_map.keys() {
-                if !KEY_ORDER.contains(&k.as_str()) {
-                    ordered_keys.push(k.clone());
-                }
-            }
-
-            let mut parent = root;
-            for key in &ordered_keys {
-                if let Some(val) = kv_map.get(key) {
-                    let coords = make_coords_from_slash_list(val);
-                    // Skip keys with empty values — inserting Coordinates::Empty
-                    // causes compress() to prune those nodes and orphan their
-                    // subtrees, resulting in data loss after Qube::append.
-                    let coords = match coords {
-                        Some(c) => c,
-                        None => continue, // e.g. timespan="" → skip
-                    };
-                    let child = qube
-                        .get_or_create_child(key, parent, Some(coords))
-                        .map_err(|e| format!("get_or_create_child failed: {:?}", e))?;
-                    parent = child;
-                }
-            }
-            leaf_count += 1;
+        // Merge all three key levels (db_key + index_key + datum_key) into one map.
+        let full_key = item.full_key();
+        if full_key.is_empty() {
+            continue;
         }
+
+        let mut kv_map: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        for (k, v) in &full_key {
+            kv_map.insert(k.clone(), v.clone());
+        }
+
+        // Drop year/month when date is present (mirrors fdb_scanner.rs).
+        if kv_map.contains_key("date") {
+            for drop_key in KEYS_TO_DROP {
+                kv_map.remove(*drop_key);
+            }
+        }
+        if kv_map.is_empty() {
+            continue;
+        }
+
+        // Emit in canonical KEY_ORDER; any unknown keys appended last.
+        let mut ordered_keys: Vec<String> =
+            KEY_ORDER.iter().filter(|k| kv_map.contains_key(**k)).map(|k| k.to_string()).collect();
+        for k in kv_map.keys() {
+            if !KEY_ORDER.contains(&k.as_str()) {
+                ordered_keys.push(k.clone());
+            }
+        }
+
+        let mut parent = root;
+        for key in &ordered_keys {
+            if let Some(val) = kv_map.get(key) {
+                let coords = make_coords_from_slash_list(val);
+                // Skip keys with empty values — inserting Coordinates::Empty
+                // causes compress() to prune those nodes and orphan their
+                // subtrees, resulting in data loss after Qube::append.
+                let coords = match coords {
+                    Some(c) => c,
+                    None => continue, // e.g. timespan="" → skip
+                };
+                let child = qube
+                    .get_or_create_child(key, parent, Some(coords))
+                    .map_err(|e| format!("get_or_create_child failed: {:?}", e))?;
+                parent = child;
+            }
+        }
+        leaf_count += 1;
     }
 
     if !quiet {
@@ -294,18 +295,46 @@ fn build_qube_from_iter(
 }
 
 // ---------------------------------------------------------------------------
+// Compact dump — mirrors `fdb-list --compact`.
+//
+// Opens FDB for the given request, calls `dump_compact`, writes the
+// aggregated MARS-request text to stdout, and returns the summary counters.
+// This consumes the iterator rather than building a Qube.
+// ---------------------------------------------------------------------------
+
+fn dump_compact_for_request(
+    fdb: &Fdb,
+    request: &Request,
+    quiet: bool,
+) -> Result<fdb::CompactSummary, String> {
+    let list_iter = fdb
+        .list(request, ListOptions { depth: 3, deduplicate: true })
+        .map_err(|e| format!("FDB list failed: {:?}", e))?;
+
+    let stdout = io::stdout();
+    let mut out = stdout.lock();
+    let summary =
+        list_iter.dump_compact(&mut out).map_err(|e| format!("dump_compact failed: {:?}", e))?;
+
+    if !quiet {
+        println!();
+        println!("Entries : {}", summary.fields);
+        println!("Total   : {} bytes", summary.total_bytes);
+    }
+    Ok(summary)
+}
+
+// ---------------------------------------------------------------------------
 // Scan a single exact date — one FDB list call, one date value only.
 //
-// The rsfdb bindings do not reliably interpret "YYYYMMDD/to/YYYYMMDD" as a
-// date range; they treat the slash-list as a literal multi-value request and
-// only resolve the first token.  Scanning one date at a time avoids this
-// entirely and gives deterministic, verifiable results.
+// Scanning one date at a time gives deterministic, verifiable results and
+// avoids any ambiguity in how the C++ side interprets slash-lists.
 // ---------------------------------------------------------------------------
 
 fn scan_single_date(
-    selector_map: &Value,
+    fdb: &Fdb,
+    selector: &str,
     date: NaiveDate,
-    fdb_config_path: &Path,
     quiet: bool,
 ) -> Result<Qube, String> {
     let date_str = to_ecmwf_date(date);
@@ -314,17 +343,10 @@ fn scan_single_date(
         println!("  Scanning date {}", date_str);
     }
 
-    let mut req_map = selector_map.clone();
-    if let Some(obj) = req_map.as_object_mut() {
-        obj.insert("date".to_string(), Value::String(date_str.clone()));
-    }
-
-    let config_yaml = fs::read_to_string(fdb_config_path)
-        .map_err(|e| format!("Cannot read FDB config: {}", e))?;
-    let fdb = FDB::new(Some(&config_yaml)).map_err(|e| format!("Failed to open FDB: {:?}", e))?;
-    let request = Request::from_json(req_map).map_err(|e| format!("Bad request JSON: {:?}", e))?;
-    let list_iter =
-        fdb.list(&request, true, false).map_err(|e| format!("FDB list failed: {:?}", e))?;
+    let request = selector_to_request(selector, Some(&date_str))?;
+    let list_iter = fdb
+        .list(&request, ListOptions { depth: 3, deduplicate: true })
+        .map_err(|e| format!("FDB list failed: {:?}", e))?;
 
     let qube = build_qube_from_iter(list_iter, quiet)?;
     if !quiet {
@@ -337,21 +359,14 @@ fn scan_single_date(
 // Full scan — no date filter
 // ---------------------------------------------------------------------------
 
-fn scan_fdb_no_date(
-    selector_map: &Value,
-    fdb_config_path: &Path,
-    quiet: bool,
-) -> Result<Qube, String> {
+fn scan_fdb_no_date(fdb: &Fdb, selector: &str, quiet: bool) -> Result<Qube, String> {
     if !quiet {
-        println!("Scanning FDB (no date filter): {}", selector_map);
+        println!("Scanning FDB (no date filter): {}", selector);
     }
-    let config_yaml = fs::read_to_string(fdb_config_path)
-        .map_err(|e| format!("Cannot read FDB config: {}", e))?;
-    let fdb = FDB::new(Some(&config_yaml)).map_err(|e| format!("Failed to open FDB: {:?}", e))?;
-    let request = Request::from_json(selector_map.clone())
-        .map_err(|e| format!("Bad request JSON: {:?}", e))?;
-    let list_iter =
-        fdb.list(&request, true, false).map_err(|e| format!("FDB list failed: {:?}", e))?;
+    let request = selector_to_request(selector, None)?;
+    let list_iter = fdb
+        .list(&request, ListOptions { depth: 3, deduplicate: true })
+        .map_err(|e| format!("FDB list failed: {:?}", e))?;
 
     build_qube_from_iter(list_iter, quiet)
 }
@@ -532,15 +547,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  to_date:    {}", t);
         }
         println!("  api:        {}", args.api);
+        if args.compact {
+            println!("  mode:       compact (no Qube built)");
+        }
     }
 
     // ------------------------------------------------------------------
     // FDB environment
     // ------------------------------------------------------------------
-    setup_fdb_environment(&args.fdb_config, &args.fdb_lib_path, args.quiet)?;
+    setup_fdb_environment(&args.fdb_config, args.quiet)?;
 
     // ------------------------------------------------------------------
-    // Parse selector — strip keys not valid as FDB request keys
+    // Parse selector into a JSON map (for filename generation / diagnostics).
+    // Strip keys not valid as FDB request keys.
     // ------------------------------------------------------------------
     let selector_map = {
         let mut m = selector_to_json(&args.selector)?;
@@ -553,6 +572,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         m
     };
+
+    // Canonical selector string with dropped keys removed (for FDB request building)
+    let clean_selector: String = selector_map
+        .as_object()
+        .map(|obj| {
+            obj.iter()
+                .map(|(k, v)| format!("{}={}", k, v.as_str().unwrap_or("")))
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .unwrap_or_default();
+
+    // ------------------------------------------------------------------
+    // Open FDB — uses FDB5_CONFIG_FILE env var set above.
+    // Fdb::open_default() picks up the env var automatically.
+    // ------------------------------------------------------------------
+    let fdb = Fdb::open_default().map_err(|e| format!("Failed to open FDB: {:?}", e))?;
+
+    // ------------------------------------------------------------------
+    // --compact mode: dump the compact MARS-request aggregation and exit.
+    // No Qube is built; mirrors `fdb-list --compact`.
+    // ------------------------------------------------------------------
+    if args.compact {
+        let request = selector_to_request(&clean_selector, None)?;
+        dump_compact_for_request(&fdb, &request, args.quiet)?;
+        return Ok(());
+    }
 
     // ------------------------------------------------------------------
     // Determine scan window
@@ -601,10 +647,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ------------------------------------------------------------------
     // Scan FDB — one FDB list call per individual date.
     //
-    // Using "YYYYMMDD/to/YYYYMMDD" in a single request is unreliable:
-    // rsfdb treats the slash-list as literal multi-values and only resolves
-    // the first token, so multi-date ranges silently return only the first
-    // date.  Scanning each date individually avoids this completely.
+    // Using "YYYYMMDD/to/YYYYMMDD" in a single request is unreliable;
+    // scanning each date individually gives deterministic, verifiable results.
     // ------------------------------------------------------------------
     let scanned_qube = if let (Some(start), Some(end)) = (scan_start, scan_end) {
         let total_days = (end - start).num_days() + 1;
@@ -619,7 +663,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut accumulated = Qube::new();
         let mut current = start;
         while current <= end {
-            match scan_single_date(&selector_map, current, &args.fdb_config, args.quiet) {
+            match scan_single_date(&fdb, &clean_selector, current, args.quiet) {
                 Ok(day_qube) => {
                     accumulated = merge_qubes(accumulated, day_qube);
                 }
@@ -631,7 +675,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         accumulated
     } else {
-        scan_fdb_no_date(&selector_map, &args.fdb_config, args.quiet)?
+        scan_fdb_no_date(&fdb, &clean_selector, args.quiet)?
     };
 
     if !args.quiet {

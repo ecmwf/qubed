@@ -1,26 +1,37 @@
-use qubed::{Coordinates, NodeIdx, Qube};
-use rsfdb::{FDB, request::Request};
+use fdb::{Fdb, ListOptions, Request};
+use qubed::{Coordinates, Qube};
 use serde_json::Value as JsonValue;
 
 pub trait FromFDBList {
     /// Build a `Qube` from a JSON request map by performing an internal list.
     ///
-    /// The `request_map` should be a JSON object (the same structure accepted
-    /// by `rsfdb::request::Request::from_json`). The implementation will build
-    /// an `rsfdb::request::Request` internally, call `list` with
-    /// `splitkey=true` and iterate the results.
+    /// The `request_map` should be a JSON object whose keys/values are passed
+    /// as FDB request constraints.  The implementation opens an `Fdb` handle
+    /// (using environment defaults, e.g. `FDB5_CONFIG_FILE`), calls `list`
+    /// with `ListOptions::default()` (depth=3, deduplicate=true) and iterates
+    /// the results.
     fn from_fdb_list(request_map: &JsonValue) -> Result<Qube, String>;
 }
 
 impl FromFDBList for Qube {
     fn from_fdb_list(request_map: &JsonValue) -> Result<Qube, String> {
-        // Build Request from provided JSON map
-        let request = Request::from_json(request_map.clone())
-            .map_err(|e| format!("Failed to build Request from JSON: {:?}", e))?;
+        // Build a Request from the provided JSON map.
+        let obj = request_map
+            .as_object()
+            .ok_or_else(|| "request_map must be a JSON object".to_string())?;
+        let mut request = Request::new();
+        for (k, v) in obj {
+            let val = match v {
+                JsonValue::String(s) => s.clone(),
+                other => other.to_string(),
+            };
+            request = request.with(k, &val);
+        }
 
-        let fdb = FDB::new(None).map_err(|e| format!("Failed to open FDB: {:?}", e))?;
-        let list_iter =
-            fdb.list(&request, true, false).map_err(|e| format!("FDB list failed: {:?}", e))?;
+        let fdb = Fdb::open_default().map_err(|e| format!("Failed to open FDB: {:?}", e))?;
+        let list_iter = fdb
+            .list(&request, ListOptions::default())
+            .map_err(|e| format!("FDB list failed: {:?}", e))?;
 
         let mut qube = Qube::new();
         let root = qube.root();
@@ -52,42 +63,28 @@ impl FromFDBList for Qube {
         }
 
         for item in list_iter {
-            // Each item may contain a splitkey metadata (request-like key/value pairs)
-            // Build a comma-separated path string from the splitkey metadata similar
-            // to the previous external representation.
-            let mut parts_vec: Vec<String> = Vec::new();
+            let element = item.map_err(|e| format!("FDB list error: {:?}", e))?;
+            // full_key() merges db_key + index_key + datum_key into a flat Vec<(String,String)>
+            let full_key = element.full_key();
 
-            if let Some(metadata) = item.request {
-                for kv in metadata.iter() {
-                    parts_vec.push(format!("{}={}", kv.key, kv.value));
-                }
-            }
-
-            if parts_vec.is_empty() {
+            if full_key.is_empty() {
                 continue;
             }
 
             let mut parent = root;
-            for part in parts_vec.iter() {
-                if let Some((key, val)) = part.split_once('=') {
-                    let vals: Vec<&str> =
-                        val.split('/').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+            for (key, val) in &full_key {
+                let vals: Vec<&str> =
+                    val.split('/').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
 
-                    // If there are no value parts (e.g. "key=") skip creating an empty child
-                    if vals.is_empty() {
-                        continue;
-                    }
-                    let coords = make_coords(&vals);
-                    let child = qube
-                        .get_or_create_child(key.trim(), parent, coords)
-                        .map_err(|e| format!("create_child failed: {:?}", e))?;
-                    parent = child;
-                } else {
-                    let child = qube
-                        .get_or_create_child(part.trim(), parent, None)
-                        .map_err(|e| format!("get_or_create_child failed: {:?}", e))?;
-                    parent = child;
+                // If there are no value parts (e.g. "key=") skip creating an empty child
+                if vals.is_empty() {
+                    continue;
                 }
+                let coords = make_coords(&vals);
+                let child = qube
+                    .get_or_create_child(key.trim(), parent, coords)
+                    .map_err(|e| format!("create_child failed: {:?}", e))?;
+                parent = child;
             }
         }
 

@@ -1,6 +1,5 @@
 use qubed::Qube;
 use qubed_meteo::adapters::fdb::FromFDBList;
-use rsfdb::{FDB, request::Request};
 use serde_json::json;
 use std::env;
 use std::time::Instant;

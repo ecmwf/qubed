@@ -1,11 +1,11 @@
 //! fdb_scanner — Rust equivalent of scan.py
 //!
-//! Scans an FDB archive using the native `rsfdb` Rust bindings (no subprocesses)
+//! Scans an FDB archive using the native `fdb` Rust bindings (no subprocesses)
 //! and builds a [`Qube`] that is incrementally POST-ed to the qubed REST API and
 //! persisted to a local JSON file.
 //!
 //! ## Key differences from scan.py
-//! * Uses `rsfdb::FDB::list` directly instead of shelling out to `fdb list`.
+//! * Uses `fdb::Fdb::list` directly instead of shelling out to `fdb list`.
 //! * Uses the Rust `qubed` library (`Qube`) instead of the Python `qubed` package.
 //! * The `year` and `month` keys are filtered out (matching scan.py's hard-coded
 //!   behaviour for climate/extremes/on-demand DT data).
@@ -33,9 +33,9 @@
 
 use chrono::{Duration, NaiveDate, Utc};
 use clap::{ArgGroup, Parser};
+use fdb::{Fdb, ListOptions, Request};
 use qubed::Qube;
 use reqwest::blocking::Client;
-use rsfdb::{FDB, request::Request};
 use serde_json::Value;
 use std::{
     fs::{self, File},
@@ -135,31 +135,44 @@ fn from_ecmwf_date(s: &str) -> Option<NaiveDate> {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: build an fdb::Request from a serde_json::Value object.
+// ---------------------------------------------------------------------------
+
+fn json_to_fdb_request(map: &Value) -> Result<Request, String> {
+    let obj = map.as_object().ok_or_else(|| "request must be a JSON object".to_string())?;
+    let mut req = Request::new();
+    for (k, v) in obj {
+        let val = match v {
+            Value::String(s) => s.clone(),
+            other => other.to_string(),
+        };
+        req = req.with(k, &val);
+    }
+    Ok(req)
+}
+
+// ---------------------------------------------------------------------------
 // FDB axes helper — returns all unique dates in the dataset for a selector.
 //
 // This mirrors `fdb axes --json --config ... --minimum-keys=class <selector>`.
-// We use `rsfdb` to open the database and perform a `list` over the full
+// We use `fdb::Fdb` to open the database and perform a `list` over the full
 // selector with no date restriction, then collect all `date` values.
 // ---------------------------------------------------------------------------
 
 fn fetch_fdb_dates(selector_map: &Value, fdb_config_path: &Path) -> Result<Vec<NaiveDate>, String> {
-    // Read the YAML config from disk and pass it to FDB::new directly.
-    let config_yaml = fs::read_to_string(fdb_config_path)
-        .map_err(|e| format!("Cannot read FDB config {:?}: {}", fdb_config_path, e))?;
-
     eprintln!("[fdb_scanner] fetch_fdb_dates: FDB config path = {:?}", fdb_config_path);
     eprintln!("[fdb_scanner] fetch_fdb_dates: selector_map = {}", selector_map);
 
-    // let fdb = FDB::new(Some(&config_yaml)).map_err(|e| format!("Failed to open FDB: {:?}", e))?;
-    let fdb = FDB::new(None).map_err(|e| format!("Failed to open FDB: {:?}", e))?;
+    let fdb = Fdb::open(Some(fdb_config_path), None)
+        .map_err(|e| format!("Failed to open FDB: {:?}", e))?;
     eprintln!("[fdb_scanner] fetch_fdb_dates: FDB opened successfully");
 
-    let request = Request::from_json(selector_map.clone())
-        .map_err(|e| format!("Bad selector JSON: {:?}", e))?;
+    let request = json_to_fdb_request(selector_map)?;
     eprintln!("[fdb_scanner] fetch_fdb_dates: request built OK");
 
-    let list_iter =
-        fdb.list(&request, true, false).map_err(|e| format!("FDB list failed: {:?}", e))?;
+    let list_iter = fdb
+        .list(&request, ListOptions::default())
+        .map_err(|e| format!("FDB list failed: {:?}", e))?;
     eprintln!("[fdb_scanner] fetch_fdb_dates: list iterator created, starting iteration...");
 
     let mut dates: Vec<NaiveDate> = Vec::new();
@@ -167,15 +180,14 @@ fn fetch_fdb_dates(selector_map: &Value, fdb_config_path: &Path) -> Result<Vec<N
 
     for item in list_iter {
         item_count += 1;
+        let element = item.map_err(|e| format!("FDB list error: {:?}", e))?;
         if item_count == 1 {
-            eprintln!("[fdb_scanner] fetch_fdb_dates: first item = {:?}", item);
+            eprintln!("[fdb_scanner] fetch_fdb_dates: first item key = {:?}", element.full_key());
         }
-        if let Some(metadata) = item.request {
-            for kv in metadata.iter() {
-                if kv.key == "date" {
-                    if let Some(d) = from_ecmwf_date(&kv.value) {
-                        dates.push(d);
-                    }
+        for (key, value) in element.full_key() {
+            if key == "date" {
+                if let Some(d) = from_ecmwf_date(&value) {
+                    dates.push(d);
                 }
             }
         }
@@ -218,17 +230,16 @@ fn scan_span(
         println!("  Scanning {} – {}", start_str, end_str);
     }
 
-    let config_yaml = fs::read_to_string(fdb_config_path)
-        .map_err(|e| format!("Cannot read FDB config: {}", e))?;
-
-    let fdb = FDB::new(Some(&config_yaml)).map_err(|e| format!("Failed to open FDB: {:?}", e))?;
+    let fdb = Fdb::open(Some(fdb_config_path), None)
+        .map_err(|e| format!("Failed to open FDB: {:?}", e))?;
     eprintln!("[fdb_scanner] scan_span: FDB opened for {} – {}", start_str, end_str);
 
-    let request = Request::from_json(req_map).map_err(|e| format!("Bad request JSON: {:?}", e))?;
+    let request = json_to_fdb_request(&req_map)?;
     eprintln!("[fdb_scanner] scan_span: request built OK for {} – {}", start_str, end_str);
 
-    let list_iter =
-        fdb.list(&request, true, false).map_err(|e| format!("FDB list failed: {:?}", e))?;
+    let list_iter = fdb
+        .list(&request, ListOptions::default())
+        .map_err(|e| format!("FDB list failed: {:?}", e))?;
     eprintln!("[fdb_scanner] scan_span: list iterator created, iterating...");
 
     // Build the Qube from the list iterator directly (replicating FromFDBList
@@ -240,54 +251,50 @@ fn scan_span(
     let mut item_count = 0usize;
     for item in list_iter {
         item_count += 1;
+        let element = item.map_err(|e| format!("FDB list error: {:?}", e))?;
         if !first_item_printed {
-            eprintln!("[fdb_scanner] first list_iter item: {:?}", item);
+            eprintln!("[fdb_scanner] first list_iter item key: {:?}", element.full_key());
             first_item_printed = true;
         }
-        if let Some(metadata) = item.request {
-            // Collect key=value pairs into a BTreeMap so we can reorder them.
-            let mut kv_map: std::collections::HashMap<String, String> =
-                std::collections::HashMap::new();
 
-            for kv in metadata.iter() {
-                kv_map.insert(kv.key.clone(), kv.value.clone());
+        // Collect key=value pairs into a HashMap so we can reorder them.
+        let mut kv_map: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        for (k, v) in element.full_key() {
+            kv_map.insert(k, v);
+        }
+
+        // Drop unwanted keys.
+        for drop_key in KEYS_TO_DROP {
+            // Only drop if a `date` key is also present (matching scan.py logic).
+            if kv_map.contains_key("date") {
+                kv_map.remove(*drop_key);
             }
+        }
 
-            // Drop unwanted keys.
-            for drop_key in KEYS_TO_DROP {
-                // Only drop if a `date` key is also present (matching scan.py logic).
-                if kv_map.contains_key("date") {
-                    kv_map.remove(*drop_key);
-                }
+        if kv_map.is_empty() {
+            continue;
+        }
+
+        // Emit keys in the canonical order; unknown keys are appended last.
+        let mut ordered_keys: Vec<String> =
+            KEY_ORDER.iter().filter(|k| kv_map.contains_key(**k)).map(|k| k.to_string()).collect();
+
+        for k in kv_map.keys() {
+            if !KEY_ORDER.contains(&k.as_str()) {
+                ordered_keys.push(k.clone());
             }
+        }
 
-            if kv_map.is_empty() {
-                continue;
-            }
-
-            // Emit keys in the canonical order; unknown keys are appended last.
-            let mut ordered_keys: Vec<String> = KEY_ORDER
-                .iter()
-                .filter(|k| kv_map.contains_key(**k))
-                .map(|k| k.to_string())
-                .collect();
-
-            for k in kv_map.keys() {
-                if !KEY_ORDER.contains(&k.as_str()) {
-                    ordered_keys.push(k.clone());
-                }
-            }
-
-            // Build the Qube path for this record.
-            let mut parent = root;
-            for key in &ordered_keys {
-                if let Some(val) = kv_map.get(key) {
-                    let coords = make_coords_from_slash_list(val);
-                    let child = qube
-                        .get_or_create_child(key, parent, coords)
-                        .map_err(|e| format!("get_or_create_child failed: {:?}", e))?;
-                    parent = child;
-                }
+        // Build the Qube path for this record.
+        let mut parent = root;
+        for key in &ordered_keys {
+            if let Some(val) = kv_map.get(key) {
+                let coords = make_coords_from_slash_list(val);
+                let child = qube
+                    .get_or_create_child(key, parent, coords)
+                    .map_err(|e| format!("get_or_create_child failed: {:?}", e))?;
+                parent = child;
             }
         }
     }
