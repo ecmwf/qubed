@@ -81,8 +81,31 @@ impl Coordinates {
             Coordinates::Floats(floats) => floats.to_string(),
             Coordinates::DateTimes(datetimes) => datetimes.to_string(),
             Coordinates::Strings(strings) => strings.to_string(),
-            Coordinates::Mixed(_) => {
-                todo!()
+            Coordinates::Mixed(mixed) => {
+                let mut parts: Vec<String> = Vec::new();
+                let ints_str = mixed.integers.to_string();
+                if !ints_str.is_empty() {
+                    parts.push(ints_str);
+                }
+                match &mixed.floats {
+                    floats::FloatCoordinates::List(list) => {
+                        for v in list.iter() {
+                            parts.push(v.to_string());
+                        }
+                    }
+                }
+                let strings_str = mixed.strings.to_string();
+                if !strings_str.is_empty() {
+                    parts.push(strings_str);
+                }
+                match &mixed.datetimes {
+                    datetime::DateTimeCoordinates::List(list) => {
+                        for v in list.iter() {
+                            parts.push(v.format("%Y%m%dT%H%M").to_string());
+                        }
+                    }
+                }
+                parts.join("/")
             }
         }
     }
@@ -175,8 +198,48 @@ impl Coordinates {
                     only_b: Coordinates::Strings(result.only_b),
                 }
             }
-            _ => {
-                unimplemented!("Intersection not implemented for these coordinate types");
+            // Cross-type: normalise both sides to strings, intersect on string
+            // representation, then return matching values in `self`'s original type.
+            (left, right) => {
+                // Build string-repr sets for both sides
+                let left_strs: std::collections::BTreeSet<String> =
+                    left.to_string().split('/').map(|s| s.to_string()).collect();
+                let right_strs: std::collections::BTreeSet<String> =
+                    right.to_string().split('/').map(|s| s.to_string()).collect();
+
+                let matching_strs: std::collections::BTreeSet<&String> =
+                    left_strs.intersection(&right_strs).collect();
+
+                // Reconstruct result in left's type by re-parsing matched strings
+                let intersection = if matching_strs.is_empty() {
+                    Coordinates::Empty
+                } else {
+                    let joined =
+                        matching_strs.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("/");
+                    Coordinates::from_string(&joined)
+                };
+
+                let only_a_strs: std::collections::BTreeSet<&String> =
+                    left_strs.difference(&right_strs).collect();
+                let only_a = if only_a_strs.is_empty() {
+                    Coordinates::Empty
+                } else {
+                    let joined =
+                        only_a_strs.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("/");
+                    Coordinates::from_string(&joined)
+                };
+
+                let only_b_strs: std::collections::BTreeSet<&String> =
+                    right_strs.difference(&left_strs).collect();
+                let only_b = if only_b_strs.is_empty() {
+                    Coordinates::Empty
+                } else {
+                    let joined =
+                        only_b_strs.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("/");
+                    Coordinates::from_string(&joined)
+                };
+
+                IntersectionResult { intersection, only_a, only_b }
             }
         }
     }
