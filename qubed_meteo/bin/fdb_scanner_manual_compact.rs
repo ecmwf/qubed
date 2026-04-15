@@ -404,10 +404,11 @@ fn generate_filename(selector_map: &Value) -> String {
     let get =
         |key: &str| selector_map.get(key).and_then(|v| v.as_str()).unwrap_or("none").to_string();
     let dataset = get("dataset");
+    let experiment = get("experiment");
     let activity = get("activity");
     let class = get("class");
     let generation = get("generation");
-    format!("{}_{}_{}_{}.json", dataset, activity, class, generation)
+    format!("{}_{}_{}_{}_{}.json", dataset, experiment, activity, class, generation)
 }
 
 fn merge_qubes(mut a: Qube, mut b: Qube) -> Qube {
