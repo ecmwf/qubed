@@ -7,15 +7,34 @@ edition = "2024"
 qubed = { path = "../qubed" }
 serde = "1.0.228"
 serde_json = "1.0.145"
-rsfdb = { git = "https://github.com/ecmwf/rsfdb" }
+# New fdb bindings (replaces rsfdb).
+# Use --no-default-features --features system to link against a system/pre-built
+# FDB installation.  Set FDB_DIR / ECKIT_DIR / METKIT_DIR / ECCODES_DIR at build
+# time to point at the right installation prefix (see build instructions below).
+fdb = { path = "../fdb/rust/crates/fdb", default-features = false, features = ["system"] }
+fdb-sys = { path = "../fdb/rust/crates/fdb-sys", default-features = false, features = ["system"] }
+# Scanner dependencies (previously pulled in transitively via rsfdb)
+chrono = "0.4"
+clap = { version = "4", features = ["derive", "env"] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
 
 [lib]
 path = "src/lib.rs"
 crate-type = ["rlib"]
 
-[patch.'https://github.com/ecmwf/rsfdb']
-rsfdb = { path = "../rsfdb" }
+[[bin]]
+name = "fdb_db_reader"
+path = "bin/fdb_db_reader.rs"
 
-[patch.'https://github.com/ecmwf-projects/rsfindlibs']
-rsfindlibs = { path = "../rsfindlibs" }
+[[bin]]
+name = "fdb_scanner"
+path = "bin/fdb_scanner.rs"
+
+[[bin]]
+name = "fdb_scanner_manual"
+path = "bin/fdb_scanner_manual.rs"
+
+[[bin]]
+name = "fdb_scanner_manual_compact"
+path = "bin/fdb_scanner_manual_compact.rs"
 

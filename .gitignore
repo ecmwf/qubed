@@ -33,6 +33,7 @@ tests/example_qubes
 .idea/
 *.grib
 fdb
+fdb_data
 
 
 # Added by cargo

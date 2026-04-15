@@ -8,8 +8,39 @@ members = [
     "py_qubed_meteo",
 ]
 
-[patch.'https://github.com/ecmwf/rsfdb']
-rsfdb = { path = "../rsfdb" }
+# These workspace.package fields are required so that the fdb / fdb-sys crates
+# (added as path dependencies from fdb/rust/crates/) can inherit them via
+# `field.workspace = true`.
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/ecmwf/fdb"
+rust-version = "1.85"
+readme = "README.md"
+keywords = ["ecmwf", "weather", "meteorology", "grib", "climate"]
+categories = ["science", "database"]
 
-[patch.'https://github.com/ecmwf-projects/rsfindlibs']
-rsfindlibs = { path = "../rsfindlibs" }
+# Workspace-level dependencies required by fdb-sys and fdb crates.
+[workspace.dependencies]
+# Internal (fdb workspace path deps resolved relative to qubed workspace root)
+fdb-sys = { path = "fdb/rust/crates/fdb-sys" }
+fdb = { path = "fdb/rust/crates/fdb" }
+
+# Build tools used by fdb-sys / fdb
+bindman       = { git = "ssh://git@github.com/ecmwf/bindman.git" }
+bindman-build = { git = "ssh://git@github.com/ecmwf/bindman.git" }
+bindman-utils = { git = "ssh://git@github.com/ecmwf/bindman.git", branch = "bindman-utils" }
+
+# C++ bridge
+cxx       = "1.0"
+cxx-build = "1.0"
+
+# Foundation crates used by fdb-sys
+eckit-sys   = { git = "ssh://git@github.com/ecmwf/rust-wrappers-playground.git", default-features = false }
+metkit-sys  = { git = "ssh://git@github.com/ecmwf/rust-wrappers-playground.git", default-features = false }
+eccodes-sys = { git = "ssh://git@github.com/ecmwf/rust-wrappers-playground.git", default-features = false }
+
+# Runtime deps used by fdb
+parking_lot = "0.12"
+thiserror   = "2"
+tempfile    = "3"
