@@ -175,6 +175,14 @@ impl Coordinates {
                     only_b: Coordinates::Strings(result.only_b),
                 }
             }
+            (Coordinates::DateTimes(dts_a), Coordinates::DateTimes(dts_b)) => {
+                let result = dts_a.intersect(dts_b);
+                IntersectionResult {
+                    intersection: Coordinates::DateTimes(result.intersection),
+                    only_a: Coordinates::DateTimes(result.only_a),
+                    only_b: Coordinates::DateTimes(result.only_b),
+                }
+            }
             _ => {
                 unimplemented!("Intersection not implemented for these coordinate types");
             }
@@ -374,6 +382,15 @@ impl Coordinates {
                             map.insert("datetimes".to_string(), Value::Array(vals));
                         }
                     }
+                    datetime::DateTimeCoordinates::RangeSet(_) => {
+                        // fallback to textual form
+                        if boxed.datetimes.len() > 0 {
+                            map.insert(
+                                "datetimes".to_string(),
+                                Value::String(boxed.datetimes.to_string()),
+                            );
+                        }
+                    }
                 }
 
                 Value::Object(map)
@@ -388,6 +405,7 @@ impl Coordinates {
                         .collect();
                     Value::Array(vals)
                 }
+                datetime::DateTimeCoordinates::RangeSet(_) => Value::String(coords.to_string()),
             },
         }
     }
