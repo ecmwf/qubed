@@ -88,10 +88,54 @@ impl MetadataStore {
     /// `path` must contain **single-value** segments (e.g. `"class=1"`).
     /// `sibling_counts[i]` is the total number of children the Qube node at
     /// depth `i` has — used to prevent premature propagation.
+    ///
+    /// After setting the value this method:
+    /// 1. Attempts to propagate upward (promote to parent when all siblings agree),
+    ///    clearing redundant child entries on each successful promotion.
+    /// 2. If any ancestor already holds a different value for `key`, pushes that
+    ///    ancestor value down to all siblings that don't yet have their own value,
+    ///    then removes the ancestor entry (since children now diverge).
     pub fn set(&mut self, path: &[String], key: &str, value: &str, sibling_counts: &[usize]) {
+        // --- Push-down: if an ancestor holds a different value, distribute it ---
+        // Walk from root toward the target; find the deepest ancestor that has
+        // a value for this key that differs from `value`.
+        for depth in 0..path.len() {
+            let ancestor_path = &path[..depth];
+            let ancestor_val =
+                match self.get_node(ancestor_path).and_then(|n| n.metadata.get(key)).cloned() {
+                    Some(v) if v != value => v,
+                    _ => continue,
+                };
+            // Push the ancestor's value down to every child that doesn't yet
+            // have an explicit value for `key`.
+            let child_keys: Vec<String> = self
+                .get_node(ancestor_path)
+                .map(|n| n.children.keys().cloned().collect())
+                .unwrap_or_default();
+            for ck in child_keys {
+                let mut child_path: Vec<String> = ancestor_path.to_vec();
+                child_path.push(ck);
+                // Only set if the child (and its sub-path toward our target) doesn't
+                // already have an explicit value.
+                let already_has =
+                    self.get_node(&child_path).and_then(|n| n.metadata.get(key)).is_some();
+                if !already_has {
+                    self.get_or_create_mut(&child_path)
+                        .metadata
+                        .insert(key.to_string(), ancestor_val.clone());
+                }
+            }
+            // Remove the ancestor's now-redundant (diverging) entry.
+            if let Some(n) = self.get_mut(ancestor_path) {
+                n.metadata.remove(key);
+            }
+        }
+
+        // --- Set the value at the target path ---
         let leaf = self.get_or_create_mut(path);
         leaf.metadata.insert(key.to_string(), value.to_string());
 
+        // --- Propagate upward, clearing children when promoted ---
         if !path.is_empty() {
             self.propagate_up(path, key, sibling_counts);
         }
@@ -106,6 +150,18 @@ impl MetadataStore {
         if let Some(node) = self.get_mut(path) {
             node.metadata.remove(key);
         }
+    }
+
+    /// Get the metadata value for `key` at `path`, walking up ancestors if
+    /// the key is not found at the exact path (inheritance after de-duplication).
+    pub fn get_inherited<'a>(&'a self, path: &[String], key: &str) -> Option<&'a str> {
+        // Walk from the exact path up to the root, returning the first hit.
+        for depth in (0..=path.len()).rev() {
+            if let Some(v) = self.get(&path[..depth], key) {
+                return Some(v);
+            }
+        }
+        None
     }
 
     /// Get the metadata value for `key` at the node identified by `path`.
@@ -124,8 +180,20 @@ impl MetadataStore {
     }
 
     /// Deep-merge `other` into `self`.  `other`'s values win on key conflicts.
+    ///
+    /// Before merging, both tries are expanded (promoted values pushed back down
+    /// to all leaf paths) so that per-path values are not lost when roots from
+    /// different Qubes are unified.  After the raw merge, `rebuild_propagation`
+    /// is called to re-promote any values that agree across all branches.
     pub fn merge(&mut self, other: MetadataStore) {
-        self.root.merge_from(other.root);
+        // Expand both tries so that every path carries its own value explicitly.
+        expand_subtree(&mut self.root, &[]);
+        let mut other_root = other.root;
+        expand_subtree(&mut other_root, &[]);
+        // Raw union (other wins on conflict).
+        self.root.merge_from(other_root);
+        // Re-promote where all children agree.
+        self.rebuild_propagation();
     }
 
     /// Rebuilds upward propagation for all keys across the entire trie.
@@ -203,7 +271,12 @@ impl MetadataStore {
             };
 
             if child_values.iter().all(|v| *v == Some(first)) {
-                parent.metadata.insert(key.to_string(), first.to_string());
+                let promoted = first.to_string();
+                parent.metadata.insert(key.to_string(), promoted);
+                // De-duplicate: remove the now-redundant value from all children.
+                for child in parent.children.values_mut() {
+                    child.metadata.remove(key);
+                }
             } else {
                 parent.metadata.remove(key);
                 break;
@@ -215,6 +288,43 @@ impl MetadataStore {
 // ---------------------------------------------------------------------------
 // Free helpers for rebuild_propagation
 // ---------------------------------------------------------------------------
+
+/// Push each metadata key stored at `node` down to every descendant leaf that
+/// doesn't already have an explicit value for that key, then remove it from
+/// `node`.  This is the inverse of propagation ("expand").
+fn expand_subtree(node: &mut TrieNode, inherited: &[(&str, &str)]) {
+    // Collect inherited values from this node.
+    let own: Vec<(String, String)> =
+        node.metadata.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+
+    // Build the full inherited set for children.
+    let mut child_inherited: Vec<(&str, &str)> = inherited.to_vec();
+    for (k, v) in &own {
+        // If already in inherited (from an ancestor), our value overrides.
+        child_inherited.retain(|(ik, _)| *ik != k.as_str());
+        child_inherited.push((k.as_str(), v.as_str()));
+    }
+
+    if node.children.is_empty() {
+        // Leaf: apply all inherited values that the leaf doesn't already have.
+        for (k, v) in inherited {
+            node.metadata.entry(k.to_string()).or_insert_with(|| v.to_string());
+        }
+        // Also apply own values (they stay on the leaf).
+    } else {
+        // Internal node: push down to children, then clear own metadata
+        // (the value is now redundant once all children carry it).
+        let child_keys: Vec<String> = node.children.keys().cloned().collect();
+        for ck in child_keys {
+            let child = node.children.get_mut(&ck).unwrap();
+            expand_subtree(child, &child_inherited);
+        }
+        // Clear the promoted keys from this node (they now live at leaves).
+        for (k, _) in &own {
+            node.metadata.remove(k);
+        }
+    }
+}
 
 fn collect_all_keys(node: &TrieNode) -> Vec<String> {
     let mut keys: std::collections::HashSet<String> = node.metadata.keys().cloned().collect();
@@ -235,15 +345,14 @@ fn propagate_subtree(node: &mut TrieNode, key: &str) -> Option<String> {
     let mut agreed: Option<String> = None;
     let mut all_agree = true;
 
-    for ck in child_keys {
-        let child = node.children.get_mut(&ck).unwrap();
+    for ck in &child_keys {
+        let child = node.children.get_mut(ck).unwrap();
         let child_value = propagate_subtree(child, key);
         match (&agreed, &child_value) {
             (None, Some(v)) => agreed = Some(v.clone()),
             (Some(a), Some(v)) if a == v => {}
             _ => {
                 all_agree = false;
-                break;
             }
         }
     }
@@ -251,6 +360,12 @@ fn propagate_subtree(node: &mut TrieNode, key: &str) -> Option<String> {
     if all_agree {
         if let Some(ref v) = agreed {
             node.metadata.insert(key.to_string(), v.clone());
+            // De-duplicate: clear the key from all children.
+            for ck in &child_keys {
+                if let Some(child) = node.children.get_mut(ck) {
+                    child.metadata.remove(key);
+                }
+            }
         } else {
             node.metadata.remove(key);
         }
@@ -494,8 +609,12 @@ mod tests {
     fn test_set_and_get_leaf() {
         let mut store = MetadataStore::new();
         let p = path(&["class=1", "expver=1"]);
+        // sibling_count=1 at each level → promoted all the way to root.
         store.set(&p, "owner", "alice", &counts(&[1, 1]));
-        assert_eq!(store.get(&p, "owner"), Some("alice"));
+        // Value promoted to root; child no longer holds it directly.
+        assert_eq!(store.get(&[], "owner"), Some("alice"));
+        // But inherited lookup at the leaf still works.
+        assert_eq!(store.get_inherited(&p, "owner"), Some("alice"));
     }
 
     #[test]
@@ -506,7 +625,11 @@ mod tests {
         store.set(&p1, "owner", "alice", &counts(&[1, 2]));
         store.set(&p2, "owner", "bob", &counts(&[1, 2]));
 
+        // Children differ → no propagation.
         assert_eq!(store.get(&path(&["class=1"]), "owner"), None);
+        // Each child keeps its own value.
+        assert_eq!(store.get(&p1, "owner"), Some("alice"));
+        assert_eq!(store.get(&p2, "owner"), Some("bob"));
     }
 
     #[test]
@@ -517,6 +640,7 @@ mod tests {
         store.set(&p1, "owner", "alice", &counts(&[1, 2]));
 
         assert_eq!(store.get(&path(&["class=1"]), "owner"), None);
+        assert_eq!(store.get(&p1, "owner"), Some("alice"));
     }
 
     #[test]
@@ -527,7 +651,13 @@ mod tests {
         store.set(&p1, "owner", "alice", &counts(&[1, 2]));
         store.set(&p2, "owner", "alice", &counts(&[1, 2]));
 
-        assert_eq!(store.get(&path(&["class=1"]), "owner"), Some("alice"));
+        // Promoted all the way to root (1 class sibling); class=1 and children cleared.
+        assert_eq!(store.get(&[], "owner"), Some("alice"));
+        assert_eq!(store.get(&path(&["class=1"]), "owner"), None);
+        assert_eq!(store.get(&p1, "owner"), None);
+        assert_eq!(store.get(&p2, "owner"), None);
+        // Inherited lookup at leaf still works.
+        assert_eq!(store.get_inherited(&p1, "owner"), Some("alice"));
     }
 
     #[test]
@@ -538,8 +668,13 @@ mod tests {
         store.set(&p1, "team", "ecmwf", &counts(&[1, 2]));
         store.set(&p2, "team", "ecmwf", &counts(&[1, 2]));
 
-        assert_eq!(store.get(&path(&["class=1"]), "team"), Some("ecmwf"));
+        // Promoted all the way to root (only 1 class sibling).
         assert_eq!(store.get(&[], "team"), Some("ecmwf"));
+        // Intermediate and leaf entries cleared.
+        assert_eq!(store.get(&path(&["class=1"]), "team"), None);
+        assert_eq!(store.get(&p1, "team"), None);
+        // Inherited still resolves.
+        assert_eq!(store.get_inherited(&p1, "team"), Some("ecmwf"));
     }
 
     #[test]
@@ -552,8 +687,13 @@ mod tests {
         store.set(&p2, "team", "ecmwf", &counts(&[2, 2]));
         store.set(&p3, "team", "other", &counts(&[2, 1]));
 
-        assert_eq!(store.get(&path(&["class=1"]), "team"), Some("ecmwf"));
+        // class=1 and class=2 differ → root not promoted.
         assert_eq!(store.get(&[], "team"), None);
+        // class=1 promoted (both expver agree); its children cleared.
+        assert_eq!(store.get(&path(&["class=1"]), "team"), Some("ecmwf"));
+        assert_eq!(store.get(&p1, "team"), None);
+        // class=2 not yet fully annotated (only 1 of 1 expver child), promoted.
+        assert_eq!(store.get_inherited(&p3, "team"), Some("other"));
     }
 
     #[test]
@@ -561,12 +701,17 @@ mod tests {
         let mut store = MetadataStore::new();
         let p1 = path(&["class=1", "expver=1"]);
         let p2 = path(&["class=1", "expver=2"]);
+        // Directly insert without going through set() so propagation doesn't run.
         store.get_or_create_mut(&p1).metadata.insert("owner".into(), "alice".into());
         store.get_or_create_mut(&p2).metadata.insert("owner".into(), "alice".into());
 
         assert_eq!(store.get(&path(&["class=1"]), "owner"), None);
         store.rebuild_propagation();
-        assert_eq!(store.get(&path(&["class=1"]), "owner"), Some("alice"));
+        // rebuild_propagation sees only 1 class child → promotes to root; class=1 cleared.
+        assert_eq!(store.get(&[], "owner"), Some("alice"));
+        assert_eq!(store.get(&path(&["class=1"]), "owner"), None);
+        assert_eq!(store.get(&p1, "owner"), None);
+        assert_eq!(store.get_inherited(&p1, "owner"), Some("alice"));
     }
 
     #[test]
@@ -574,13 +719,17 @@ mod tests {
         let mut store = MetadataStore::new();
         let p1 = path(&["class=1", "expver=1"]);
         let p2 = path(&["class=1", "expver=2"]);
-        store.set(&p1, "owner", "alice", &counts(&[1, 2]));
-        store.set(&p2, "owner", "alice", &counts(&[1, 2]));
+        // sibling_count=2 at class level → stays at class=1 after expver agrees.
+        store.set(&p1, "owner", "alice", &counts(&[2, 2]));
+        store.set(&p2, "owner", "alice", &counts(&[2, 2]));
+        // Promoted to class=1 (not root, because 2 class siblings expected).
         assert_eq!(store.get(&path(&["class=1"]), "owner"), Some("alice"));
 
-        store.remove(&p1, "owner");
+        // remove from p1: p1 has been de-duped (value lives at class=1), so remove at class=1.
+        store.remove(&path(&["class=1"]), "owner");
         store.rebuild_propagation();
         assert_eq!(store.get(&path(&["class=1"]), "owner"), None);
+        assert_eq!(store.get(&[], "owner"), None);
     }
 
     #[test]
@@ -588,13 +737,15 @@ mod tests {
         let mut a = MetadataStore::new();
         let mut b = MetadataStore::new();
 
+        // sibling_count=2: two class siblings exist, so no promotion to root.
         let p1 = path(&["class=1"]);
         let p2 = path(&["class=2"]);
-        a.set(&p1, "owner", "alice", &counts(&[1]));
-        b.set(&p2, "owner", "bob", &counts(&[1]));
+        a.set(&p1, "owner", "alice", &counts(&[2]));
+        b.set(&p2, "owner", "bob", &counts(&[2]));
 
         a.merge(b);
 
+        // Values stay at their respective paths (different values → no promotion).
         assert_eq!(a.get(&p1, "owner"), Some("alice"));
         assert_eq!(a.get(&p2, "owner"), Some("bob"));
     }
@@ -604,12 +755,15 @@ mod tests {
         let mut a = MetadataStore::new();
         let mut b = MetadataStore::new();
         let p = path(&["class=1"]);
+        // sibling_count=1 → promoted to root in each store before merge.
         a.set(&p, "owner", "alice", &counts(&[1]));
         b.set(&p, "owner", "bob", &counts(&[1]));
 
         a.merge(b);
 
-        assert_eq!(a.get(&p, "owner"), Some("bob"));
+        // After merge, root holds "bob" (other wins).
+        assert_eq!(a.get(&[], "owner"), Some("bob"));
+        assert_eq!(a.get_inherited(&p, "owner"), Some("bob"));
     }
 
     #[test]

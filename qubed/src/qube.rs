@@ -500,6 +500,19 @@ impl Qube {
     /// each of the three individual coordinate values (`class=1`, `class=2`,
     /// `class=3`), then propagates upward.
     pub fn set_metadata(&mut self, node_id: NodeIdx, key: &str, value: &str) {
+        // Root node: push the value down to each child that doesn't already
+        // have an explicit value, then let promotion re-evaluate.
+        if self.node(node_id).map(|n| n.parent().is_none()).unwrap_or(false) {
+            let children: Vec<NodeIdx> =
+                self.node(node_id).map(|n| n.all_children().collect()).unwrap_or_default();
+            for child_id in children {
+                // Only push down if the child doesn't already have a value.
+                if self.get_metadata(child_id, key).is_none() {
+                    self.set_metadata(child_id, key, value);
+                }
+            }
+            return;
+        }
         let paths = node_trie_paths_all_values(self, node_id);
         for info in paths {
             self.metadata.set(&info.single_value_segments, key, value, &info.sibling_counts);
@@ -539,15 +552,9 @@ impl Qube {
         // First pass: find paths ending with the exact coord_value.
         for info in &paths {
             if info.single_value_segments.last().map(|s| s.as_str()) == Some(&expected_last) {
-                if let Some(v) = self.metadata.get(&info.single_value_segments, key) {
+                if let Some(v) = self.metadata.get_inherited(&info.single_value_segments, key) {
                     return Some(v);
                 }
-            }
-        }
-        // Fallback: try any path that returns a result.
-        for info in &paths {
-            if let Some(v) = self.metadata.get(&info.single_value_segments, key) {
-                return Some(v);
             }
         }
         None
@@ -566,7 +573,7 @@ impl Qube {
         // Try all Cartesian-product paths and return the first match.
         let paths = node_trie_paths_all_values(self, node_id);
         for info in &paths {
-            if let Some(v) = self.metadata.get(&info.single_value_segments, key) {
+            if let Some(v) = self.metadata.get_inherited(&info.single_value_segments, key) {
                 return Some(v);
             }
         }
