@@ -41,6 +41,12 @@ impl StringCoordinates {
         }
     }
 
+    pub(crate) fn individual_value_strings(&self) -> Vec<String> {
+        match self {
+            StringCoordinates::Set(list) => list.iter().map(|v| v.to_string()).collect(),
+        }
+    }
+
     pub(crate) fn intersect(
         &self,
         other: &StringCoordinates,

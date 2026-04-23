@@ -141,6 +141,10 @@ impl Qube {
         // This method starts at the root of both Qubes and recursively merges their nodes.
         // After the union, the tree is compressed to remove duplicates and empty nodes.
 
+        // Merge metadata from other into self before clearing other.
+        let other_meta = std::mem::take(&mut other.metadata);
+        self.metadata.merge(other_meta);
+
         // Fast-path: if self is empty, just take the content of other directly.
         if self.is_empty() {
             let other_root = other.root();
