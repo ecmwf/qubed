@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tiny_vec::TinyVec;
 
 use crate::coordinates::Coordinates;
+use crate::metadata::{MetadataStore, node_trie_path_for_value, node_trie_paths_all_values};
 
 new_key_type! {
     pub struct NodeIdx;
@@ -36,6 +37,7 @@ pub struct Qube {
     nodes: SlotMap<NodeIdx, Node>,
     root_id: NodeIdx,
     key_store: Rodeo<MiniSpur>,
+    pub(crate) metadata: MetadataStore,
 }
 
 /// Read-only reference to a node
@@ -104,7 +106,7 @@ impl Qube {
             children: BTreeMap::new(),
         });
 
-        Qube { nodes, root_id, key_store }
+        Qube { nodes, root_id, key_store, metadata: MetadataStore::new() }
     }
 
     pub fn root(&self) -> NodeIdx {
@@ -437,7 +439,7 @@ impl Qube {
         hash
     }
 
-    pub(crate) fn leaf_node_ids_paths(&self) -> Vec<Vec<NodeIdx>> {
+    pub fn leaf_node_ids_paths(&self) -> Vec<Vec<NodeIdx>> {
         let mut paths = Vec::new();
 
         fn traverse(
@@ -487,7 +489,140 @@ impl Qube {
 }
 
 impl Qube {
-    /// Recursively copies the subtree from `other_node` in `other` to `new_node` in `self`.
+    // ------------------------------------------------------------------
+    // Metadata API
+    // ------------------------------------------------------------------
+
+    /// Set a metadata `key`/`value` pair on **all** coordinate values of
+    /// `node_id`.
+    ///
+    /// For a node with `Integers(Set([1, 2, 3]))` this sets the value for
+    /// each of the three individual coordinate values (`class=1`, `class=2`,
+    /// `class=3`), then propagates upward.
+    pub fn set_metadata(&mut self, node_id: NodeIdx, key: &str, value: &str) {
+        // Root node: push the value down to each child that doesn't already
+        // have an explicit value, then let promotion re-evaluate.
+        if self.node(node_id).map(|n| n.parent().is_none()).unwrap_or(false) {
+            let children: Vec<NodeIdx> =
+                self.node(node_id).map(|n| n.all_children().collect()).unwrap_or_default();
+            for child_id in children {
+                // Only push down if the child doesn't already have a value.
+                if self.get_metadata(child_id, key).is_none() {
+                    self.set_metadata(child_id, key, value);
+                }
+            }
+            return;
+        }
+        let paths = node_trie_paths_all_values(self, node_id);
+        for info in paths {
+            self.metadata.set(&info.single_value_segments, key, value, &info.sibling_counts);
+        }
+    }
+
+    /// Set a metadata `key`/`value` pair for a **specific** coordinate value
+    /// string (e.g. `"1"`, `"od"`) on `node_id`.
+    ///
+    /// Use this when the coordinates of the node hold multiple values and you
+    /// want to annotate only one of them.
+    pub fn set_metadata_for_value(
+        &mut self,
+        node_id: NodeIdx,
+        coord_value: &str,
+        key: &str,
+        value: &str,
+    ) {
+        let info = node_trie_path_for_value(self, node_id, coord_value);
+        self.metadata.set(&info.single_value_segments, key, value, &info.sibling_counts);
+    }
+
+    /// Get the metadata value for `key` on `node_id`, for a **specific**
+    /// coordinate value string.
+    ///
+    /// Tries all ancestor value combinations (needed when ancestors have been
+    /// compressed to multi-value nodes).
+    pub fn get_metadata_for_value(
+        &self,
+        node_id: NodeIdx,
+        coord_value: &str,
+        key: &str,
+    ) -> Option<&str> {
+        let target_dim = self.node(node_id)?.dimension()?.to_string();
+        let expected_last = format!("{}={}", target_dim, coord_value);
+        let paths = node_trie_paths_all_values(self, node_id);
+        // First pass: find paths ending with the exact coord_value.
+        for info in &paths {
+            if info.single_value_segments.last().map(|s| s.as_str()) == Some(&expected_last) {
+                if let Some(v) = self.metadata.get_inherited(&info.single_value_segments, key) {
+                    return Some(v);
+                }
+            }
+        }
+        None
+    }
+
+    /// Get the metadata value for `key` on `node_id`.
+    ///
+    /// For single-value nodes this queries the trie directly.  For multi-value
+    /// nodes (after compress) it tries all individual coordinate value paths
+    /// and returns the first match.
+    pub fn get_metadata(&self, node_id: NodeIdx, key: &str) -> Option<&str> {
+        let nr = self.node(node_id)?;
+        if nr.parent().is_none() {
+            return self.metadata.get(&[], key);
+        }
+        // Try all Cartesian-product paths and return the first match.
+        let paths = node_trie_paths_all_values(self, node_id);
+        for info in &paths {
+            if let Some(v) = self.metadata.get_inherited(&info.single_value_segments, key) {
+                return Some(v);
+            }
+        }
+        None
+    }
+
+    /// Get all metadata key/value pairs on the node identified by `node_id`.
+    ///
+    /// Uses the node's `to_string()` as the trie key (same semantics as
+    /// [`get_metadata`](Self::get_metadata)).
+    pub fn get_all_metadata(
+        &self,
+        node_id: NodeIdx,
+    ) -> Option<&std::collections::HashMap<String, String>> {
+        let nr = self.node(node_id)?;
+        if nr.parent().is_none() {
+            return self.metadata.get_all(&[]);
+        }
+        // Try all paths; return the first that has any metadata.
+        let paths = node_trie_paths_all_values(self, node_id);
+        for info in &paths {
+            if let Some(m) = self.metadata.get_all(&info.single_value_segments) {
+                if !m.is_empty() {
+                    return Some(m);
+                }
+            }
+        }
+        None
+    }
+
+    /// Remove a metadata key from all coordinate values of `node_id`.
+    ///
+    /// Previously propagated values at ancestor nodes are **not** automatically
+    /// demoted.  Call [`Qube::rebuild_metadata_propagation`] afterwards if
+    /// you need ancestors to reflect the removal.
+    pub fn remove_metadata(&mut self, node_id: NodeIdx, key: &str) {
+        let paths = node_trie_paths_all_values(self, node_id);
+        for info in paths {
+            self.metadata.remove(&info.single_value_segments, key);
+        }
+    }
+
+    /// Rebuild the upward propagation of all metadata values across the trie.
+    pub fn rebuild_metadata_propagation(&mut self) {
+        self.metadata.rebuild_propagation();
+    }
+}
+
+impl Qube {
     pub(crate) fn copy_subtree(&mut self, other: &Qube, other_node: NodeIdx, new_node: NodeIdx) {
         // Get the children of the `other_node`
         let other_children = other.node_ref(other_node).unwrap().children().clone();

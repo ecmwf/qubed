@@ -45,6 +45,12 @@ impl FloatCoordinates {
         }
     }
 
+    pub(crate) fn individual_value_strings(&self) -> Vec<String> {
+        match self {
+            FloatCoordinates::List(list) => list.iter().map(|v| v.to_string()).collect(),
+        }
+    }
+
     pub(crate) fn hash(&self, hasher: &mut std::collections::hash_map::DefaultHasher) {
         "floats".hash(hasher);
         match self {

@@ -49,6 +49,14 @@ impl DateTimeCoordinates {
         }
     }
 
+    pub(crate) fn individual_value_strings(&self) -> Vec<String> {
+        match self {
+            DateTimeCoordinates::List(list) => {
+                list.iter().map(|dt| dt.format("%Y-%m-%dT%H:%M:%S").to_string()).collect()
+            }
+        }
+    }
+
     pub(crate) fn hash(&self, hasher: &mut std::collections::hash_map::DefaultHasher) {
         "datetime".hash(hasher);
         match self {

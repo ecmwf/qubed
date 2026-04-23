@@ -64,6 +64,25 @@ impl IntegerCoordinates {
         }
     }
 
+    pub(crate) fn individual_value_strings(&self) -> Vec<String> {
+        match self {
+            IntegerCoordinates::Set(set) => set.iter().map(|v| v.to_string()).collect(),
+            IntegerCoordinates::RangeSet(ranges) => {
+                // Expand ranges into individual values
+                let mut out = Vec::new();
+                for r in ranges.iter() {
+                    let step = r.step.get() as i32;
+                    let mut v = r.start;
+                    while v <= r.end {
+                        out.push(v.to_string());
+                        v += step;
+                    }
+                }
+                out
+            }
+        }
+    }
+
     pub(crate) fn intersect(
         &self,
         other: &IntegerCoordinates,

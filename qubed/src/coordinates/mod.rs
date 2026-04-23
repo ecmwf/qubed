@@ -87,6 +87,25 @@ impl Coordinates {
         }
     }
 
+    /// Returns the string representation of each individual coordinate value.
+    ///
+    /// For a node with `Integers(Set([1, 2, 3]))` this returns `["1", "2", "3"]`.
+    /// This is the basis for per-value metadata trie paths.
+    pub fn individual_value_strings(&self) -> Vec<String> {
+        match self {
+            Coordinates::Empty => vec![],
+            Coordinates::Integers(ints) => ints.individual_value_strings(),
+            Coordinates::Floats(floats) => floats.individual_value_strings(),
+            Coordinates::Strings(strings) => strings.individual_value_strings(),
+            Coordinates::DateTimes(datetimes) => datetimes.individual_value_strings(),
+            Coordinates::Mixed(_) => {
+                // Fallback: use the combined to_string as a single segment
+                // (Mixed is not yet fully implemented)
+                vec![self.to_string()]
+            }
+        }
+    }
+
     pub fn len(&self) -> usize {
         match self {
             Coordinates::Empty => 0,
