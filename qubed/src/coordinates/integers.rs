@@ -400,6 +400,104 @@ impl Default for IntegerCoordinates {
 }
 
 impl IntegerCoordinates {
+    /// Attempt to compress the coordinate set into a tighter `RangeSet` representation.
+    ///
+    /// The algorithm:
+    /// 1. Collect all values (sorted).
+    /// 2. Greedy scan: extend the current run as long as the step is consistent.
+    ///    A run is only emitted as a `Range` if it has ≥ 3 elements (otherwise storing
+    ///    as individual values is equally compact or smaller).
+    /// 3. Only replace `self` with a `RangeSet` when the resulting number of
+    ///    ranges (where singletons also count as one range each) is strictly less
+    ///    than the original element count — i.e. it actually saves space.
+    pub fn try_compress_to_ranges(&mut self) {
+        // Collect sorted values (works for both variants)
+        let mut values: Vec<i32> = match self {
+            IntegerCoordinates::Set(set) => set.iter().copied().collect(),
+            IntegerCoordinates::RangeSet(ranges) => {
+                let mut v: Vec<i32> = ranges.iter().flat_map(|r| r.iter()).collect();
+                v.sort_unstable();
+                v.dedup();
+                v
+            }
+        };
+
+        if values.len() < 3 {
+            // Nothing to compress — a range only helps at 3+ elements.
+            return;
+        }
+
+        values.sort_unstable();
+        values.dedup();
+
+        let ranges = compress_integers_to_ranges(&values);
+
+        // Only replace if the number of ranges is strictly smaller than the
+        // original element count (a range with N elements saves N-1 "slots").
+        let range_count = ranges.len();
+        if range_count < values.len() {
+            let mut rv: TinyVec<IntegerRange, 2> = TinyVec::new();
+            for r in ranges {
+                rv.push(r);
+            }
+            *self = IntegerCoordinates::RangeSet(rv);
+        }
+    }
+}
+
+/// Partition a sorted, deduplicated slice of integers into the minimum set of
+/// uniform-step ranges.
+///
+/// At each position the algorithm measures the run length achievable with step
+/// `values[i+1] - values[i]`.  If the run is ≥ 3 elements it is emitted as a
+/// range; otherwise only a single singleton is emitted and the position advances
+/// by one.  This "emit one, retry" behaviour means the algorithm never locks a
+/// value into a short run that would prevent a longer run starting one position
+/// later.  For example [1,2,3,7,10,11,12] produces:
+///   [1:1:3]   (run of 3)
+///   7         (singleton — run [7,10] step 3 is only length 2)
+///   [10:1:12] (run of 3 detected once 10 is re-evaluated as the start)
+pub(crate) fn compress_integers_to_ranges(values: &[i32]) -> Vec<IntegerRange> {
+    if values.is_empty() {
+        return vec![];
+    }
+
+    let mut result: Vec<IntegerRange> = Vec::new();
+    let mut i = 0;
+
+    while i < values.len() {
+        // Measure the run starting at i using the step to the very next element.
+        let run_len = if i + 1 < values.len() {
+            let step = values[i + 1] - values[i];
+            if step > 0 && step <= u16::MAX as i32 {
+                let mut j = i;
+                while j + 1 < values.len() && values[j + 1] - values[j] == step {
+                    j += 1;
+                }
+                j - i + 1
+            } else {
+                1
+            }
+        } else {
+            1
+        };
+
+        if run_len >= 3 {
+            let step = values[i + 1] - values[i];
+            result.push(IntegerRange::new(values[i], values[i + run_len - 1], step as u16));
+            i += run_len;
+        } else {
+            // Run too short — emit just this element as a singleton and retry
+            // from the next position so a better run can be found.
+            result.push(IntegerRange::new_step1(values[i], values[i]));
+            i += 1;
+        }
+    }
+
+    result
+}
+
+impl IntegerCoordinates {
     pub fn contains(&self, value: i32) -> bool {
         match self {
             IntegerCoordinates::Set(set) => set.contains(&value),
@@ -661,5 +759,170 @@ mod tests {
         assert_eq!(coords.len(), 6);
         assert!(coords.contains(3i32));
         assert!(coords.contains(10i32));
+    }
+
+    // ---- try_compress_to_ranges tests ----
+
+    #[test]
+    fn test_compress_set_consecutive_step1_to_range() {
+        // {1,2,3,4,5} → RangeSet([1:1:5])
+        let mut c = IntegerCoordinates::default();
+        for v in [1, 2, 3, 4, 5] {
+            c.append(v);
+        }
+        c.try_compress_to_ranges();
+        match &c {
+            IntegerCoordinates::RangeSet(ranges) => {
+                assert_eq!(ranges.len(), 1);
+                assert_eq!(ranges[0].start, 1);
+                assert_eq!(ranges[0].end, 5);
+                assert_eq!(ranges[0].step_size(), 1);
+            }
+            other => panic!("Expected RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_compress_set_even_numbers_to_range() {
+        // {0,2,4,6,8,10} → RangeSet([0:2:10])
+        let mut c = IntegerCoordinates::default();
+        for v in [0, 2, 4, 6, 8, 10] {
+            c.append(v);
+        }
+        c.try_compress_to_ranges();
+        match &c {
+            IntegerCoordinates::RangeSet(ranges) => {
+                assert_eq!(ranges.len(), 1);
+                assert_eq!(ranges[0].start, 0);
+                assert_eq!(ranges[0].end, 10);
+                assert_eq!(ranges[0].step_size(), 2);
+            }
+            other => panic!("Expected RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_compress_set_two_runs_to_two_ranges() {
+        // {1,2,3, 10,12,14} → two ranges
+        let mut c = IntegerCoordinates::default();
+        for v in [1, 2, 3, 10, 12, 14] {
+            c.append(v);
+        }
+        c.try_compress_to_ranges();
+        match &c {
+            IntegerCoordinates::RangeSet(ranges) => {
+                assert_eq!(ranges.len(), 2, "Expected 2 ranges, got {:?}", ranges);
+                // First range: 1..3 step 1
+                assert_eq!(ranges[0].start, 1);
+                assert_eq!(ranges[0].end, 3);
+                assert_eq!(ranges[0].step_size(), 1);
+                // Second range: 10..14 step 2
+                assert_eq!(ranges[1].start, 10);
+                assert_eq!(ranges[1].end, 14);
+                assert_eq!(ranges[1].step_size(), 2);
+            }
+            other => panic!("Expected RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_compress_set_with_isolated_singletons() {
+        // {1,2,3, 7, 10,11,12} → [1:1:3], singleton 7, [10:1:12]
+        // The algorithm emits singleton 7 (because the run 7→10 is only length 2)
+        // and then re-evaluates from 10, finding the run [10,11,12].
+        let mut c = IntegerCoordinates::default();
+        for v in [1, 2, 3, 7, 10, 11, 12] {
+            c.append(v);
+        }
+        c.try_compress_to_ranges();
+        match &c {
+            IntegerCoordinates::RangeSet(ranges) => {
+                assert_eq!(ranges.len(), 3, "Expected 3 ranges, got {:?}", ranges);
+                let vals: Vec<i32> = ranges.iter().flat_map(|r| r.iter()).collect();
+                assert_eq!(vals, vec![1, 2, 3, 7, 10, 11, 12]);
+                // First range: 1..3 step 1
+                assert_eq!(ranges[0].start, 1);
+                assert_eq!(ranges[0].end, 3);
+                assert_eq!(ranges[0].step_size(), 1);
+                // Second: singleton 7
+                assert_eq!(ranges[1].start, 7);
+                assert_eq!(ranges[1].end, 7);
+                // Third range: 10..12 step 1
+                assert_eq!(ranges[2].start, 10);
+                assert_eq!(ranges[2].end, 12);
+                assert_eq!(ranges[2].step_size(), 1);
+            }
+            other => panic!("Expected RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_compress_two_elements_does_not_compress() {
+        // {5, 6} — only 2 elements, not worth compressing
+        let mut c = IntegerCoordinates::default();
+        c.append(5);
+        c.append(6);
+        c.try_compress_to_ranges();
+        // Should remain a Set (compression threshold is 3+ elements per run)
+        assert!(matches!(c, IntegerCoordinates::Set(_)));
+    }
+
+    #[test]
+    fn test_compress_already_rangeset_merges_adjacent_ranges() {
+        // Two adjacent step-1 ranges: [1..3] and [4..6] → should merge to [1..6]
+        use tiny_vec::TinyVec;
+        let mut ranges: TinyVec<IntegerRange, 2> = TinyVec::new();
+        ranges.push(IntegerRange::new_step1(1, 3));
+        ranges.push(IntegerRange::new_step1(4, 6));
+        let mut c = IntegerCoordinates::RangeSet(ranges);
+        c.try_compress_to_ranges();
+        match &c {
+            IntegerCoordinates::RangeSet(rs) => {
+                assert_eq!(rs.len(), 1);
+                assert_eq!(rs[0].start, 1);
+                assert_eq!(rs[0].end, 6);
+            }
+            other => panic!("Expected merged RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_compress_via_coordinates_try_compress() {
+        // Using the top-level Coordinates::try_compress() API
+        let mut coords = Coordinates::Empty;
+        for v in [10, 11, 12, 13, 14, 15] {
+            coords.append(v);
+        }
+        coords.try_compress();
+        match &coords {
+            Coordinates::Integers(IntegerCoordinates::RangeSet(ranges)) => {
+                assert_eq!(ranges.len(), 1);
+                assert_eq!(ranges[0].start, 10);
+                assert_eq!(ranges[0].end, 15);
+            }
+            other => panic!("Expected compressed Integers RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_integer_rangeset_from_string_roundtrip() {
+        // to_string → from_string roundtrip for integer RangeSet
+        let coords = Coordinates::from(IntegerRange::new(1, 10, 2));
+        let s = coords.to_string();
+        assert_eq!(s, "1:2:10");
+        let parsed = Coordinates::from_string(&s);
+        assert_eq!(parsed, coords);
+    }
+
+    #[test]
+    fn test_integer_two_range_from_string_roundtrip() {
+        use tiny_vec::TinyVec;
+        let mut ranges: TinyVec<IntegerRange, 2> = TinyVec::new();
+        ranges.push(IntegerRange::new_step1(1, 5));
+        ranges.push(IntegerRange::new_step1(10, 15));
+        let c = Coordinates::Integers(IntegerCoordinates::RangeSet(ranges));
+        let s = c.to_string();
+        let parsed = Coordinates::from_string(&s);
+        assert_eq!(parsed, c);
     }
 }

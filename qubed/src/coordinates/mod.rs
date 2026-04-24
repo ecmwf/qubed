@@ -51,6 +51,23 @@ impl Coordinates {
         if s.is_empty() {
             return Coordinates::Empty;
         }
+
+        // First, try to parse the whole string as a datetime RangeSet
+        // (format: "start:Xs:end/start:Xs:end/...").
+        // This must be checked before splitting on '/' because the datetime format
+        // contains ':' characters.
+        if let Some(dt_ranges) = datetime::DateTimeCoordinates::parse_range_from_str(s) {
+            return Coordinates::DateTimes(dt_ranges);
+        }
+
+        // Next, try the whole string as an integer range set ("start:step:end/...").
+        // Format: digits:digits:digits, optionally repeated with '/'.
+        if looks_like_integer_rangeset(s) {
+            if let Some(coords) = parse_integer_rangeset_str(s) {
+                return coords;
+            }
+        }
+
         let mut coords = Coordinates::Empty;
         let split: Vec<&str> = s.split('/').collect();
 
@@ -105,6 +122,20 @@ impl Coordinates {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Attempt to compress coordinate values into a more compact range representation.
+    ///
+    /// - `Integers(Set)` or `Integers(RangeSet)` → may become `RangeSet` if
+    ///   consecutive runs are found that reduce the total number of stored items.
+    /// - `DateTimes(List)` or `DateTimes(RangeSet)` → same treatment.
+    /// - All other variants are unchanged.
+    pub fn try_compress(&mut self) {
+        match self {
+            Coordinates::Integers(ints) => ints.try_compress_to_ranges(),
+            Coordinates::DateTimes(dts) => dts.try_compress_to_ranges(),
+            _ => {}
+        }
     }
 
     pub fn contains<T>(&self, value: T) -> bool
@@ -222,6 +253,41 @@ impl Default for Coordinates {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Returns true if the string looks like an integer RangeSet: all `/`-separated
+/// parts match the pattern `<int>:<int>:<int>`.
+fn looks_like_integer_rangeset(s: &str) -> bool {
+    s.split('/').all(|part| {
+        let segs: Vec<&str> = part.splitn(3, ':').collect();
+        segs.len() == 3 && segs.iter().all(|seg| seg.parse::<i32>().is_ok())
+    })
+}
+
+/// Parse a string of the form `"start:step:end/start:step:end/..."` into
+/// `Coordinates::Integers(RangeSet(...))`.
+fn parse_integer_rangeset_str(s: &str) -> Option<Coordinates> {
+    use integers::IntegerRange;
+    use tiny_vec::TinyVec;
+
+    let mut ranges: TinyVec<IntegerRange, 2> = TinyVec::new();
+    for part in s.split('/') {
+        let segs: Vec<&str> = part.splitn(3, ':').collect();
+        if segs.len() != 3 {
+            return None;
+        }
+        let start: i32 = segs[0].parse().ok()?;
+        let step: i32 = segs[1].parse().ok()?;
+        let end: i32 = segs[2].parse().ok()?;
+        if step <= 0 || step > u16::MAX as i32 || start > end {
+            return None;
+        }
+        ranges.push(IntegerRange::new(start, end, step as u16));
+    }
+    if ranges.is_empty() {
+        return None;
+    }
+    Some(Coordinates::Integers(integers::IntegerCoordinates::RangeSet(ranges)))
 }
 
 // ------------- Intersection ------------------

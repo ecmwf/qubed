@@ -263,6 +263,18 @@ impl DateTimeCoordinates {
         }
     }
 
+    /// Try to parse a `DateTimeRange` from its textual `to_string()` representation.
+    /// Format: `"<start>:<step_secs>s:<end>"` e.g. `"2020-01-01T00:00:00:86400s:2020-01-10T00:00:00"`.
+    /// Multiple ranges separated by `/` are also supported.
+    pub(crate) fn parse_range_from_str(s: &str) -> Option<DateTimeCoordinates> {
+        let mut ranges: TinyVec<DateTimeRange, 2> = TinyVec::new();
+        for part in s.split('/') {
+            let r = parse_single_dt_range(part)?;
+            ranges.push(r);
+        }
+        if ranges.is_empty() { None } else { Some(DateTimeCoordinates::RangeSet(ranges)) }
+    }
+
     /// Try to parse a string into `NaiveDateTime` using common formats.
     pub(crate) fn parse_from_str(s: &str) -> Option<NaiveDateTime> {
         // Try RFC3339 / ISO 8601
@@ -414,6 +426,126 @@ impl Default for DateTimeCoordinates {
     fn default() -> Self {
         DateTimeCoordinates::List(TinyVec::new())
     }
+}
+
+impl DateTimeCoordinates {
+    /// Attempt to compress the coordinate list into a tighter `RangeSet` representation.
+    ///
+    /// Works analogously to `IntegerCoordinates::try_compress_to_ranges`:
+    /// - Collect all values (sorted).
+    /// - Greedy scan for runs with a uniform `Duration` step (≥ 3 elements per run to save space).
+    /// - Only replace `self` with a `RangeSet` when the resulting number of ranges is strictly
+    ///   less than the original element count.
+    pub fn try_compress_to_ranges(&mut self) {
+        let mut values: Vec<NaiveDateTime> = match self {
+            DateTimeCoordinates::List(list) => list.iter().copied().collect(),
+            DateTimeCoordinates::RangeSet(ranges) => {
+                let mut v: Vec<NaiveDateTime> = ranges.iter().flat_map(|r| r.iter()).collect();
+                v.sort_unstable();
+                v.dedup();
+                v
+            }
+        };
+
+        if values.len() < 3 {
+            return;
+        }
+
+        values.sort_unstable();
+        values.dedup();
+
+        let ranges = compress_datetimes_to_ranges(&values);
+
+        let range_count = ranges.len();
+        if range_count < values.len() {
+            let mut rv: TinyVec<DateTimeRange, 2> = TinyVec::new();
+            for r in ranges {
+                rv.push(r);
+            }
+            *self = DateTimeCoordinates::RangeSet(rv);
+        }
+    }
+}
+
+/// Partition a sorted, deduplicated slice of `NaiveDateTime` values into the
+/// minimum set of uniform-step ranges.
+///
+/// Uses the same "emit one singleton, retry" strategy as the integer equivalent:
+/// if the run starting at position `i` using step `values[i+1]-values[i]` is
+/// fewer than 3 elements, only a singleton is emitted and the scan retries from
+/// `i+1`.  This prevents a short 2-element run from consuming a value that
+/// could start a longer run immediately after.
+pub(crate) fn compress_datetimes_to_ranges(values: &[NaiveDateTime]) -> Vec<DateTimeRange> {
+    if values.is_empty() {
+        return vec![];
+    }
+
+    let singleton = |v: NaiveDateTime| DateTimeRange::new(v, v, Duration::seconds(1));
+
+    let mut result: Vec<DateTimeRange> = Vec::new();
+    let mut i = 0;
+
+    while i < values.len() {
+        let run_len = if i + 1 < values.len() {
+            let step = values[i + 1] - values[i];
+            if step > Duration::zero() {
+                let mut j = i;
+                while j + 1 < values.len() && values[j + 1] - values[j] == step {
+                    j += 1;
+                }
+                j - i + 1
+            } else {
+                1
+            }
+        } else {
+            1
+        };
+
+        if run_len >= 3 {
+            let step = values[i + 1] - values[i];
+            result.push(DateTimeRange::new(values[i], values[i + run_len - 1], step));
+            i += run_len;
+        } else {
+            result.push(singleton(values[i]));
+            i += 1;
+        }
+    }
+
+    result
+}
+
+/// Parse a single datetime range string of the form `"<start>:<step_secs>s:<end>"`.
+fn parse_single_dt_range(s: &str) -> Option<DateTimeRange> {
+    // The format is: YYYY-MM-DDTHH:MM:SS:<step>s:YYYY-MM-DDTHH:MM:SS
+    // We locate the step token by finding `:<digits>s:` in the middle.
+    // Start and end datetimes are 19 chars each in "%Y-%m-%dT%H:%M:%S" format.
+    // So layout is: [19 chars]:[step]s:[19 chars]
+    if s.len() < 19 + 1 + 1 + 1 + 19 {
+        return None;
+    }
+    let start_str = &s[..19];
+    let rest = &s[19..];
+    // rest starts with ":<step>s:<end>"
+    if !rest.starts_with(':') {
+        return None;
+    }
+    let rest = &rest[1..]; // skip leading ':'
+    // Find the 's:' separator
+    let sep_pos = rest.find("s:")?;
+    let step_str = &rest[..sep_pos];
+    let end_str = &rest[sep_pos + 2..];
+    if end_str.len() < 19 {
+        return None;
+    }
+    let end_str = &end_str[..19];
+
+    let start = NaiveDateTime::parse_from_str(start_str, "%Y-%m-%dT%H:%M:%S").ok()?;
+    let end = NaiveDateTime::parse_from_str(end_str, "%Y-%m-%dT%H:%M:%S").ok()?;
+    let step_secs: i64 = step_str.parse().ok()?;
+    if step_secs <= 0 {
+        return None;
+    }
+    Some(DateTimeRange::new(start, end, Duration::seconds(step_secs)))
 }
 
 // ---- From impls ----
@@ -816,5 +948,131 @@ mod tests {
         // Midpoint check — not on hourly grid
         let mid = dt_h(2020, 1, 1, 0) + Duration::minutes(30);
         assert!(!r.contains(mid));
+    }
+
+    // ---- try_compress_to_ranges tests ----
+
+    #[test]
+    fn test_compress_list_daily_to_range() {
+        // List of 5 consecutive days → RangeSet([Jan1..Jan5 daily])
+        let mut c = DateTimeCoordinates::default();
+        for day in 1..=5 {
+            c.append(dt(2020, 1, day));
+        }
+        c.try_compress_to_ranges();
+        match &c {
+            DateTimeCoordinates::RangeSet(ranges) => {
+                assert_eq!(ranges.len(), 1);
+                assert_eq!(ranges[0].start, dt(2020, 1, 1));
+                assert_eq!(ranges[0].end, dt(2020, 1, 5));
+                assert_eq!(ranges[0].step, Duration::days(1));
+            }
+            other => panic!("Expected RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_compress_list_hourly_to_range() {
+        // 6 consecutive hours → RangeSet([0h..5h hourly])
+        let mut c = DateTimeCoordinates::default();
+        for h in 0..=5 {
+            c.append(dt_h(2020, 1, 1, h));
+        }
+        c.try_compress_to_ranges();
+        match &c {
+            DateTimeCoordinates::RangeSet(ranges) => {
+                assert_eq!(ranges.len(), 1);
+                assert_eq!(ranges[0].step, Duration::hours(1));
+                assert_eq!(ranges[0].len(), 6);
+            }
+            other => panic!("Expected RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_compress_list_two_runs_to_two_ranges() {
+        // Jan 1..3 (daily) + Jan 10..12 (daily)  → two ranges
+        let mut c = DateTimeCoordinates::default();
+        for day in [1u32, 2, 3, 10, 11, 12] {
+            c.append(dt(2020, 1, day));
+        }
+        c.try_compress_to_ranges();
+        match &c {
+            DateTimeCoordinates::RangeSet(ranges) => {
+                assert_eq!(ranges.len(), 2, "Expected 2 ranges, got {:?}", ranges);
+                assert_eq!(ranges[0].start, dt(2020, 1, 1));
+                assert_eq!(ranges[0].end, dt(2020, 1, 3));
+                assert_eq!(ranges[1].start, dt(2020, 1, 10));
+                assert_eq!(ranges[1].end, dt(2020, 1, 12));
+            }
+            other => panic!("Expected RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_compress_two_elements_does_not_compress() {
+        // Only 2 datetimes — not worth compressing
+        let mut c = DateTimeCoordinates::default();
+        c.append(dt(2020, 1, 1));
+        c.append(dt(2020, 1, 2));
+        c.try_compress_to_ranges();
+        assert!(matches!(c, DateTimeCoordinates::List(_)));
+    }
+
+    #[test]
+    fn test_compress_already_rangeset_merges_adjacent_ranges() {
+        // Two adjacent daily ranges: [Jan 1..Jan 3] and [Jan 4..Jan 6] → merge to [Jan 1..Jan 6]
+        use tiny_vec::TinyVec;
+        let mut ranges: TinyVec<DateTimeRange, 2> = TinyVec::new();
+        ranges.push(DateTimeRange::daily(dt(2020, 1, 1), dt(2020, 1, 3)));
+        ranges.push(DateTimeRange::daily(dt(2020, 1, 4), dt(2020, 1, 6)));
+        let mut c = DateTimeCoordinates::RangeSet(ranges);
+        c.try_compress_to_ranges();
+        match &c {
+            DateTimeCoordinates::RangeSet(rs) => {
+                assert_eq!(rs.len(), 1, "Expected merged into 1 range, got {:?}", rs);
+                assert_eq!(rs[0].start, dt(2020, 1, 1));
+                assert_eq!(rs[0].end, dt(2020, 1, 6));
+            }
+            other => panic!("Expected RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_compress_via_coordinates_try_compress() {
+        // Via top-level Coordinates::try_compress()
+        let mut coords = Coordinates::from(
+            [dt(2020, 6, 1), dt(2020, 6, 2), dt(2020, 6, 3), dt(2020, 6, 4)].as_slice(),
+        );
+        coords.try_compress();
+        match &coords {
+            Coordinates::DateTimes(DateTimeCoordinates::RangeSet(ranges)) => {
+                assert_eq!(ranges.len(), 1);
+                assert_eq!(ranges[0].start, dt(2020, 6, 1));
+                assert_eq!(ranges[0].end, dt(2020, 6, 4));
+            }
+            other => panic!("Expected compressed DateTimes RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_datetime_rangeset_to_string_from_string_roundtrip() {
+        let r = DateTimeRange::daily(dt(2020, 1, 1), dt(2020, 1, 10));
+        let coords = Coordinates::from(r);
+        let s = coords.to_string();
+        let parsed = Coordinates::from_string(&s);
+        assert_eq!(parsed, coords, "Roundtrip failed: {:?} → {:?} → {:?}", coords, s, parsed);
+    }
+
+    #[test]
+    fn test_datetime_two_range_from_string_roundtrip() {
+        use tiny_vec::TinyVec;
+        let mut ranges: TinyVec<DateTimeRange, 2> = TinyVec::new();
+        ranges.push(DateTimeRange::daily(dt(2020, 1, 1), dt(2020, 1, 5)));
+        ranges.push(DateTimeRange::daily(dt(2020, 2, 1), dt(2020, 2, 5)));
+        let c = Coordinates::DateTimes(DateTimeCoordinates::RangeSet(ranges));
+        let s = c.to_string();
+        let parsed = Coordinates::from_string(&s);
+        assert_eq!(parsed, c, "Roundtrip failed: {:?} → {:?} → {:?}", c, s, parsed);
     }
 }

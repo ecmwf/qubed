@@ -129,14 +129,18 @@ impl Qube {
                         }
                     },
                     crate::Coordinates::DateTimes(_) => {
-                        // Fallback to whatever the generic serializer produces (not implemented elsewhere yet)
                         let v = nref.coordinates().to_json_value();
                         match v {
                             Value::Array(arr) => {
                                 map.insert("datetimes".to_string(), Value::Array(arr));
                                 Value::Object(map)
                             }
-                            other => Value::Object(map),
+                            Value::String(s) => {
+                                // RangeSet serialised as a textual string
+                                map.insert("datetimes_range".to_string(), Value::String(s));
+                                Value::Object(map)
+                            }
+                            _ => Value::Object(map),
                         }
                     }
                     crate::Coordinates::Mixed(_) => {
@@ -253,12 +257,19 @@ impl Qube {
                         let has_strings = map.get("strings").is_some();
                         let has_floats = map.get("floats").is_some();
                         let has_datetimes = map.get("datetimes").is_some();
+                        let has_datetimes_range = map.get("datetimes_range").is_some();
 
-                        let typed_key_count =
-                            [has_ints, has_ints_text, has_strings, has_floats, has_datetimes]
-                                .iter()
-                                .filter(|&&b| b)
-                                .count();
+                        let typed_key_count = [
+                            has_ints,
+                            has_ints_text,
+                            has_strings,
+                            has_floats,
+                            has_datetimes,
+                            has_datetimes_range,
+                        ]
+                        .iter()
+                        .filter(|&&b| b)
+                        .count();
 
                         if has_ints_text && typed_key_count == 1 {
                             // textual integer representation -> parse as string
@@ -273,6 +284,9 @@ impl Qube {
                             map.get("floats").cloned().unwrap_or(Value::Null)
                         } else if has_datetimes && typed_key_count == 1 {
                             map.get("datetimes").cloned().unwrap_or(Value::Null)
+                        } else if has_datetimes_range && typed_key_count == 1 {
+                            // datetime range stored as textual string — parse via from_string
+                            map.get("datetimes_range").cloned().unwrap_or(Value::Null)
                         } else {
                             // Mixed or unknown: pass the whole object so
                             // `from_json_value` can create a MixedCoordinates
@@ -472,5 +486,185 @@ mod json_tests {
         // Reconstruct and verify structure equality via to_json()
         let reconstructed = Qube::from_arena_json(arena).expect("from_arena_json");
         assert_eq!(qube.to_json(), reconstructed.to_json());
+    }
+
+    #[test]
+    fn test_arena_roundtrip_integer_rangeset() {
+        use crate::coordinates::integers::{IntegerCoordinates, IntegerRange};
+        use tiny_vec::TinyVec;
+
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        // param = 1:1:10 (range 1..10 step 1)
+        let mut ranges: TinyVec<IntegerRange, 2> = TinyVec::new();
+        ranges.push(IntegerRange::new_step1(1, 10));
+        let coords = Coordinates::Integers(IntegerCoordinates::RangeSet(ranges));
+        qube.get_or_create_child("param", root, Some(coords)).unwrap();
+
+        let arena = qube.to_arena_json();
+        println!("Integer RangeSet arena JSON:\n{}", serde_json::to_string_pretty(&arena).unwrap());
+
+        let reconstructed = Qube::from_arena_json(arena).expect("from_arena_json");
+        assert_eq!(
+            qube.to_json(),
+            reconstructed.to_json(),
+            "Integer RangeSet arena roundtrip failed"
+        );
+    }
+
+    #[test]
+    fn test_arena_roundtrip_datetime_rangeset() {
+        use crate::coordinates::datetime::{DateTimeCoordinates, DateTimeRange};
+        use chrono::NaiveDate;
+        use tiny_vec::TinyVec;
+
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        let d_start = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let d_end = NaiveDate::from_ymd_opt(2020, 1, 10).unwrap().and_hms_opt(0, 0, 0).unwrap();
+
+        let mut ranges: TinyVec<DateTimeRange, 2> = TinyVec::new();
+        ranges.push(DateTimeRange::daily(d_start, d_end));
+        let coords = Coordinates::DateTimes(DateTimeCoordinates::RangeSet(ranges));
+        qube.get_or_create_child("date", root, Some(coords)).unwrap();
+
+        let arena = qube.to_arena_json();
+        println!(
+            "DateTime RangeSet arena JSON:\n{}",
+            serde_json::to_string_pretty(&arena).unwrap()
+        );
+
+        let reconstructed = Qube::from_arena_json(arena).expect("from_arena_json");
+        assert_eq!(
+            qube.to_json(),
+            reconstructed.to_json(),
+            "DateTime RangeSet arena roundtrip failed"
+        );
+    }
+
+    #[test]
+    fn test_qube_compress_integers_to_rangeset() {
+        // Building a Qube with many single-integer param nodes, then compressing
+        // should merge them and then compress into a range.
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        // class=od branch
+        let class = {
+            let mut c = Coordinates::Empty;
+            c.append("od".to_string());
+            qube.get_or_create_child("class", root, Some(c)).unwrap()
+        };
+
+        // Add params 1..10 as individual nodes under the same parent
+        for v in 1..=10i32 {
+            let mut c = Coordinates::Empty;
+            c.append(v);
+            qube.get_or_create_child("param", class, Some(c)).unwrap();
+        }
+
+        qube.compress();
+
+        // After compression the param node should have a single RangeSet coord
+        let class_node = qube.node(class).unwrap();
+        let param_kids: Vec<_> = class_node.all_children().collect();
+        assert_eq!(param_kids.len(), 1, "Expected params merged into 1 node");
+
+        let param_node = qube.node(param_kids[0]).unwrap();
+        match param_node.coordinates() {
+            Coordinates::Integers(crate::coordinates::integers::IntegerCoordinates::RangeSet(
+                ranges,
+            )) => {
+                // Should have compressed to a single 1..10 range
+                assert_eq!(ranges.len(), 1, "Expected single range, got {:?}", ranges);
+                assert_eq!(ranges[0].start, 1);
+                assert_eq!(ranges[0].end, 10);
+            }
+            other => panic!("Expected IntegerCoordinates::RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_qube_compress_datetimes_to_rangeset() {
+        use chrono::NaiveDate;
+
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        let class = {
+            let mut c = Coordinates::Empty;
+            c.append("od".to_string());
+            qube.get_or_create_child("class", root, Some(c)).unwrap()
+        };
+
+        // Add dates Jan 1..10 as individual nodes
+        for day in 1..=10u32 {
+            let d = NaiveDate::from_ymd_opt(2020, 1, day).unwrap().and_hms_opt(0, 0, 0).unwrap();
+            let mut c = Coordinates::Empty;
+            c.append(d);
+            qube.get_or_create_child("date", class, Some(c)).unwrap();
+        }
+
+        qube.compress();
+
+        let class_node = qube.node(class).unwrap();
+        let date_kids: Vec<_> = class_node.all_children().collect();
+        assert_eq!(date_kids.len(), 1, "Expected dates merged into 1 node");
+
+        let date_node = qube.node(date_kids[0]).unwrap();
+        match date_node.coordinates() {
+            Coordinates::DateTimes(
+                crate::coordinates::datetime::DateTimeCoordinates::RangeSet(ranges),
+            ) => {
+                assert_eq!(ranges.len(), 1, "Expected single daily range, got {:?}", ranges);
+                assert_eq!(
+                    ranges[0].start,
+                    NaiveDate::from_ymd_opt(2020, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap()
+                );
+                assert_eq!(
+                    ranges[0].end,
+                    NaiveDate::from_ymd_opt(2020, 1, 10).unwrap().and_hms_opt(0, 0, 0).unwrap()
+                );
+            }
+            other => panic!("Expected DateTimeCoordinates::RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_qube_compress_two_integer_ranges() {
+        // Two disjoint ranges of integers should both be preserved as ranges
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        let class = {
+            let mut c = Coordinates::Empty;
+            c.append("od".to_string());
+            qube.get_or_create_child("class", root, Some(c)).unwrap()
+        };
+
+        // Add 1..5 and 10..15 as individual integer nodes
+        for v in (1..=5i32).chain(10..=15) {
+            let mut c = Coordinates::Empty;
+            c.append(v);
+            qube.get_or_create_child("param", class, Some(c)).unwrap();
+        }
+
+        qube.compress();
+
+        let class_node = qube.node(class).unwrap();
+        let param_kids: Vec<_> = class_node.all_children().collect();
+        assert_eq!(param_kids.len(), 1);
+
+        let param_node = qube.node(param_kids[0]).unwrap();
+        match param_node.coordinates() {
+            Coordinates::Integers(crate::coordinates::integers::IntegerCoordinates::RangeSet(
+                ranges,
+            )) => {
+                assert_eq!(ranges.len(), 2, "Expected 2 ranges, got {:?}", ranges);
+            }
+            other => panic!("Expected IntegerCoordinates::RangeSet with 2 ranges, got {:?}", other),
+        }
     }
 }
