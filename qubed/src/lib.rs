@@ -2,6 +2,7 @@ mod compress;
 mod coordinates;
 pub mod datacube;
 mod merge;
+mod metadata;
 mod qube;
 pub mod select;
 pub mod serde;
