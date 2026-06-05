@@ -170,6 +170,36 @@ impl IntegerCoordinates {
         }
     }
 
+    /// Human-readable ASCII representation.
+    ///
+    /// Each range is rendered as:
+    ///   - singleton `v`  →  `v`
+    ///   - step-1 range   →  `start/to/end`
+    ///   - stepped range  →  `start/to/end/by/step`
+    ///
+    /// Multiple ranges / singletons are separated by `|`.
+    /// Plain `Set` values use the standard `/`-joined format (no ranges present).
+    pub(crate) fn to_ascii_string(&self) -> String {
+        match self {
+            IntegerCoordinates::Set(set) => {
+                set.iter().map(|v| v.to_string()).collect::<Vec<String>>().join("/")
+            }
+            IntegerCoordinates::RangeSet(ranges) => ranges
+                .iter()
+                .map(|r| {
+                    if r.start == r.end {
+                        r.start.to_string()
+                    } else if r.step_size() == 1 {
+                        format!("{}/to/{}", r.start, r.end)
+                    } else {
+                        format!("{}/to/{}/by/{}", r.start, r.end, r.step_size())
+                    }
+                })
+                .collect::<Vec<String>>()
+                .join("|"),
+        }
+    }
+
     pub(crate) fn intersect(
         &self,
         other: &IntegerCoordinates,

@@ -184,6 +184,45 @@ impl DateTimeCoordinates {
         }
     }
 
+    /// Human-readable ASCII representation.
+    ///
+    /// Each range is rendered as:
+    ///   - singleton `v`       →  `v` (using `%Y-%m-%dT%H:%M:%S`)
+    ///   - daily range         →  `start/to/end`
+    ///   - range with step     →  `start/to/end/by/<secs>s`
+    ///
+    /// Multiple ranges / singletons are separated by `|`.
+    /// Plain `List` values use the standard `/`-joined format.
+    pub(crate) fn to_ascii_string(&self) -> String {
+        let fmt = "%Y-%m-%dT%H:%M:%S";
+        match self {
+            DateTimeCoordinates::List(list) => {
+                list.iter().map(|dt| dt.format(fmt).to_string()).collect::<Vec<String>>().join("/")
+            }
+            DateTimeCoordinates::RangeSet(ranges) => {
+                let day_secs = Duration::days(1).num_seconds();
+                ranges
+                    .iter()
+                    .map(|r| {
+                        if r.start == r.end {
+                            r.start.format(fmt).to_string()
+                        } else if r.step.num_seconds() == day_secs {
+                            format!("{}/to/{}", r.start.format(fmt), r.end.format(fmt))
+                        } else {
+                            format!(
+                                "{}/to/{}/by/{}s",
+                                r.start.format(fmt),
+                                r.end.format(fmt),
+                                r.step.num_seconds()
+                            )
+                        }
+                    })
+                    .collect::<Vec<String>>()
+                    .join("|")
+            }
+        }
+    }
+
     pub(crate) fn hash(&self, hasher: &mut std::collections::hash_map::DefaultHasher) {
         "datetime".hash(hasher);
         match self {
@@ -277,9 +316,14 @@ impl DateTimeCoordinates {
 
     /// Try to parse a string into `NaiveDateTime` using common formats.
     pub(crate) fn parse_from_str(s: &str) -> Option<NaiveDateTime> {
-        // Try RFC3339 / ISO 8601
+        // Try RFC3339 / ISO 8601 with timezone
         if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
             return Some(dt.with_timezone(&Utc).naive_utc());
+        }
+
+        // Try YYYY-MM-DDTHH:MM:SS (no timezone — the canonical to_ascii_string format)
+        if let Ok(ndt) = NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S") {
+            return Some(ndt);
         }
 
         // Try YYYY-MM-DD HH:MM:SS
