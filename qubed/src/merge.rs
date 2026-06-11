@@ -1,3 +1,4 @@
+use crate::metadata::Metadata;
 use crate::qube::Dimension;
 use crate::{NodeIdx, Qube};
 use std::collections::HashMap;
@@ -100,9 +101,18 @@ impl Qube {
                         .unwrap();
 
                     if check_new_child_a.unwrap() {
+                        // Seed the new intersection node in self with the metadata of the
+                        // node being split.  The recursive node_merge + compress that
+                        // follows will reconcile metadata from both sides.
+                        let self_meta: Metadata =
+                            self.get_node_metadata(*node).cloned().unwrap_or_default();
+                        *self.node_mut(new_node_a).unwrap().metadata_mut() = self_meta;
                         self.copy_branch(*node, new_node_a);
                     }
                     if check_new_child_b.unwrap() {
+                        let other_meta: Metadata =
+                            other.get_node_metadata(*other_node).cloned().unwrap_or_default();
+                        *other.node_mut(new_node_b).unwrap().metadata_mut() = other_meta;
                         other.copy_branch(*other_node, new_node_b);
                     }
 
@@ -110,16 +120,24 @@ impl Qube {
                 }
 
                 // If there are values only in self, update the coordinates of the current node.
+                // The node keeps its existing metadata — it still represents the same "kind"
+                // of data, just with a narrowed coordinate set.
                 if only_self.len() != 0 {
                     let actual_node = self.node_mut(*node).unwrap();
                     *actual_node.coords_mut() = only_self;
                 }
 
-                // If there are values only in other, create a new node for those values.
+                // If there are values only in other, create a new node for those values and
+                // copy the full subtree (including metadata) from other.
                 if only_other.len() != 0 {
                     let new_node_only_b = self
                         .get_or_create_child(&other_dim_str, parent_a, Some(only_other.clone()))
                         .unwrap();
+
+                    // Propagate the metadata from other's node to the new node.
+                    let other_meta: Metadata =
+                        other.get_node_metadata(*other_node).cloned().unwrap_or_default();
+                    *self.node_mut(new_node_only_b).unwrap().metadata_mut() = other_meta;
 
                     self.copy_subtree(other, *other_node, new_node_only_b);
 
@@ -145,6 +163,8 @@ impl Qube {
         if self.is_empty() {
             let other_root = other.root();
             let self_root = self.root();
+            // De-consolidate metadata from other's root so it travels with the subtrees.
+            other.push_metadata_to_children(other_root);
             self.copy_subtree(other, other_root, self_root);
             *other = Qube::new();
             // Ensure append behavior is consistent: always compress after merging.
@@ -154,6 +174,10 @@ impl Qube {
 
         let self_root_id = self.root();
         let other_root_id = other.root();
+        // De-consolidate root metadata on both sides so it travels with each subtree
+        // during node_merge rather than staying stranded on the roots.
+        self.push_metadata_to_children(self_root_id);
+        other.push_metadata_to_children(other_root_id);
         self.node_merge(other, self_root_id, other_root_id);
         self.compress();
         // Clear the other Qube
@@ -166,6 +190,10 @@ impl Qube {
         for (i, other) in others.iter_mut().enumerate() {
             let self_root_id = self.root();
             let other_root_id = other.root();
+
+            // De-consolidate root metadata on both sides so it travels with each subtree.
+            self.push_metadata_to_children(self_root_id);
+            other.push_metadata_to_children(other_root_id);
 
             // Perform the union with the current Qube
             self.node_merge(other, self_root_id, other_root_id);

@@ -80,6 +80,10 @@ impl Node {
     pub(crate) fn metadata(&self) -> &Metadata {
         &self.metadata
     }
+
+    pub(crate) fn metadata_mut(&mut self) -> &mut Metadata {
+        &mut self.metadata
+    }
 }
 
 impl Qube {
@@ -496,21 +500,24 @@ impl Qube {
 }
 
 impl Qube {
-    /// Recursively copies the subtree from `other_node` in `other` to `new_node` in `self`.
+    /// Recursively copies the subtree from `other_node` in `other` to `new_node` in `self`,
+    /// including the metadata of every copied node.
     pub(crate) fn copy_subtree(&mut self, other: &Qube, other_node: NodeIdx, new_node: NodeIdx) {
         // Get the children of the `other_node`
         let other_children = other.node_ref(other_node).unwrap().children().clone();
 
         for (dim, child_ids) in other_children {
             for child_id in child_ids {
-                // Get the coordinates of the child node
+                // Clone both coordinates and metadata before any mutable borrow
                 let child_coords = other.node_ref(child_id).unwrap().coords().clone();
+                let child_metadata = other.node_ref(child_id).unwrap().metadata().clone();
 
-                // Create a new child node in `self` with the same dimension and coordinates
-                // let new_child = self.get_or_create_child(&self.dimension_str(&dim).unwrap(), new_node, Some(child_coords)).unwrap();
-                let dim_str = other.dimension_str(&dim).unwrap().to_owned(); // Immutable borrow ends here
+                let dim_str = other.dimension_str(&dim).unwrap().to_owned();
                 let new_child =
-                    self.get_or_create_child(&dim_str, new_node, Some(child_coords)).unwrap(); // Mutable borrow starts here
+                    self.get_or_create_child(&dim_str, new_node, Some(child_coords)).unwrap();
+
+                // Propagate metadata to the newly created child
+                *self.node_mut(new_child).unwrap().metadata_mut() = child_metadata;
 
                 // Recursively copy the subtree of the child
                 self.copy_subtree(other, child_id, new_child);
@@ -524,14 +531,17 @@ impl Qube {
 
         for (dim, child_ids) in source_children {
             for child_id in child_ids {
-                // Clone the coordinates of the child
+                // Clone coordinates and metadata before any mutable borrow
                 let child_coords = self.node_ref(child_id).unwrap().coords().clone();
+                let child_metadata = self.node_ref(child_id).unwrap().metadata().clone();
 
-                // Create a new child node in `target_node` with the same dimension and coordinates
                 let dim_str = self.dimension_str(&dim).unwrap().to_owned();
                 let new_child = self
                     .get_or_create_child(&dim_str, target_node, Some(child_coords))
                     .expect("Failed to create child node");
+
+                // Propagate metadata to the newly created child
+                *self.node_mut(new_child).unwrap().metadata_mut() = child_metadata;
 
                 // Recursively copy the subtree of the child
                 self.copy_branch(child_id, new_child);
@@ -757,6 +767,66 @@ impl Qube {
         // Recursively try to consolidate further up
         if let Some(grandparent_id) = self.nodes.get(parent_id).and_then(|n| n.parent) {
             self.try_consolidate_metadata(grandparent_id, key);
+        }
+    }
+
+    /// Pushes all metadata from `node_id` down to its direct children, merging with
+    /// any metadata already on each child, then clears the node's own metadata.
+    ///
+    /// This is the inverse of `try_consolidate_metadata`: it de-consolidates metadata
+    /// that has been bubbled up, ensuring the metadata travels with its subtree when
+    /// the subtree is copied during `append` / `append_many`.
+    ///
+    /// No-op if the node has no metadata or has no children (i.e. is a leaf).
+    pub(crate) fn push_metadata_to_children(&mut self, node_id: NodeIdx) {
+        let node_metadata = match self.node_ref(node_id) {
+            Some(n) if !n.metadata().is_empty() => n.metadata().clone(),
+            _ => return,
+        };
+
+        let children: Vec<NodeIdx> = match self.node_ref(node_id) {
+            Some(n) => n.children().values().flat_map(|v| v.iter().copied()).collect(),
+            None => return,
+        };
+
+        if children.is_empty() {
+            return;
+        }
+
+        for child_id in children {
+            let existing = self.node_ref(child_id).unwrap().metadata().clone();
+            let new_meta = existing.merge_with(&node_metadata);
+            *self.node_mut(child_id).unwrap().metadata_mut() = new_meta;
+        }
+
+        if let Some(node) = self.node_mut(node_id) {
+            *node.metadata_mut() = Metadata::new();
+        }
+    }
+
+    /// Run a full bottom-up metadata consolidation pass over the subtree rooted at `node_id`.
+    ///
+    /// Processes nodes deepest-first. At each node, for every metadata key present on
+    /// its children, attempts to consolidate that key upward if all children share the
+    /// same uniform value.
+    pub(crate) fn consolidate_all_metadata(&mut self, node_id: NodeIdx) {
+        let children: Vec<NodeIdx> = {
+            let node = self.node_ref(node_id).unwrap();
+            node.children().values().flat_map(|v| v.iter().copied()).collect()
+        };
+
+        for &child in &children {
+            self.consolidate_all_metadata(child);
+        }
+
+        // Collect all metadata keys present across children, then try to consolidate each
+        let child_keys: std::collections::HashSet<String> = children
+            .iter()
+            .flat_map(|&id| self.node_ref(id).unwrap().metadata().keys().cloned())
+            .collect();
+
+        for key in child_keys {
+            self.try_consolidate_metadata(node_id, &key);
         }
     }
 }
