@@ -7,6 +7,19 @@ use std::time::Instant;
 impl Qube {
     /// Performs a union operation between two nodes in two different Qubes.
     fn node_merge(&mut self, other: &mut Qube, self_id: NodeIdx, other_id: NodeIdx) -> NodeIdx {
+        // Before descending into children, check whether the two nodes carry different
+        // metadata for the same key.  This can happen when the same metadata was
+        // consolidated to different levels in the two trees (e.g. class=1 in tree A has
+        // src=X consolidated from its only child, while tree B still has src=X sitting
+        // on that child).  Pushing down here normalises both trees to the same level
+        // before the structural merge so metadata is never silently lost or misattributed.
+        let self_meta = self.get_node_metadata(self_id).cloned().unwrap_or_default();
+        let other_meta = other.get_node_metadata(other_id).cloned().unwrap_or_default();
+        if self_meta != other_meta {
+            self.push_metadata_to_children(self_id);
+            other.push_metadata_to_children(other_id);
+        }
+
         // Group the children of both nodes into groups according to their associated dimensions.
         let self_children = {
             let node = self.node_ref(self_id).unwrap();
@@ -159,25 +172,27 @@ impl Qube {
         // This method starts at the root of both Qubes and recursively merges their nodes.
         // After the union, the tree is compressed to remove duplicates and empty nodes.
 
-        // Fast-path: if self is empty, just take the content of other directly.
+        let self_root_id = self.root();
+        let other_root_id = other.root();
+
+        // Fast-path: if self is empty, copy_subtree is used instead of node_merge, so the
+        // per-level conflict detection in node_merge never fires.  Handle the root-level
+        // metadata mismatch here explicitly before the copy.
         if self.is_empty() {
-            let other_root = other.root();
-            let self_root = self.root();
-            // De-consolidate metadata from other's root so it travels with the subtrees.
-            other.push_metadata_to_children(other_root);
-            self.copy_subtree(other, other_root, self_root);
+            let self_root_meta = self.get_node_metadata(self_root_id).cloned().unwrap_or_default();
+            let other_root_meta =
+                other.get_node_metadata(other_root_id).cloned().unwrap_or_default();
+            if self_root_meta != other_root_meta {
+                other.push_metadata_to_children(other_root_id);
+            }
+            self.copy_subtree(other, other_root_id, self_root_id);
             *other = Qube::new();
-            // Ensure append behavior is consistent: always compress after merging.
             self.compress();
             return;
         }
 
-        let self_root_id = self.root();
-        let other_root_id = other.root();
-        // De-consolidate root metadata on both sides so it travels with each subtree
-        // during node_merge rather than staying stranded on the roots.
-        self.push_metadata_to_children(self_root_id);
-        other.push_metadata_to_children(other_root_id);
+        // General path: node_merge recurses through the tree and pushes metadata at every
+        // level where the two sides disagree, so no explicit push is needed here.
         self.node_merge(other, self_root_id, other_root_id);
         self.compress();
         // Clear the other Qube
@@ -191,11 +206,7 @@ impl Qube {
             let self_root_id = self.root();
             let other_root_id = other.root();
 
-            // De-consolidate root metadata on both sides so it travels with each subtree.
-            self.push_metadata_to_children(self_root_id);
-            other.push_metadata_to_children(other_root_id);
-
-            // Perform the union with the current Qube
+            // node_merge handles metadata conflict detection at every tree level.
             self.node_merge(other, self_root_id, other_root_id);
 
             // Print progress update

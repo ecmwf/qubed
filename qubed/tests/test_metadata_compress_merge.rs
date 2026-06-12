@@ -512,8 +512,117 @@ fn append_disjoint_metadata_stays_on_correct_branches() {
 }
 
 // ===========================================================================
-//  14. Compress – node with no metadata mixed with node with metadata
+//  15. Merge – same key consolidated to different tree levels
 // ===========================================================================
+
+/// Tree A has src=X consolidated up to `class` level (from a single-child chain).
+/// Tree B carries src=X on the `param` nodes directly (two params, not consolidated).
+/// After appending B into A, the merged tree should still have src=X attributed
+/// to the combined class subtree — at whatever level consolidation settles on.
+#[test]
+fn append_same_key_different_consolidation_levels() {
+    // Tree A: class=1 → expver=0001 → param=1
+    //   src=X consolidated all the way to class=1 (single-child chain).
+    let mut qa = Qube::new();
+    let root_a = qa.root();
+    let class_a = qa.get_or_create_child("class", root_a, Some(1.into())).unwrap();
+    let expver_a = qa.get_or_create_child("expver", class_a, Some("0001".into())).unwrap();
+    let param_a = qa.get_or_create_child("param", expver_a, Some(1.into())).unwrap();
+    // Setting src=X on param bubbles up through the single-child chain all the way to root.
+    qa.set_metadata(param_a, "src", MetadataValues::single_string("X")).unwrap();
+    // After consolidation: src=X is on root (or class_a), not on expver_a / param_a.
+    assert!(
+        qa.get_metadata(class_a, "src").is_some() || qa.get_metadata(root_a, "src").is_some(),
+        "src should have consolidated to class or root"
+    );
+
+    // Tree B: class=1 → expver=0001 → param=1
+    //                              → param=2
+    //   src=X sits on param=1 and param=2; it consolidates only to expver=0001
+    //   (not further, because class has only one expver child — actually it *would*
+    //    consolidate to class too; so let's give class two expver children so it stops
+    //    at expver level).
+    let mut qb = Qube::new();
+    let root_b = qb.root();
+    let class_b = qb.get_or_create_child("class", root_b, Some(1.into())).unwrap();
+    let expver_b1 = qb.get_or_create_child("expver", class_b, Some("0001".into())).unwrap();
+    let expver_b2 = qb.get_or_create_child("expver", class_b, Some("0002".into())).unwrap();
+    let param_b1 = qb.get_or_create_child("param", expver_b1, Some(1.into())).unwrap();
+    let param_b2 = qb.get_or_create_child("param", expver_b1, Some(2.into())).unwrap();
+    // Give expver_b2 a param too (no src, to prevent consolidation up to class).
+    let _param_b3 = qb.get_or_create_child("param", expver_b2, Some(1.into())).unwrap();
+    qb.set_metadata(param_b1, "src", MetadataValues::single_string("X")).unwrap();
+    qb.set_metadata(param_b2, "src", MetadataValues::single_string("X")).unwrap();
+    // src=X consolidates from param_b1 and param_b2 up to expver_b1.
+    // expver_b2 has no src → src does NOT consolidate to class_b.
+    assert!(qb.get_metadata(expver_b1, "src").is_some(), "src should consolidate to expver_b1");
+    assert!(qb.get_metadata(class_b, "src").is_none(), "src must NOT reach class_b");
+
+    qa.append(&mut qb);
+
+    // After the merge, src=X must still be present somewhere in the subtree
+    // rooted at class=1.  It may sit on class, on expver=0001, on the params,
+    // or have consolidated further — but it must not be silently lost.
+    let merged_class = find_child(&qa, root_a, "class", "1");
+    let merged_expver = find_child(&qa, merged_class, "expver", "0001");
+
+    let src = qa
+        .get_metadata(merged_class, "src")
+        .or_else(|| qa.get_metadata(merged_expver, "src"))
+        .or_else(|| qa.get_metadata(root_a, "src"));
+
+    assert!(
+        src.is_some(),
+        "src=X must survive the merge of trees where it was at different consolidation levels"
+    );
+    assert!(src.unwrap().contains_string("X"));
+}
+
+// ===========================================================================
+//  16. Merge – metadata on inner node of one tree vs. leaf of the other
+// ===========================================================================
+
+/// Appending two trees where the shared metadata key is at `class` level in one
+/// qube and at `param` level in the other should not lose it.
+#[test]
+fn append_metadata_at_inner_vs_leaf_level() {
+    // qa: class=1 (tag=Y) → param=1   (tag consolidated from param to class)
+    let mut qa = Qube::new();
+    let root_a = qa.root();
+    let c1 = qa.get_or_create_child("class", root_a, Some(1.into())).unwrap();
+    let p1 = qa.get_or_create_child("param", c1, Some(1.into())).unwrap();
+    qa.set_metadata(p1, "tag", MetadataValues::single_string("Y")).unwrap();
+    // tag=Y consolidates to class=1 (single-child chain through class→param).
+    assert!(qa.get_metadata(c1, "tag").is_some() || qa.get_metadata(root_a, "tag").is_some());
+
+    // qb: class=2 → param=1 (tag=Y)   (tag stays at param, two class children prevent
+    //             → param=2 (tag=Y)    full consolidation to root but not to class=2)
+    let mut qb = Qube::new();
+    let root_b = qb.root();
+    let c2 = qb.get_or_create_child("class", root_b, Some(2.into())).unwrap();
+    let p2a = qb.get_or_create_child("param", c2, Some(1.into())).unwrap();
+    let p2b = qb.get_or_create_child("param", c2, Some(2.into())).unwrap();
+    qb.set_metadata(p2a, "tag", MetadataValues::single_string("Y")).unwrap();
+    qb.set_metadata(p2b, "tag", MetadataValues::single_string("Y")).unwrap();
+    // tag=Y consolidates to class=2.
+    assert!(qb.get_metadata(c2, "tag").is_some() || qb.get_metadata(root_b, "tag").is_some());
+
+    qa.append(&mut qb);
+
+    // Both class=1 and class=2 (and their descendants) carry tag=Y.
+    // After merging, tag=Y must be present at or above both class nodes
+    // (or consolidated all the way to root since both classes agree).
+    let class1 = find_child(&qa, root_a, "class", "1");
+    let class2 = find_child(&qa, root_a, "class", "2");
+
+    let tag1 = qa.get_metadata(class1, "tag").or_else(|| qa.get_metadata(root_a, "tag"));
+    let tag2 = qa.get_metadata(class2, "tag").or_else(|| qa.get_metadata(root_a, "tag"));
+
+    assert!(tag1.is_some(), "tag=Y must be present for class=1 subtree after merge");
+    assert!(tag1.unwrap().contains_string("Y"));
+    assert!(tag2.is_some(), "tag=Y must be present for class=2 subtree after merge");
+    assert!(tag2.unwrap().contains_string("Y"));
+}
 
 #[test]
 fn compress_partial_metadata_one_node_has_key_other_does_not() {
