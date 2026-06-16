@@ -17,9 +17,3 @@ rsfdb-support = ["dep:rsfdb"]
 path = "src/lib.rs"
 crate-type = ["rlib"]
 
-[patch.'https://github.com/ecmwf/rsfdb']
-rsfdb = { path = "../rsfdb" }
-
-[patch.'https://github.com/ecmwf-projects/rsfindlibs']
-rsfindlibs = { path = "../rsfindlibs" }
-
