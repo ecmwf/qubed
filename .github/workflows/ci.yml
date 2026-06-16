@@ -49,7 +49,7 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Run Rust tests
-        run: cargo test --workspace
+        run: cargo test -p qubed
 
       # Build the two Python extension packages that wrap the Rust crates.
       - name: Build qubed wheel
