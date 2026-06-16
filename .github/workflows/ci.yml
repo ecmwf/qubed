@@ -44,10 +44,6 @@ jobs:
 
       - name: Install maturin
         run: uv tool install maturin
-      
-      - name: Configure GitHub auth for Cargo
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
 
       - name: Check Rust formatting
         run: cargo fmt -- --check
