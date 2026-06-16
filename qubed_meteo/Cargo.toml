@@ -3,6 +3,11 @@ name = "qubed_meteo"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = [
+    "../py_qubed_meteo",
+]
+
 [dependencies]
 qubed = { path = "../qubed" }
 serde = "1.0.228"
