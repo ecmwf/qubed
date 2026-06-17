@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         target: [x86_64, aarch64]
-        package: [py_qubed, py_qubed_meteo]
+        package: [py_qubed]
 
     steps:
       - name: Checkout
@@ -58,11 +58,6 @@ jobs:
           pip install --upgrade pip
           pip install dist/**/py_qubed*.whl
           python -c "import py_qubed; print('py_qubed OK')"
-
-      - name: Install and test py_qubed_meteo
-        run: |
-          pip install dist/**/py_qubed_meteo*.whl
-          python -c "import py_qubed_meteo; print('py_qubed_meteo OK')"
 
 
   publish:
