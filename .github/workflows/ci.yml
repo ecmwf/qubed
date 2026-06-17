@@ -60,7 +60,7 @@ jobs:
         run: |
           uv venv .ci-venv
           uv pip install --python .ci-venv pytest target/wheels/qubed-*.whl 
-          uv run --python .ci-venv pytest -q py_qubed/tests
+          .ci-venv/bin/python -m pytest -q py_qubed/tests
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
