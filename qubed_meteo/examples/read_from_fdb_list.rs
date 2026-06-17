@@ -1,6 +1,7 @@
 use qubed::Qube;
 #[cfg(feature = "rsfdb-support")]
 use qubed_meteo::adapters::fdb::FromFDBList;
+#[cfg(feature = "rsfdb-support")]
 use rsfdb::{FDB, request::Request};
 use serde_json::json;
 use std::env;
