@@ -42,6 +42,34 @@ q = PyQube.from_ascii("""root
     └── expver=0002, param=1/2""")
 ```
 
+#### `PyQube.from_datacube(datacube: dict[str, str], order: list[str] | None = None) -> PyQube`
+
+Build a Qube from a flat datacube dictionary. Each key is a dimension name and each value is a coordinate string (use `/` to specify multiple values for a dimension, e.g. `"1/2/3"`).
+
+The optional `order` list controls the nesting order of dimensions in the resulting tree — dimensions listed first become shallower levels. Any dimensions not in `order` are appended at deeper levels in an unspecified order. When `order` is `None`, all dimension ordering is unspecified.
+
+This is the inverse of `to_datacubes()`: a single dict from that list can be passed back here to reconstruct a single-branch Qube.
+
+```python
+# Single identifier
+q = PyQube.from_datacube({"class": "od", "expver": "0001", "param": "1"}, ["class", "expver", "param"])
+print(q)
+# root
+# └── class=od
+#     └── expver=0001
+#         └── param=1
+
+# Multiple values on a dimension
+q = PyQube.from_datacube({"class": "od", "param": "1/2/3"}, ["class", "param"])
+print(q.all_unique_dim_coords())
+# {'class': ['od'], 'param': ['1', '2', '3']}
+
+# Roundtrip from to_datacubes
+original = PyQube.from_ascii("root\n└── class=od, expver=0001, param=1")
+for dc in original.to_datacubes():
+    rebuilt = PyQube.from_datacube(dc, ["class", "expver", "param"])
+```
+
 #### `PyQube.from_arena_json(json_str: str) -> PyQube`
 
 Reconstruct a Qube from arena JSON (a flat BFS array produced by `to_arena_json`):
@@ -121,6 +149,32 @@ Merge multiple Qubes at once:
 base = PyQube()
 qubes = [PyQube.from_ascii(f"root\n└── class=c{i}, param=1") for i in range(100)]
 base.append_many(qubes)
+```
+
+#### `append_datacube(datacube: dict[str, str], order: list[str] | None = None, accept_existing_order: bool = False) -> None`
+
+Merge a single flat datacube dictionary into this Qube in-place. This is a convenience wrapper around `from_datacube` + `append`: it constructs a temporary single-branch Qube from `datacube` and merges it, then compresses the result.
+
+`order` controls the dimension nesting order of the new branch (see `from_datacube`). `accept_existing_order` is reserved for future use.
+
+```python
+q = PyQube.from_ascii("""root
+└── class=od
+    └── expver=0001
+        └── param=1""")
+
+q.append_datacube({"class": "od", "expver": "0002", "param": "1"}, ["class", "expver", "param"])
+print(q.all_unique_dim_coords())
+# {'class': ['od'], 'expver': ['0001', '0002'], 'param': ['1']}
+
+# Build a Qube incrementally from a list of datacube dicts
+q = PyQube()
+for dc in [{"class": "od", "param": "1"}, {"class": "rd", "param": "2"}]:
+    q.append_datacube(dc, ["class", "param"])
+print(q)
+# root
+# └── class=od/rd
+#     └── param=1/2  (structure may vary)
 ```
 
 ---
