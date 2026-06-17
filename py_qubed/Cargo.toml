@@ -12,3 +12,6 @@ pyo3 = { version = "0.28", features = ["extension-module", "abi3-py38"] }
 name = "qubed"
 path = "src/lib.rs"
 crate-type = ["cdylib"]
+
+[tool.maturin]
+module-name = "qubed"
