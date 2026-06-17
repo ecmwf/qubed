@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  # Trigger the workflow on push to master or develop, except tag creation
+  push:
+    branches:
+      - "main"
+    tags-ignore:
+      - "**"
+
+  # Trigger the workflow on pull request
+  pull_request: ~
+
+  # Trigger the workflow manually
+  workflow_dispatch: ~
+
+  # Trigger after public PR approved for CI
+  pull_request_target:
+    types: [labeled]
+
+jobs:
+  checks-and-wheels:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # Cache Cargo registry + target to speed up Rust and extension builds.
+      - name: Cache cargo + target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # uv is used as the package/install frontend (including maturin install).
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install maturin
+        run: uv tool install maturin
+
+      - name: Check Rust formatting
+        run: cargo fmt -- --check
+
+      - name: Run Rust tests
+        run: cargo test -p qubed
+
+      # Build the two Python extension packages that wrap the Rust crates.
+      - name: Build qubed wheel
+        run: uv tool run maturin build -m py_qubed/Cargo.toml
+
+      # Install built wheels into an isolated uv-managed venv and run pytest.
+      - name: Run Python binding tests
+        run: |
+          uv venv .ci-venv
+          uv pip install --python .ci-venv pytest target/wheels/qubed-*.whl 
+          .ci-venv/bin/python -m pytest -q py_qubed/tests
+
+      - name: Upload wheel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux
+          path: target/wheels/*.whl

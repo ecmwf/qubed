@@ -1,12 +1,16 @@
 __pycache__
+**/__pycache__/
+**/.pytest_cache/
 .DS_Store
 .venv
 *.json
+*.bak
 raw_list
 *.egg-info/
 deps/
 docs/_build/
 docs/jupyter_execute
+docs/book/
 target/
 *.so
 _build/
@@ -14,7 +18,6 @@ build/
 .ipynb_checkpoints/
 dist/
 Cargo.lock
-src/python/qubed/_version.py
 *.ipynb
 cmake_build/
 tests/data/
@@ -23,9 +26,15 @@ node_modules/
 uv.lock
 *.log
 *.tmp
-test_scripts/data
+*.list
+test_scripts
 tests/example_qubes
 **/*venv*
-*.txt
-*.list
-**/data
+.idea/
+*.grib
+fdb
+
+
+# Added by cargo
+
+/target
