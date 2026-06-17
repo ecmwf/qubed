@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-e5663146.js";
+            window.path_to_searchindex_js = "../searchindex-a8d90e1f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-78e66672.js"></script>
@@ -199,6 +199,28 @@ maturin develop --release
     ├── expver=0001, param=1/2/3
     └── expver=0002, param=1/2""")
 </code></pre>
+<h4 id="pyqubefrom_datacubedatacube-dictstr-str-order-liststr--none--none---pyqube"><a class="header" href="#pyqubefrom_datacubedatacube-dictstr-str-order-liststr--none--none---pyqube"><code>PyQube.from_datacube(datacube: dict[str, str], order: list[str] | None = None) -&gt; PyQube</code></a></h4>
+<p>Build a Qube from a flat datacube dictionary. Each key is a dimension name and each value is a coordinate string (use <code>/</code> to specify multiple values for a dimension, e.g. <code>"1/2/3"</code>).</p>
+<p>The optional <code>order</code> list controls the nesting order of dimensions in the resulting tree — dimensions listed first become shallower levels. Any dimensions not in <code>order</code> are appended at deeper levels in an unspecified order. When <code>order</code> is <code>None</code>, all dimension ordering is unspecified.</p>
+<p>This is the inverse of <code>to_datacubes()</code>: a single dict from that list can be passed back here to reconstruct a single-branch Qube.</p>
+<pre><code class="language-python"># Single identifier
+q = PyQube.from_datacube({"class": "od", "expver": "0001", "param": "1"}, ["class", "expver", "param"])
+print(q)
+# root
+# └── class=od
+#     └── expver=0001
+#         └── param=1
+
+# Multiple values on a dimension
+q = PyQube.from_datacube({"class": "od", "param": "1/2/3"}, ["class", "param"])
+print(q.all_unique_dim_coords())
+# {'class': ['od'], 'param': ['1', '2', '3']}
+
+# Roundtrip from to_datacubes
+original = PyQube.from_ascii("root\n└── class=od, expver=0001, param=1")
+for dc in original.to_datacubes():
+    rebuilt = PyQube.from_datacube(dc, ["class", "expver", "param"])
+</code></pre>
 <h4 id="pyqubefrom_arena_jsonjson_str-str---pyqube"><a class="header" href="#pyqubefrom_arena_jsonjson_str-str---pyqube"><code>PyQube.from_arena_json(json_str: str) -&gt; PyQube</code></a></h4>
 <p>Reconstruct a Qube from arena JSON (a flat BFS array produced by <code>to_arena_json</code>):</p>
 <pre><code class="language-python">import json
@@ -249,6 +271,27 @@ print(a)
 <pre><code class="language-python">base = PyQube()
 qubes = [PyQube.from_ascii(f"root\n└── class=c{i}, param=1") for i in range(100)]
 base.append_many(qubes)
+</code></pre>
+<h4 id="append_datacubedatacube-dictstr-str-order-liststr--none--none-accept_existing_order-bool--false---none"><a class="header" href="#append_datacubedatacube-dictstr-str-order-liststr--none--none-accept_existing_order-bool--false---none"><code>append_datacube(datacube: dict[str, str], order: list[str] | None = None, accept_existing_order: bool = False) -&gt; None</code></a></h4>
+<p>Merge a single flat datacube dictionary into this Qube in-place. This is a convenience wrapper around <code>from_datacube</code> + <code>append</code>: it constructs a temporary single-branch Qube from <code>datacube</code> and merges it, then compresses the result.</p>
+<p><code>order</code> controls the dimension nesting order of the new branch (see <code>from_datacube</code>). <code>accept_existing_order</code> is reserved for future use.</p>
+<pre><code class="language-python">q = PyQube.from_ascii("""root
+└── class=od
+    └── expver=0001
+        └── param=1""")
+
+q.append_datacube({"class": "od", "expver": "0002", "param": "1"}, ["class", "expver", "param"])
+print(q.all_unique_dim_coords())
+# {'class': ['od'], 'expver': ['0001', '0002'], 'param': ['1']}
+
+# Build a Qube incrementally from a list of datacube dicts
+q = PyQube()
+for dc in [{"class": "od", "param": "1"}, {"class": "rd", "param": "2"}]:
+    q.append_datacube(dc, ["class", "param"])
+print(q)
+# root
+# └── class=od/rd
+#     └── param=1/2  (structure may vary)
 </code></pre>
 <hr>
 <h3 id="manipulation"><a class="header" href="#manipulation">Manipulation</a></h3>
