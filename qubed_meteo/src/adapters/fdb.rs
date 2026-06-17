@@ -1,4 +1,5 @@
 use qubed::{Coordinates, NodeIdx, Qube};
+#[cfg(feature = "rsfdb-support")]
 use rsfdb::{FDB, request::Request};
 use serde_json::Value as JsonValue;
 
@@ -13,6 +14,7 @@ pub trait FromFDBList {
 }
 
 impl FromFDBList for Qube {
+    #[cfg(feature = "rsfdb-support")]
     fn from_fdb_list(request_map: &JsonValue) -> Result<Qube, String> {
         // Build Request from provided JSON map
         let request = Request::from_json(request_map.clone())
@@ -103,6 +105,7 @@ mod tests {
     use std::env;
 
     #[test]
+    #[cfg(feature = "rsfdb-support")]
     fn test_from_fdb_list_basic() {
         // Ensure FDB config is set (adjust path for local environment if needed)
         let config_path =

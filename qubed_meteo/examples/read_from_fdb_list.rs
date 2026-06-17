@@ -1,10 +1,12 @@
 use qubed::Qube;
+#[cfg(feature = "rsfdb-support")]
 use qubed_meteo::adapters::fdb::FromFDBList;
 use rsfdb::{FDB, request::Request};
 use serde_json::json;
 use std::env;
 use std::time::Instant;
 
+#[cfg(feature = "rsfdb-support")]
 fn main() {
     // Ensure FDB config is set so the internal listing can open the DB
     let config_path =
