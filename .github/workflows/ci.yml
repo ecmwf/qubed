@@ -67,7 +67,7 @@ jobs:
           uv venv .ci-venv
           uv pip install --python .ci-venv pytest target/wheels/qubed-*.whl 
           .ci-venv/bin/python -m pytest -q py_qubed/tests
-          uv pip install --python .ci-venv pytest target/wheels/qubed_meteo-*.whl 
+          uv pip install --python .ci-venv pytest qubed_meteo/target/wheels/qubed_meteo-*.whl 
           .ci-venv/bin/python -m pytest -q py_qubed_meteo/tests
 
       - name: Upload wheel artifacts
