@@ -2,6 +2,9 @@ name: Publish crates
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - "v*"
 
 jobs:
   publish:
@@ -20,8 +23,3 @@ jobs:
 
       - name: Wait for crates.io index
         run: sleep 30
-
-      - name: Publish qubed_meteo
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish -p qubed_meteo
