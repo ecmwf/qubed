@@ -1,4 +1,5 @@
 use ::qubed::Qube;
+#[cfg(feature = "rsfdb-support")]
 use ::qubed_meteo::adapters::fdb::FromFDBList;
 use ::qubed_meteo::adapters::mars_list::FromMARSList;
 use ::qubed_meteo::adapters::to_constraints::ToDssConstraints;
