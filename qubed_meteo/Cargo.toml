@@ -3,16 +3,11 @@ name = "qubed_meteo"
 version = "0.1.0"
 edition = "2024"
 
-[workspace]
-members = [
-    "../py_qubed_meteo",
-]
-
 [dependencies]
 qubed = { path = "../qubed" }
 serde = "1.0.228"
 serde_json = "1.0.145"
-rsfdb = { git = "https://github.com/ecmwf/rsfdb" , optional = true}
+rsfdb = { git = "https://github.com/ecmwf/rsfdb", optional = true }
 
 [features]
 default = []

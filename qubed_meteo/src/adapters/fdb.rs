@@ -107,16 +107,10 @@ mod tests {
 
     #[test]
     #[cfg(feature = "rsfdb-support")]
+    #[ignore = "requires a live FDB; set FDB5_CONFIG_FILE before running"]
     fn test_from_fdb_list_basic() {
-        // Ensure FDB config is set (adjust path for local environment if needed)
-        let config_path =
-            env::current_dir().unwrap().join("/Users/male/git/fdb-home/etc/fdb/config.yaml");
-        unsafe {
-            std::env::set_var(
-                "FDB5_CONFIG_FILE",
-                config_path.to_str().expect("Invalid config path"),
-            );
-        }
+        // FDB5_CONFIG_FILE must be set in the environment before running this test.
+        // Do not hardcode any local paths here.
 
         let request_map = json!({
             "class" : "od",
