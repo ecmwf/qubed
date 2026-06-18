@@ -5,3 +5,8 @@ members = [
     "qubed",
     "py_qubed",
 ]
+
+exclude = [
+    "qubed_meteo",
+    "py_qubed_meteo",
+]

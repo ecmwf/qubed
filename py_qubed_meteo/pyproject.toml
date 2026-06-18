@@ -13,6 +13,10 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
 ]
 
+[features]
+default = []
+rsfdb-support = ["dep:rsfdb"]
+
 [tool.maturin]
 manifest-path = "Cargo.toml"
 features = []

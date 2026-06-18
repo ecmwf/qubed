@@ -49,11 +49,17 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Run Rust tests
-        run: cargo test -p qubed
+        run: cargo test -p qubed qubed_meteo
 
       # Build the two Python extension packages that wrap the Rust crates.
       - name: Build qubed wheel
         run: uv tool run maturin build -m py_qubed/Cargo.toml
+
+      - name: Build qubed-meteo wheel
+        working-directory: qubed_meteo
+        run: |
+          uv tool run maturin build \
+            -m ../py_qubed_meteo/Cargo.toml
 
       # Install built wheels into an isolated uv-managed venv and run pytest.
       - name: Run Python binding tests
@@ -61,6 +67,8 @@ jobs:
           uv venv .ci-venv
           uv pip install --python .ci-venv pytest target/wheels/qubed-*.whl 
           .ci-venv/bin/python -m pytest -q py_qubed/tests
+          uv pip install --python .ci-venv pytest py_qubed_meteo/target/wheels/qubed_meteo-*.whl 
+          .ci-venv/bin/python -m pytest -q py_qubed_meteo/tests
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4

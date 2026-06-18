@@ -1,4 +1,5 @@
 use ::qubed::Qube;
+#[cfg(feature = "rsfdb-support")]
 use ::qubed_meteo::adapters::fdb::FromFDBList;
 use ::qubed_meteo::adapters::mars_list::FromMARSList;
 use ::qubed_meteo::adapters::to_constraints::ToDssConstraints;
@@ -20,11 +21,13 @@ pub fn from_mars_list_py(text: &str) -> PyResult<String> {
 #[pyo3(name = "qubed_meteo")]
 fn py_qubed_meteo_module(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(from_mars_list_py, m)?)?;
+    #[cfg(feature = "rsfdb-support")]
     m.add_function(wrap_pyfunction!(from_fdb_list_py, m)?)?;
     m.add_function(wrap_pyfunction!(to_dss_constraints_py, m)?)?;
     Ok(())
 }
 
+#[cfg(feature = "rsfdb-support")]
 #[pyfunction]
 pub fn from_fdb_list_py(request_json: &str) -> PyResult<String> {
     let v: serde_json::Value =

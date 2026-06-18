@@ -3,6 +3,7 @@ use qubed::{Coordinates, NodeIdx, Qube};
 use rsfdb::{FDB, request::Request};
 use serde_json::Value as JsonValue;
 
+#[cfg(feature = "rsfdb-support")]
 pub trait FromFDBList {
     /// Build a `Qube` from a JSON request map by performing an internal list.
     ///
@@ -13,8 +14,8 @@ pub trait FromFDBList {
     fn from_fdb_list(request_map: &JsonValue) -> Result<Qube, String>;
 }
 
+#[cfg(feature = "rsfdb-support")]
 impl FromFDBList for Qube {
-    #[cfg(feature = "rsfdb-support")]
     fn from_fdb_list(request_map: &JsonValue) -> Result<Qube, String> {
         // Build Request from provided JSON map
         let request = Request::from_json(request_map.clone())
