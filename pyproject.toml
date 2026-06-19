@@ -7,7 +7,6 @@ dependencies = []
 [tool.uv.workspace]
 members = [
     "py_qubed",
-    "py_qubed_meteo",
 ]
 
 # optional shared dev deps

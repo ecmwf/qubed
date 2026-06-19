@@ -45,11 +45,17 @@ jobs:
       - name: Install maturin
         run: uv tool install maturin
 
-      - name: Check Rust formatting
+      - name: Check Rust formatting (qubed workspace)
         run: cargo fmt -- --check
 
-      - name: Run Rust tests
-        run: cargo test -p qubed qubed_meteo
+      - name: Check Rust formatting (qubed_meteo workspace)
+        run: cargo fmt --manifest-path qubed_meteo/Cargo.toml -- --check
+
+      - name: Run Rust tests (qubed workspace)
+        run: cargo test -p qubed
+
+      - name: Run Rust tests (qubed_meteo workspace)
+        run: cargo test --manifest-path qubed_meteo/qubed_meteo/Cargo.toml
 
       # Build the two Python extension packages that wrap the Rust crates.
       - name: Build qubed wheel
@@ -65,13 +71,15 @@ jobs:
       - name: Run Python binding tests
         run: |
           uv venv .ci-venv
-          uv pip install --python .ci-venv pytest target/wheels/qubed-*.whl 
+          uv pip install --python .ci-venv pytest target/wheels/qubed-*.whl
           .ci-venv/bin/python -m pytest -q py_qubed/tests
-          uv pip install --python .ci-venv pytest py_qubed_meteo/target/wheels/qubed_meteo-*.whl 
-          .ci-venv/bin/python -m pytest -q py_qubed_meteo/tests
+          uv pip install --python .ci-venv qubed_meteo/target/wheels/qubed_meteo-*.whl
+          .ci-venv/bin/python -m pytest -q qubed_meteo/py_qubed_meteo/tests
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
         with:
           name: wheels-linux
-          path: target/wheels/*.whl
+          path: |
+            target/wheels/*.whl
+            qubed_meteo/target/wheels/*.whl

@@ -19,6 +19,11 @@ jobs:
       matrix:
         target: [x86_64, aarch64]
         package: [py_qubed, py_qubed_meteo]
+        include:
+          - package: py_qubed
+            manifest_path: py_qubed/Cargo.toml
+          - package: py_qubed_meteo
+            manifest_path: qubed_meteo/py_qubed_meteo/Cargo.toml
 
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +38,7 @@ jobs:
           manylinux: auto
           args: >
             --release
-            --manifest-path ${{ matrix.package }}/Cargo.toml
+            --manifest-path ${{ matrix.manifest_path }}
             --out dist
 
       - name: Upload wheels

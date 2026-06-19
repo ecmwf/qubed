@@ -8,5 +8,4 @@ members = [
 
 exclude = [
     "qubed_meteo",
-    "py_qubed_meteo",
 ]

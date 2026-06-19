@@ -13,5 +13,3 @@ name = "qubed"
 path = "src/lib.rs"
 crate-type = ["cdylib"]
 
-[tool.maturin]
-module-name = "qubed"
