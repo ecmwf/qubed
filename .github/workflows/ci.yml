@@ -59,7 +59,7 @@ jobs:
         working-directory: qubed_meteo
         run: |
           uv tool run maturin build \
-            -m ../py_qubed_meteo/Cargo.toml
+            -m qubed_meteo/py_qubed_meteo/Cargo.toml
 
       # Install built wheels into an isolated uv-managed venv and run pytest.
       - name: Run Python binding tests
