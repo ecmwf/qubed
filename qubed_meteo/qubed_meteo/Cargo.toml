@@ -1,0 +1,33 @@
+[package]
+name = "qubed_meteo"
+version = "0.1.1"
+edition = "2024"
+description = "Meteorological adapters to the Qubed library."
+license = "Apache-2.0"
+repository = "https://github.com/ecmwf/qubed"
+homepage = "https://github.com/ecmwf/qubed"
+documentation = "https://ecmwf.github.io/qubed/"
+
+[dependencies]
+qubed = { path = "../../qubed", version = "0.1.1" }
+serde = "1.0.228"
+serde_json = "1.0.145"
+
+[features]
+default = []
+# Enable FDB (Fields DataBase) support via rsfdb.
+# When enabling this feature you must also add rsfdb to your own workspace
+# dependencies, e.g.:
+#   rsfdb = { git = "https://github.com/ecmwf/rsfdb" }
+# rsfdb is intentionally not declared here so Cargo does not attempt to
+# fetch the private git repository during normal CI builds.
+rsfdb-support = []
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["rlib"]
+
+[[example]]
+name = "read_from_fdb_list"
+required-features = ["rsfdb-support"]
+
