@@ -3,8 +3,8 @@
 <a href="https://github.com/ecmwf/codex/raw/refs/heads/main/Project%20Maturity#emerging">
   <img src="https://github.com/ecmwf/codex/raw/refs/heads/main/Project%20Maturity/emerging_badge.svg" alt="Project Maturity">
 </a>
- <a href="https://github.com/ecmwf/qubed/actions/workflows/docs.yml">
-  <img src="https://github.com/ecmwf/qubed/actions/workflows/docs.yml/badge.svg" alt="Docs Build Status" />
+<a href="https://ecmwf.github.io/qubed/">
+  <img src="https://img.shields.io/badge/Documentation-GitHub%20Pages-blue" alt="Documentation" />
 </a>
 <a href="https://pypi.org/project/qubed/"><img src="https://img.shields.io/pypi/v/qubed.svg" alt='PyPi'></a>
 </p>
