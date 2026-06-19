@@ -9,11 +9,6 @@ repository = "https://github.com/ecmwf/qubed"
 homepage = "https://github.com/ecmwf/qubed"
 documentation = "https://ecmwf.github.io/qubed/"
 
-[workspace]
-members = [
-    "../py_qubed_meteo",
-]
-
 [dependencies]
 qubed = { path = "../qubed" }
 serde = "1.0.228"
