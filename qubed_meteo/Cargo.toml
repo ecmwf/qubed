@@ -11,7 +11,7 @@ documentation = "https://ecmwf.github.io/qubed/"
 
 [workspace]
 members = [
-    "../py_qubed_meteo",
+    "py_qubed_meteo",
 ]
 
 [dependencies]
