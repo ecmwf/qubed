@@ -26,3 +26,8 @@ rsfdb-support = []
 [lib]
 path = "src/lib.rs"
 crate-type = ["rlib"]
+
+[[example]]
+name = "read_from_fdb_list"
+required-features = ["rsfdb-support"]
+
