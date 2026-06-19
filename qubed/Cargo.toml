@@ -1,6 +1,6 @@
 [package]
 name = "qubed"
-version = "0.4.3"
+version = "0.4.4"
 edition = "2024"
 description = "A new data structure to efficiently represent complex data spaces."
 license = "Apache-2.0"
