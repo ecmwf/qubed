@@ -49,7 +49,7 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Check Rust formatting (qubed_meteo workspace)
-        run: cargo fmt --manifest-path qubed_meteo/Cargo.toml -- --check
+        run: cargo fmt --manifest-path qubed_meteo/qubed_meteo/Cargo.toml -- --check
 
       - name: Run Rust tests (qubed workspace)
         run: cargo test -p qubed
