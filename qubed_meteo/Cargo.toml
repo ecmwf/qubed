@@ -2,6 +2,12 @@
 name = "qubed_meteo"
 version = "0.1.0"
 edition = "2024"
+description = "Meteorological adapters to the Qubed library."
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/ecmwf/qubed"
+homepage = "https://github.com/ecmwf/qubed"
+documentation = "ecmwf.github.io/qubed/"
 
 [workspace]
 members = [

@@ -55,15 +55,17 @@ jobs:
 
       - name: Install and test py_qubed
         run: |
-          pip install --upgrade pip
-          pip install dist/**/py_qubed*.whl
-          python -c "import py_qubed; print('py_qubed OK')"
+          WHEEL=$(find . -name 'qubed*.whl' | head -n1)
+          echo "Installing $WHEEL"
+          pip install "$WHEEL"
+          python -c "import qubed; print('qubed OK')"
 
       - name: Install and test py_qubed_meteo
         run: |
-          pip install --upgrade pip
-          pip install dist/**/py_qubed_meteo*.whl
-          python -c "import py_qubed_meteo; print('py_qubed_meteo OK')"
+          WHEEL=$(find . -name 'qubed_meteo*.whl' | head -n1)
+          echo "Installing $WHEEL"
+          pip install "$WHEEL"
+          python -c "import qubed_meteo; print('qubed_meteo OK')"
 
 
   publish:
