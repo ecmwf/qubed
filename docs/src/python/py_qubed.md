@@ -355,7 +355,7 @@ q3 = copy.deepcopy(q)
 | Method | Description |
 |---|---|
 | `__str__()` | Same as `to_ascii()` |
-| `__repr__()` | Returns `Qube(root_id=...)` |
+| `__repr__()` | Same as `to_ascii()` |
 | `__len__()` | Returns `datacube_count()` -- the number of leaf identifiers |
 | `__copy__()` | Returns a clone (for `copy.copy`) |
 | `__deepcopy__(memo)` | Returns a clone (for `copy.deepcopy`) |

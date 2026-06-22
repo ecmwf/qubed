@@ -242,6 +242,34 @@ impl PyQube {
         Ok(PyQube { inner: result })
     }
 
+    /// Wrap this Qube under new parent node(s).
+    ///
+    /// Takes a datacube dict `{dim: value}` and optional order, mirroring
+    /// `append_datacube`. The dimensions become ancestors of the current tree
+    /// (outermost first per `order`). Returns a new Qube.
+    ///
+    /// Examples:
+    ///   q.prepend({"dataset": "foo"})
+    ///   q.prepend({"dataset": "foo", "class": "od"}, order=["dataset", "class"])
+    #[pyo3(signature = (datacube, order=None))]
+    pub fn prepend(
+        &self,
+        datacube: Bound<'_, PyDict>,
+        order: Option<Vec<String>>,
+    ) -> PyResult<Self> {
+        let (dc, key_order) = pydict_to_datacube(datacube)?;
+        let effective_order = order.unwrap_or(key_order);
+
+        // Build nested wrappers: first in order is outermost, last is innermost
+        let mut result = self.inner.clone();
+        for dim in effective_order.iter().rev() {
+            if let Some(coords) = dc.coordinates().get(dim) {
+                result = result.prepend(dim, coords.clone());
+            }
+        }
+        Ok(PyQube { inner: result })
+    }
+
     pub fn append(&mut self, other: &Bound<'_, PyQube>) -> PyResult<()> {
         let mut other_mut = other.borrow_mut();
         self.inner.append(&mut other_mut.inner);
@@ -345,13 +373,8 @@ fn pydict_to_datacube(datacube: Bound<'_, PyDict>) -> PyResult<(Datacube, Vec<St
             let val: f64 = v.extract()?;
             Coordinates::from(val)
         } else {
-            // Scalar string — keep as String coordinate to preserve the
-            // Python type (avoids Mixed coordinates when merging with other
-            // String coordinates for the same dimension).
-            let s: String = v.str()?.extract()?;
-            let mut coords = Coordinates::new();
-            coords.append(s);
-            coords
+            let s: String = v.extract().unwrap_or_else(|_| v.str().unwrap().extract().unwrap());
+            Coordinates::from_string(&s)
         };
         dc.add_coordinate(&key, coords);
     }

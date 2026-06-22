@@ -410,6 +410,62 @@ def test_squeeze_returns_new_qube() -> None:
 
 
 def test_repr() -> None:
-    """__repr__ should return Qube(root_id=...)."""
-    q = Qube()
-    assert repr(q).startswith("Qube(root_id=")
+    """__repr__ should return the ASCII tree (same as __str__)."""
+    q = Qube.from_ascii("""root
+└── class=od
+    └── param=1
+""")
+    assert "class=od" in repr(q)
+    assert repr(q) == str(q)
+
+
+def test_prepend_wraps_tree_under_new_node() -> None:
+    """prepend({'dim': 'val'}) should wrap the tree under a new parent node."""
+    q = Qube.from_ascii("""root
+├── expver=0001
+│   └── param=1/2
+└── expver=0002
+    └── param=3
+""")
+
+    result = q.prepend({"dataset": "foo"})
+
+    assert "dataset=foo" in result.to_ascii()
+    assert "expver=0001" in result.to_ascii()
+    assert "param=1/2" in result.to_ascii()
+
+    coords = result.all_unique_dim_coords()
+    assert coords["dataset"] == ["foo"]
+    assert set(coords["expver"]) == {"0001", "0002"}
+
+    # Original unchanged
+    assert "dataset" not in q.to_ascii()
+
+
+def test_prepend_with_order() -> None:
+    """prepend with order controls nesting depth."""
+    q = Qube.from_ascii("""root
+└── param=1
+""")
+
+    result = q.prepend({"dataset": "foo", "class": "od"}, order=["dataset", "class"])
+    ascii = result.to_ascii()
+    # dataset should be above class
+    assert ascii.index("dataset") < ascii.index("class")
+
+    coords = result.all_unique_dim_coords()
+    assert coords["dataset"] == ["foo"]
+    assert coords["class"] == ["od"]
+    assert coords["param"] == [1]
+
+
+def test_prepend_with_multiple_values() -> None:
+    """prepend with slash-separated values should create multi-value coords."""
+    q = Qube.from_ascii("""root
+└── param=1
+""")
+
+    result = q.prepend({"class": "od/rd"})
+    coords = result.all_unique_dim_coords()
+    assert set(coords["class"]) == {"od", "rd"}
+    assert coords["param"] == [1]

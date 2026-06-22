@@ -391,6 +391,18 @@ impl Qube {
         self.drop(to_drop)
     }
 
+    /// Wrap the entire tree under a new parent node with the given dimension and coordinates.
+    /// Returns a new Qube where root -> new_node -> (original root's children).
+    pub fn prepend(&self, dim: &str, coords: Coordinates) -> Self {
+        let mut new_qube = Qube::new();
+        let new_root = new_qube.root();
+        let wrapper_node = new_qube
+            .get_or_create_child(dim, new_root, Some(coords))
+            .expect("Failed to create prepend node");
+        new_qube.copy_subtree(self, self.root(), wrapper_node);
+        new_qube
+    }
+
     pub fn dimension(&self, dim_str: &str) -> Option<Dimension> {
         self.key_store.get(dim_str).map(Dimension)
     }

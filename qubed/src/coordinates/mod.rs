@@ -669,4 +669,16 @@ mod tests {
         assert_eq!(result.only_a, Coordinates::Empty);
         assert_eq!(result.only_b, Coordinates::Empty);
     }
+
+    #[test]
+    fn from_string_splits_on_slash() {
+        let c = Coordinates::from_string("1/2/3");
+        assert_eq!(c, ints(&[1, 2, 3]));
+
+        let c = Coordinates::from_string("od/rd");
+        assert_eq!(c, strs(&["od", "rd"]));
+
+        let c = Coordinates::from_string("single");
+        assert_eq!(c, strs(&["single"]));
+    }
 }
