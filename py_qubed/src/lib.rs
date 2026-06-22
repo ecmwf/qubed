@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyModule};
 use serde_json::Value as JsonValue;
 
-#[pyclass(unsendable)]
+#[pyclass(name = "Qube", unsendable)]
 pub struct PyQube {
     inner: Qube,
 }

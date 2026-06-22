@@ -19,7 +19,7 @@ def test_select_1():
         ├── param=1
         └── param=2"""
 
-    q = qubed.PyQube.from_ascii(input_qube)
+    q = qubed.Qube.from_ascii(input_qube)
 
     selected = q.select({"class": [1]}, None, None)
 
@@ -32,7 +32,7 @@ def test_select_1():
         ├── param=1
         └── param=2"""
 
-    assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
+    assert selected.to_ascii() == qubed.Qube.from_ascii(expected).to_ascii()
 
 
 def test_select_2():
@@ -53,7 +53,7 @@ def test_select_2():
         ├── param=1
         └── param=2"""
 
-    q = qubed.PyQube.from_ascii(input_qube)
+    q = qubed.Qube.from_ascii(input_qube)
 
     selected = q.select({"class": [1], "param": [1]}, None, None)
 
@@ -64,7 +64,7 @@ def test_select_2():
     └── expver=0002
         └── param=1"""
 
-    assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
+    assert selected.to_ascii() == qubed.Qube.from_ascii(expected).to_ascii()
 
 
 def test_select_3():
@@ -85,7 +85,7 @@ def test_select_3():
         ├── param=1
         └── param=2"""
 
-    q = qubed.PyQube.from_ascii(input_qube)
+    q = qubed.Qube.from_ascii(input_qube)
 
     selected = q.select({"expver": ["0001"]}, None, None)
 
@@ -100,7 +100,7 @@ def test_select_3():
         ├── param=2
         └── param=3"""
 
-    assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
+    assert selected.to_ascii() == qubed.Qube.from_ascii(expected).to_ascii()
 
 
 def test_all_unique_dim_coords():
@@ -121,7 +121,7 @@ def test_all_unique_dim_coords():
         ├── param=1
         └── param=2"""
 
-    q = qubed.PyQube.from_ascii(input_qube)
+    q = qubed.Qube.from_ascii(input_qube)
 
     dim_coords = q.all_unique_dim_coords()
 
@@ -166,7 +166,7 @@ def test_compress():
         ├── param=1
         └── param=2"""
 
-    q = qubed.PyQube.from_ascii(input_qube)
+    q = qubed.Qube.from_ascii(input_qube)
 
     # Get the ASCII representation before compression
     ascii_before = q.to_ascii()
@@ -191,7 +191,7 @@ def test_compress_2():
     └── expver=0002
         └── param=2"""
 
-    q = qubed.PyQube.from_ascii(input_qube)
+    q = qubed.Qube.from_ascii(input_qube)
 
     # Get the ASCII representation before compression
     ascii_before = q.to_ascii()
@@ -228,7 +228,7 @@ def test_select_multiple_values():
         ├── param=1
         └── param=2"""
 
-    q = qubed.PyQube.from_ascii(input_qube)
+    q = qubed.Qube.from_ascii(input_qube)
 
     # Select multiple values for the same key
     selected = q.select({"param": [1, 3]}, None, None)
@@ -246,7 +246,7 @@ def test_select_multiple_values():
     └── expver=0002
         └── param=1"""
 
-    assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
+    assert selected.to_ascii() == qubed.Qube.from_ascii(expected).to_ascii()
 
 
 def test_default():
@@ -268,7 +268,7 @@ def test_default():
         ├── param=1
         └── param=2"""
 
-    q = qubed.PyQube.from_ascii(input_qube)
+    q = qubed.Qube.from_ascii(input_qube)
 
     # Default mode: shows full subtree
     default_result = q.select({"class": [1]}, None, None)
@@ -284,7 +284,7 @@ def test_default():
 
     assert (
         default_result.to_ascii()
-        == qubed.PyQube.from_ascii(default_expected).to_ascii()
+        == qubed.Qube.from_ascii(default_expected).to_ascii()
     )
 
 
@@ -298,14 +298,14 @@ def test_drop():
         ├── param=1
         └── param=2"""
 
-    q = qubed.PyQube.from_ascii(input_qube)
+    q = qubed.Qube.from_ascii(input_qube)
     q.drop(["expver"])
 
     expected = r"""root
 └── class=1
     └── param=1/2"""
 
-    assert q.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
+    assert q.to_ascii() == qubed.Qube.from_ascii(expected).to_ascii()
 
 
 def test_squeeze():
@@ -318,7 +318,7 @@ def test_squeeze():
         ├── param=1
         └── param=2"""
 
-    q = qubed.PyQube.from_ascii(input_qube)
+    q = qubed.Qube.from_ascii(input_qube)
     q.squeeze()
 
     # class has only one value (1), so it gets squeezed out
@@ -326,7 +326,7 @@ def test_squeeze():
 └── expver=0001/0002
     └── param=1/2"""
 
-    assert q.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii()
+    assert q.to_ascii() == qubed.Qube.from_ascii(expected).to_ascii()
 
 
 def test_select_drops_branches_without_matching_deep_key():
@@ -339,14 +339,14 @@ def test_select_drops_branches_without_matching_deep_key():
     ├── param=3
     └── param=4"""
 
-    q = qubed.PyQube.from_ascii(input_qube)
+    q = qubed.Qube.from_ascii(input_qube)
     selected = q.select({"param": [1]}, None, None)
 
     expected = r"""root
 └── expver=0001
     └── param=1"""
 
-    assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii(), (
+    assert selected.to_ascii() == qubed.Qube.from_ascii(expected).to_ascii(), (
         "expver=0002 (no param=1 descendants) should be absent from the result"
     )
 
@@ -366,7 +366,7 @@ def test_select_deep_key_multi_level_unselected_prefix():
         ├── param=5
         └── param=6"""
 
-    q = qubed.PyQube.from_ascii(input_qube)
+    q = qubed.Qube.from_ascii(input_qube)
     selected = q.select({"param": [1]}, None, None)
 
     expected = r"""root
@@ -374,6 +374,6 @@ def test_select_deep_key_multi_level_unselected_prefix():
     └── expver=0001
         └── param=1"""
 
-    assert selected.to_ascii() == qubed.PyQube.from_ascii(expected).to_ascii(), (
+    assert selected.to_ascii() == qubed.Qube.from_ascii(expected).to_ascii(), (
         "only class=1/expver=0001 contains param=1; all other branches must be pruned"
     )
