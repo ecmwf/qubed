@@ -5,3 +5,9 @@ members = [
     "qubed_meteo",
     "py_qubed_meteo",
 ]
+
+[workspace.package]
+version = "0.4.5"
+
+[workspace.dependencies]
+qubed = { path = "../qubed", version = "0.4.5" }

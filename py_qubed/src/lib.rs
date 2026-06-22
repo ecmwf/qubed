@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyModule};
 use serde_json::Value as JsonValue;
 
-#[pyclass(unsendable)]
+#[pyclass(name = "Qube", unsendable)]
 pub struct PyQube {
     inner: Qube,
 }
@@ -197,7 +197,7 @@ impl PyQube {
         let mut validated_qubes = Vec::with_capacity(others.len());
         for item in others.iter() {
             let other_cell =
-                item.cast::<PyQube>().map_err(|_| PyTypeError::new_err("expected PyQube"))?;
+                item.cast::<PyQube>().map_err(|_| PyTypeError::new_err("expected Qube"))?;
             validated_qubes.push(other_cell.clone().unbind());
         }
 

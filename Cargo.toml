@@ -9,3 +9,6 @@ members = [
 exclude = [
     "qubed_meteo",
 ]
+
+[workspace.package]
+version = "0.4.5"
