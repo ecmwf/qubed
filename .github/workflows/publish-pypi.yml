@@ -59,41 +59,82 @@ jobs:
           name: wheels-${{ matrix.package }}-${{ matrix.target }}
           path: dist/*.whl
 
-  test-wheels:
-    name: Test x86_64 wheels
+  test-wheels-linux:
+    name: Test Linux wheels only
     runs-on: ubuntu-latest
     needs: build-wheels
 
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download Linux artifacts only
+        uses: actions/download-artifact@v4
         with:
           path: dist
+          pattern: wheels-*-ubuntu-latest-*
+          merge-multiple: true
 
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Show downloaded wheels
+      - name: Show wheels
         run: find dist -name '*.whl' | sort
 
       - name: Install and test py_qubed
         run: |
-          WHEEL=$(find dist -name 'qubed-*.whl' | grep x86_64 | head -n1)
+          WHEEL=$(find dist -name '*manylinux*py_qubed*.whl' | head -n1)
           echo "Installing $WHEEL"
           pip install "$WHEEL"
           python -c "import qubed; print('qubed OK')"
 
       - name: Install and test py_qubed_meteo
         run: |
-          WHEEL=$(find dist -name 'qubed_meteo-*.whl' | grep x86_64 | head -n1)
+          WHEEL=$(find dist -name '*manylinux*py_qubed_meteo*.whl' | head -n1)
           echo "Installing $WHEEL"
           pip install "$WHEEL"
           python -c "import qubed_meteo; print('qubed_meteo OK')"
 
+  test-wheels-macos:
+    name: Test macOS wheels
+    runs-on: macos-latest
+    needs: build-wheels
+
+    strategy:
+      matrix:
+        package: [py_qubed, py_qubed_meteo]
+
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: wheels-${{ matrix.package }}-macos-*
+          merge-multiple: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Show wheels
+        run: find dist -name '*.whl' | sort
+
+      - name: Install wheel
+        run: |
+          WHEEL=$(find dist -name "*${{ matrix.package }}*.whl" | head -n1)
+          echo "Installing $WHEEL"
+          pip install "$WHEEL"
+
+      - name: Run import test
+        run: |
+          if [ "${{ matrix.package }}" = "py_qubed" ]; then
+            python -c "import qubed; print('qubed OK')"
+          else
+            python -c "import qubed_meteo; print('qubed_meteo OK')"
+          fi
+
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
-    needs: test-wheels
+    needs: [test-wheels-linux, test-wheels-macos]
 
     steps:
       - uses: actions/download-artifact@v4
