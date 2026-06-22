@@ -197,7 +197,7 @@ impl PyQube {
         let mut validated_qubes = Vec::with_capacity(others.len());
         for item in others.iter() {
             let other_cell =
-                item.cast::<PyQube>().map_err(|_| PyTypeError::new_err("expected PyQube"))?;
+                item.cast::<PyQube>().map_err(|_| PyTypeError::new_err("expected Qube"))?;
             validated_qubes.push(other_cell.clone().unbind());
         }
 
