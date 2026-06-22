@@ -12,14 +12,26 @@ env:
 jobs:
   build-wheels:
     name: Build ${{ matrix.package }} (${{ matrix.target }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
 
     strategy:
       fail-fast: false
       matrix:
-        target: [x86_64, aarch64]
         package: [py_qubed, py_qubed_meteo]
+        target: [x86_64, aarch64, x86_64-apple-darwin, aarch64-apple-darwin]
         include:
+          - target: x86_64
+            runner: ubuntu-latest
+            manylinux: auto
+          - target: aarch64
+            runner: ubuntu-latest
+            manylinux: auto
+          - target: x86_64-apple-darwin
+            runner: macos-13
+            manylinux: 'off'
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            manylinux: 'off'
           - package: py_qubed
             manifest_path: py_qubed/Cargo.toml
           - package: py_qubed_meteo
@@ -35,7 +47,7 @@ jobs:
         with:
           command: build
           target: ${{ matrix.target }}
-          manylinux: auto
+          manylinux: ${{ matrix.manylinux }}
           args: >
             --release
             --manifest-path ${{ matrix.manifest_path }}

@@ -7,9 +7,29 @@ on:
       - "v*"
 
 jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Test qubed
+        run: cargo test -p qubed
+
+      - name: Test qubed_meteo
+        run: cargo test --manifest-path qubed_meteo/qubed_meteo/Cargo.toml
+
   publish:
     runs-on: ubuntu-24.04
     environment: crates-io
+    needs: test
 
     steps:
       - uses: actions/checkout@v4
