@@ -233,8 +233,8 @@ impl Qube {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::datacube::Datacube;
     use crate::Coordinates;
+    use crate::datacube::Datacube;
 
     fn dc(pairs: &[(&str, &str)]) -> Datacube {
         let mut d = Datacube::new();

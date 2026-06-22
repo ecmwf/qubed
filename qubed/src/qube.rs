@@ -362,8 +362,7 @@ impl Qube {
                                 .map(|s| to_drop.contains(s))
                                 .unwrap_or(false);
                             if gc_should_drop {
-                                next_pending
-                                    .extend(self.splice_out_node(gc_id, node_id)?);
+                                next_pending.extend(self.splice_out_node(gc_id, node_id)?);
                             } else {
                                 self.drop_recurse(gc_id, to_drop)?;
                             }

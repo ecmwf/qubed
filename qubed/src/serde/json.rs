@@ -389,10 +389,8 @@ fn serialize_tree_node(qube: &Qube, node_id: NodeIdx) -> Value {
     values_obj.insert("values".to_string(), values_arr);
 
     let children_ids: Vec<NodeIdx> = node.all_children().collect();
-    let children: Vec<Value> = children_ids
-        .iter()
-        .map(|&child_id| serialize_tree_node(qube, child_id))
-        .collect();
+    let children: Vec<Value> =
+        children_ids.iter().map(|&child_id| serialize_tree_node(qube, child_id)).collect();
 
     let mut map = Map::new();
     map.insert("key".to_string(), Value::String(key));
@@ -406,29 +404,22 @@ fn serialize_tree_node(qube: &Qube, node_id: NodeIdx) -> Value {
 fn parse_tree_node(qube: &mut Qube, parent: NodeIdx, value: &Value) -> Result<(), String> {
     let obj = value.as_object().ok_or("Expected JSON object for tree node")?;
 
-    let children = obj
-        .get("children")
-        .and_then(|v| v.as_array())
-        .ok_or("Missing 'children' array")?;
+    let children =
+        obj.get("children").and_then(|v| v.as_array()).ok_or("Missing 'children' array")?;
 
     for child_value in children {
-        let child_obj = child_value
-            .as_object()
-            .ok_or("Expected JSON object for child node")?;
+        let child_obj = child_value.as_object().ok_or("Expected JSON object for child node")?;
 
-        let key = child_obj
-            .get("key")
-            .and_then(|v| v.as_str())
-            .ok_or("Missing 'key' in child node")?;
+        let key =
+            child_obj.get("key").and_then(|v| v.as_str()).ok_or("Missing 'key' in child node")?;
 
         let values_obj = child_obj
             .get("values")
             .and_then(|v| v.as_object())
             .ok_or("Missing 'values' object in child node")?;
 
-        let values_array = values_obj
-            .get("values")
-            .ok_or("Missing 'values' array in values object")?;
+        let values_array =
+            values_obj.get("values").ok_or("Missing 'values' array in values object")?;
 
         let coords = Coordinates::from_json_value(values_array)?;
 

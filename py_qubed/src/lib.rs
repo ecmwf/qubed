@@ -336,8 +336,7 @@ fn pydict_to_datacube(datacube: Bound<'_, PyDict>) -> PyResult<(Datacube, Vec<St
             k.extract().map_err(|_| PyTypeError::new_err("datacube keys must be strings"))?;
         key_order.push(key.clone());
         let coords = if v.is_instance_of::<PyList>() {
-            let lst =
-                v.downcast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
+            let lst = v.downcast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
             pylist_to_coords(lst)?
         } else if v.is_instance_of::<PyInt>() {
             let val: i32 = v.extract()?;
@@ -400,9 +399,7 @@ fn py_to_json_value(input: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
     } else if input.is_instance_of::<PyList>() {
         py_list_to_json(input.downcast::<PyList>().unwrap())
     } else {
-        Err(PyTypeError::new_err(
-            "Expected str, dict, or list for JSON input",
-        ))
+        Err(PyTypeError::new_err("Expected str, dict, or list for JSON input"))
     }
 }
 
@@ -419,7 +416,8 @@ fn py_dict_to_json(dict: &Bound<'_, PyDict>) -> PyResult<JsonValue> {
 
 /// Recursively convert a Python list to serde_json::Value::Array.
 fn py_list_to_json(list: &Bound<'_, PyList>) -> PyResult<JsonValue> {
-    let arr: Vec<JsonValue> = list.iter().map(|item| py_any_to_json(&item)).collect::<PyResult<_>>()?;
+    let arr: Vec<JsonValue> =
+        list.iter().map(|item| py_any_to_json(&item)).collect::<PyResult<_>>()?;
     Ok(JsonValue::Array(arr))
 }
 

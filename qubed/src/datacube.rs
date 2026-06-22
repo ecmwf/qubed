@@ -71,11 +71,8 @@ impl Qube {
         }
 
         // Create remaining dimensions in sorted order for deterministic tree structure
-        let mut remaining: Vec<&String> = datacube
-            .coordinates
-            .keys()
-            .filter(|dim| qube.dimension(dim).is_none())
-            .collect();
+        let mut remaining: Vec<&String> =
+            datacube.coordinates.keys().filter(|dim| qube.dimension(dim).is_none()).collect();
         remaining.sort();
 
         for dim in remaining {
@@ -201,12 +198,7 @@ mod tests {
 
     #[test]
     fn from_datacube_partial_order_appends_remaining_alphabetically() {
-        let datacube = dc(&[
-            ("step", "0/6"),
-            ("class", "od"),
-            ("time", "0000"),
-            ("param", "t"),
-        ]);
+        let datacube = dc(&[("step", "0/6"), ("class", "od"), ("time", "0000"), ("param", "t")]);
         // Only specify first two dims; step and param should be appended alphabetically
         let order: Vec<String> = vec!["time", "class"].into_iter().map(String::from).collect();
         let qube = Qube::from_datacube(&datacube, Some(&order));
@@ -249,24 +241,16 @@ mod tests {
         let ascii = qube_a.to_ascii();
         // time=0000/1200 and time=0600/1800 should be separate branches because
         // the step ranges below them differ
-        assert!(
-            ascii.contains("time=0000/1200"),
-            "time=0000/1200 branch missing:\n{ascii}"
-        );
-        assert!(
-            ascii.contains("time=0600/1800"),
-            "time=0600/1800 branch missing:\n{ascii}"
-        );
+        assert!(ascii.contains("time=0000/1200"), "time=0000/1200 branch missing:\n{ascii}");
+        assert!(ascii.contains("time=0600/1800"), "time=0600/1800 branch missing:\n{ascii}");
     }
 
     #[test]
     fn union_merges_time_when_subtrees_identical() {
         // When subtrees below different time values are structurally identical,
         // compress correctly merges them into a single node.
-        let order: Vec<String> = vec!["domain", "time", "type", "step", "param"]
-            .into_iter()
-            .map(String::from)
-            .collect();
+        let order: Vec<String> =
+            vec!["domain", "time", "type", "step", "param"].into_iter().map(String::from).collect();
 
         let dc_a = dc(&[
             ("domain", "g"),
@@ -316,4 +300,3 @@ mod tests {
         );
     }
 }
-
