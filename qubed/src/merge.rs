@@ -1,12 +1,33 @@
 use crate::qube::Dimension;
 use crate::{NodeIdx, Qube};
 use std::collections::HashMap;
-use std::time::Instant;
 
 impl Qube {
+    /// Build a mapping from `other`'s dimension IDs to `self`'s dimension IDs
+    /// by interning all of `other`'s dimension names into `self`'s key_store.
+    /// This allows us to compare dimensions by ID rather than string in the merge loop.
+    fn build_dim_translation(&mut self, other: &Qube) -> HashMap<Dimension, Dimension> {
+        let mut map = HashMap::new();
+        for other_dim in other.all_dim_ids() {
+            if let Some(name) = other.dimension_str(&other_dim) {
+                let self_dim = self.get_or_intern_dim(name);
+                map.insert(other_dim, self_dim);
+            }
+        }
+        map
+    }
+
     /// Performs a union operation between two nodes in two different Qubes.
-    fn node_merge(&mut self, other: &mut Qube, self_id: NodeIdx, other_id: NodeIdx) -> NodeIdx {
-        // Group the children of both nodes into groups according to their associated dimensions.
+    fn node_merge(
+        &mut self,
+        other: &mut Qube,
+        self_id: NodeIdx,
+        other_id: NodeIdx,
+        dim_map: &HashMap<Dimension, Dimension>,
+    ) -> NodeIdx {
+        // Group children by dimension, using self's dimension IDs (via the translation map)
+        // so that same-named dimensions from both qubes are matched correctly regardless of
+        // interner ordering.
         let self_children = {
             let node = self.node_ref(self_id).unwrap();
             node.children().clone()
@@ -17,26 +38,43 @@ impl Qube {
             node.children().clone()
         };
 
-        // Create a map of dimensions to (self_children, other_children).
         let mut dim_child_map: HashMap<Dimension, (Vec<NodeIdx>, Vec<NodeIdx>)> = HashMap::new();
 
         for (dim, self_kids) in self_children {
             dim_child_map.entry(dim).or_default().0.extend(self_kids);
         }
         for (dim, other_kids) in other_children {
-            dim_child_map.entry(dim).or_default().1.extend(other_kids);
+            // Translate other's dimension ID to self's namespace
+            let self_dim = dim_map.get(&dim).copied().unwrap_or(dim);
+            dim_child_map.entry(self_dim).or_default().1.extend(other_kids);
         }
 
         // For each dimension, perform an internal set operation on the groups.
-        let dims: Vec<_> = dim_child_map.keys().copied().collect();
+        let dims: Vec<Dimension> = dim_child_map.keys().copied().collect();
 
         for dim in dims {
             let (these_kids, those_kids) = {
                 let entry = dim_child_map.entry(dim).or_default();
-                (&entry.0, &entry.1)
+                (entry.0.clone(), entry.1.clone())
             };
 
-            let _new_children = self.internal_set_operation(other, these_kids, those_kids);
+            if these_kids.is_empty() {
+                // Dimension exists only in `other`: copy every node (and its subtree) into self.
+                for other_node in those_kids {
+                    let (dim_str, coords) = {
+                        let n = other.node_ref(other_node).unwrap();
+                        let d = other.dimension_str(n.dim()).unwrap().to_owned();
+                        let c = n.coords().clone();
+                        (d, c)
+                    };
+                    let new_child =
+                        self.get_or_create_child(&dim_str, self_id, Some(coords)).unwrap();
+                    self.copy_subtree(other, other_node, new_child);
+                }
+            } else {
+                let _new_children =
+                    self.internal_set_operation(other, &these_kids, &those_kids, dim_map);
+            }
         }
 
         return self.root();
@@ -46,8 +84,9 @@ impl Qube {
     fn internal_set_operation(
         &mut self,
         other: &mut Qube,
-        self_ids: &Vec<NodeIdx>,
-        other_ids: &Vec<NodeIdx>,
+        self_ids: &[NodeIdx],
+        other_ids: &[NodeIdx],
+        dim_map: &HashMap<Dimension, Dimension>,
     ) -> Option<Vec<NodeIdx>> {
         let mut return_vec = Vec::new();
 
@@ -106,7 +145,7 @@ impl Qube {
                         other.copy_branch(*other_node, new_node_b);
                     }
 
-                    let _nested_result = self.node_merge(other, new_node_a, new_node_b);
+                    let _nested_result = self.node_merge(other, new_node_a, new_node_b, dim_map);
                 }
 
                 // If there are values only in self, update the coordinates of the current node.
@@ -152,9 +191,13 @@ impl Qube {
             return;
         }
 
+        // Pre-intern all of other's dimension names into self's key_store so we can
+        // compare dimensions by ID rather than string throughout the recursive merge.
+        let dim_map = self.build_dim_translation(other);
+
         let self_root_id = self.root();
         let other_root_id = other.root();
-        self.node_merge(other, self_root_id, other_root_id);
+        self.node_merge(other, self_root_id, other_root_id, &dim_map);
         self.compress();
         // Clear the other Qube
         *other = Qube::new();
@@ -164,11 +207,14 @@ impl Qube {
     pub fn append_many(&mut self, others: &mut Vec<Qube>) {
         let others_len = others.len();
         for (i, other) in others.iter_mut().enumerate() {
+            // Build translation map for each other qube
+            let dim_map = self.build_dim_translation(other);
+
             let self_root_id = self.root();
             let other_root_id = other.root();
 
             // Perform the union with the current Qube
-            self.node_merge(other, self_root_id, other_root_id);
+            self.node_merge(other, self_root_id, other_root_id, &dim_map);
 
             // Print progress update
             println!("Union completed for Qube {}/{}", i + 1, others_len);
@@ -181,5 +227,56 @@ impl Qube {
         }
         // Final compression after all unions are complete
         self.compress();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::datacube::Datacube;
+    use crate::Coordinates;
+
+    fn dc(pairs: &[(&str, &str)]) -> Datacube {
+        let mut d = Datacube::new();
+        for &(k, v) in pairs {
+            d.add_coordinate(k, Coordinates::from_string(v));
+        }
+        d
+    }
+
+    /// Appending two Qubes whose dimensions were interned in a different order
+    /// must not cross-intersect coordinates from different dimension names.
+    /// Before the fix, the shared integer dimension ID caused e.g. `number` coords
+    /// to be intersected against `time` coords, producing a panic.
+    #[test]
+    fn append_qubes_with_different_dimension_interning_order() {
+        // First Qube: dimensions added in order a, b, c
+        let mut q1 = Qube::from_datacube(&dc(&[("a", "1"), ("b", "x"), ("c", "10")]), None);
+
+        // Second Qube: dimensions added in order c, b, a — interner assigns IDs in the opposite
+        // order, so `a` in q2 gets the same integer ID as `c` in q1.
+        let mut q2 = Qube::from_datacube(&dc(&[("c", "20"), ("b", "y"), ("a", "2")]), None);
+
+        // Must not panic.
+        q1.append(&mut q2);
+
+        let ascii = q1.to_ascii();
+        assert!(ascii.contains("a=1") || ascii.contains("a=2"), "a values lost: {ascii}");
+        assert!(ascii.contains("b=x") || ascii.contains("b=y"), "b values lost: {ascii}");
+        assert!(ascii.contains("c=10") || ascii.contains("c=20"), "c values lost: {ascii}");
+    }
+
+    #[test]
+    fn append_qubes_all_shared_dimensions_merged() {
+        let mut q1 = Qube::from_datacube(&dc(&[("class", "od"), ("step", "0/6/12")]), None);
+        let mut q2 = Qube::from_datacube(&dc(&[("class", "od"), ("step", "18/24")]), None);
+
+        q1.append(&mut q2);
+
+        let coords = q1.all_unique_dim_coords();
+        let steps: std::collections::BTreeSet<String> =
+            coords["step"].to_string().split('/').map(|s| s.to_owned()).collect();
+
+        assert_eq!(steps, ["0", "12", "18", "24", "6"].iter().map(|s| s.to_string()).collect());
     }
 }

@@ -341,6 +341,104 @@ fn serialize_children_json(qube: &Qube, parent_id: NodeIdx, output: &mut Map<Str
     }
 }
 
+// ---------------- Tree JSON (key/values/metadata/children) ----------------
+
+impl Qube {
+    /// Serialize the Qube into a recursive tree JSON layout where each node has:
+    /// `{ "key": <dim>, "values": { "type": "enum", "dtype": <type>, "values": [...] }, "metadata": {}, "children": [...] }`
+    pub fn to_tree_json(&self) -> Value {
+        serialize_tree_node(self, self.root())
+    }
+
+    /// Reconstruct a Qube from a tree JSON layout created by `to_tree_json`.
+    pub fn from_tree_json(value: Value) -> Result<Qube, String> {
+        let mut qube = Qube::new();
+        let root = qube.root();
+        parse_tree_node(&mut qube, root, &value)?;
+        Ok(qube)
+    }
+}
+
+fn coords_dtype(coords: &Coordinates) -> &'static str {
+    match coords {
+        Coordinates::Empty => "str",
+        Coordinates::Integers(_) => "int64",
+        Coordinates::Floats(_) => "float64",
+        Coordinates::Strings(_) => "str",
+        Coordinates::DateTimes(_) => "datetime",
+        Coordinates::Mixed(_) => "mixed",
+    }
+}
+
+fn serialize_tree_node(qube: &Qube, node_id: NodeIdx) -> Value {
+    let node = qube.node(node_id).expect("valid node");
+    let key = node.dimension().unwrap_or("root").to_string();
+    let coords = node.coordinates();
+
+    let dtype = coords_dtype(coords);
+    let values_array = coords.to_json_value();
+
+    let mut values_obj = Map::new();
+    values_obj.insert("type".to_string(), Value::String("enum".to_string()));
+    values_obj.insert("dtype".to_string(), Value::String(dtype.to_string()));
+    // Ensure values is always an array
+    let values_arr = match values_array {
+        Value::Array(a) => Value::Array(a),
+        other => Value::Array(vec![other]),
+    };
+    values_obj.insert("values".to_string(), values_arr);
+
+    let children_ids: Vec<NodeIdx> = node.all_children().collect();
+    let children: Vec<Value> = children_ids
+        .iter()
+        .map(|&child_id| serialize_tree_node(qube, child_id))
+        .collect();
+
+    let mut map = Map::new();
+    map.insert("key".to_string(), Value::String(key));
+    map.insert("values".to_string(), Value::Object(values_obj));
+    map.insert("metadata".to_string(), Value::Object(Map::new()));
+    map.insert("children".to_string(), Value::Array(children));
+
+    Value::Object(map)
+}
+
+fn parse_tree_node(qube: &mut Qube, parent: NodeIdx, value: &Value) -> Result<(), String> {
+    let obj = value.as_object().ok_or("Expected JSON object for tree node")?;
+
+    let children = obj
+        .get("children")
+        .and_then(|v| v.as_array())
+        .ok_or("Missing 'children' array")?;
+
+    for child_value in children {
+        let child_obj = child_value
+            .as_object()
+            .ok_or("Expected JSON object for child node")?;
+
+        let key = child_obj
+            .get("key")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing 'key' in child node")?;
+
+        let values_obj = child_obj
+            .get("values")
+            .and_then(|v| v.as_object())
+            .ok_or("Missing 'values' object in child node")?;
+
+        let values_array = values_obj
+            .get("values")
+            .ok_or("Missing 'values' array in values object")?;
+
+        let coords = Coordinates::from_json_value(values_array)?;
+
+        let child_node = qube.get_or_create_child(key, parent, Some(coords))?;
+        parse_tree_node(qube, child_node, child_value)?;
+    }
+
+    Ok(())
+}
+
 // ---------------- Tests ----------------
 
 // TODO: The JSON structure should probably be more detailed, possibly splitting values and children into separate fields, possibly containing type information for the values too.
