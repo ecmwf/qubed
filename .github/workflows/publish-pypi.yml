@@ -27,7 +27,7 @@ jobs:
             runner: ubuntu-latest
             manylinux: auto
           - target: x86_64-apple-darwin
-            runner: macos-13
+            runner: macos-latest
             manylinux: 'off'
           - target: aarch64-apple-darwin
             runner: macos-latest
