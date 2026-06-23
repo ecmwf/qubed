@@ -31,7 +31,19 @@ pub(crate) struct Node {
     children: BTreeMap<Dimension, TinyVec<NodeIdx, 4>>,
 }
 
-#[derive(Debug)]
+impl Clone for Node {
+    fn clone(&self) -> Self {
+        Node {
+            dim: self.dim,
+            structural_hash: AtomicU64::new(self.structural_hash.load(Ordering::Relaxed)),
+            coords: self.coords.clone(),
+            parent: self.parent,
+            children: self.children.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Qube {
     nodes: SlotMap<NodeIdx, Node>,
     root_id: NodeIdx,
@@ -195,22 +207,31 @@ impl Qube {
     }
 
     pub fn all_unique_dim_coords(&mut self) -> BTreeMap<String, Coordinates> {
-        // TODO
         let mut map: BTreeMap<String, Coordinates> = BTreeMap::new();
 
         for (_id, node) in self.nodes.iter() {
             if let Some(dim_str) = self.dimension_str(&node.dim) {
                 let coords = node.coords.clone();
                 if coords.is_empty() {
-                    continue; // Skip empty coordinates
+                    continue;
                 }
-                // if there is no entry in map for this dimension, just fill it in with coords, otherwise extend the current entry with coords
                 map.entry(dim_str.to_string())
                     .and_modify(|existing| existing.extend(&coords))
                     .or_insert(coords);
             }
         }
         map
+    }
+
+    /// Alias for `all_unique_dim_coords` — returns every dimension and its
+    /// merged coordinate values across the whole tree.
+    pub fn axes(&mut self) -> BTreeMap<String, Coordinates> {
+        self.all_unique_dim_coords()
+    }
+
+    /// Return the set of dimension names present in the tree.
+    pub fn dimensions(&mut self) -> Vec<String> {
+        self.all_unique_dim_coords().into_keys().collect()
     }
 
     pub fn remove_node(&mut self, id: NodeIdx) -> Result<(), String> {
@@ -328,10 +349,25 @@ impl Qube {
         for (should_drop, children) in child_info {
             if should_drop {
                 for child_id in children {
-                    // Splice out: move grandchildren up to node_id, then recurse on them
-                    let grandchildren = self.splice_out_node(child_id, node_id)?;
-                    for gc_id in grandchildren {
-                        self.drop_recurse(gc_id, to_drop)?;
+                    // Splice out: move grandchildren up to node_id, then recurse.
+                    // Re-parented nodes may themselves need dropping, so keep
+                    // splicing until we reach nodes not in to_drop.
+                    let mut pending = self.splice_out_node(child_id, node_id)?;
+                    while !pending.is_empty() {
+                        let mut next_pending = Vec::new();
+                        for gc_id in pending {
+                            let gc_should_drop = self
+                                .node_ref(gc_id)
+                                .and_then(|n| self.dimension_str(&n.dim()))
+                                .map(|s| to_drop.contains(s))
+                                .unwrap_or(false);
+                            if gc_should_drop {
+                                next_pending.extend(self.splice_out_node(gc_id, node_id)?);
+                            } else {
+                                self.drop_recurse(gc_id, to_drop)?;
+                            }
+                        }
+                        pending = next_pending;
                     }
                 }
             } else {
@@ -355,12 +391,38 @@ impl Qube {
         self.drop(to_drop)
     }
 
+    /// Wrap the entire tree under a new parent node with the given dimension and coordinates.
+    /// Returns a new Qube where root -> new_node -> (original root's children).
+    pub fn prepend(&self, dim: &str, coords: Coordinates) -> Self {
+        let mut new_qube = Qube::new();
+        let new_root = new_qube.root();
+        let wrapper_node = new_qube
+            .get_or_create_child(dim, new_root, Some(coords))
+            .expect("Failed to create prepend node");
+        new_qube.copy_subtree(self, self.root(), wrapper_node);
+        new_qube
+    }
+
     pub fn dimension(&self, dim_str: &str) -> Option<Dimension> {
         self.key_store.get(dim_str).map(Dimension)
     }
 
     pub fn dimension_str(&self, dim: &Dimension) -> Option<&str> {
         self.key_store.try_resolve(&dim.0)
+    }
+
+    /// Intern a dimension name into this Qube's key_store, returning the Dimension ID.
+    pub(crate) fn get_or_intern_dim(&mut self, name: &str) -> Dimension {
+        Dimension(self.key_store.get_or_intern(name))
+    }
+
+    /// Return all unique Dimension IDs used by nodes in this Qube.
+    pub(crate) fn all_dim_ids(&self) -> Vec<Dimension> {
+        let mut seen = HashSet::new();
+        for (_id, node) in self.nodes.iter() {
+            seen.insert(node.dim);
+        }
+        seen.into_iter().collect()
     }
 
     pub(crate) fn invalidate_ancestors(&self, id: NodeIdx) {
