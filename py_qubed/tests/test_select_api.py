@@ -139,13 +139,13 @@ def test_all_unique_dim_coords():
     assert isinstance(dim_coords["param"], list)
 
     # Check that coordinates contain expected values
-    assert "1" in dim_coords["class"]
-    assert "2" in dim_coords["class"]
+    assert 1 in dim_coords["class"]
+    assert 2 in dim_coords["class"]
     assert "0001" in dim_coords["expver"]
     assert "0002" in dim_coords["expver"]
-    assert "1" in dim_coords["param"]
-    assert "2" in dim_coords["param"]
-    assert "3" in dim_coords["param"]
+    assert 1 in dim_coords["param"]
+    assert 2 in dim_coords["param"]
+    assert 3 in dim_coords["param"]
 
 
 def test_compress():
@@ -283,8 +283,7 @@ def test_default():
         └── param=2"""
 
     assert (
-        default_result.to_ascii()
-        == qubed.Qube.from_ascii(default_expected).to_ascii()
+        default_result.to_ascii() == qubed.Qube.from_ascii(default_expected).to_ascii()
     )
 
 
@@ -299,7 +298,7 @@ def test_drop():
         └── param=2"""
 
     q = qubed.Qube.from_ascii(input_qube)
-    q.drop(["expver"])
+    q = q.drop(["expver"])
 
     expected = r"""root
 └── class=1
@@ -319,7 +318,7 @@ def test_squeeze():
         └── param=2"""
 
     q = qubed.Qube.from_ascii(input_qube)
-    q.squeeze()
+    q = q.squeeze()
 
     # class has only one value (1), so it gets squeezed out
     expected = r"""root

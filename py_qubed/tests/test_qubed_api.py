@@ -1,5 +1,6 @@
 from qubed import Qube
 import pytest
+import copy
 
 ASCII_INPUT = """root
 └── class=3
@@ -61,8 +62,8 @@ def test_to_datacubes_shape() -> None:
     datacubes = qube.to_datacubes()
     assert isinstance(datacubes, list)
     assert len(datacubes) == 1
-    assert datacubes[0]["class"] == "5"
-    assert datacubes[0]["param"] == "42"
+    assert datacubes[0]["class"] == 5
+    assert datacubes[0]["param"] == 42
 
 
 def test_str_and_len_dunder_methods() -> None:
@@ -91,7 +92,10 @@ def test_to_from_arena_json_roundtrip() -> None:
     # expect qube to be a list with node entries containing dim and coords
     qube_list = parsed["qube"]
     assert isinstance(qube_list, list)
-    assert any(isinstance(item, dict) and "dim" in item and "coords" in item for item in qube_list)
+    assert any(
+        isinstance(item, dict) and "dim" in item and "coords" in item
+        for item in qube_list
+    )
 
     # Reconstruct and verify ascii equality
     reconstructed = Qube.from_arena_json(arena_json)
@@ -139,7 +143,7 @@ def test_from_datacube_roundtrip_via_to_datacubes() -> None:
     assert len(datacubes) == 1
     assert datacubes[0]["class"] == "od"
     assert datacubes[0]["expver"] == "0001"
-    assert datacubes[0]["param"] == "1"
+    assert datacubes[0]["param"] == 1
 
 
 def test_from_datacube_multi_value_coords() -> None:
@@ -148,7 +152,7 @@ def test_from_datacube_multi_value_coords() -> None:
     q = Qube.from_datacube(dc, ["class", "param"])
     coords = q.all_unique_dim_coords()
 
-    assert set(coords["param"]) == {"1", "2", "3"}
+    assert set(coords["param"]) == {1, 2, 3}
     assert coords["class"] == ["od"]
 
 
@@ -162,7 +166,7 @@ def test_append_datacube_merges_new_dimension_values() -> None:
     coords = q.all_unique_dim_coords()
 
     assert set(coords["class"]) == {"od", "rd"}
-    assert set(coords["param"]) == {"1"}
+    assert set(coords["param"]) == {1}
 
 
 def test_append_datacube_merges_into_existing_structure() -> None:
@@ -180,7 +184,7 @@ def test_append_datacube_merges_into_existing_structure() -> None:
 
     assert set(coords["expver"]) == {"0001", "0002"}
     assert coords["class"] == ["od"]
-    assert coords["param"] == ["1"]
+    assert coords["param"] == [1]
 
 
 def test_append_datacube_multiple_times_builds_correct_tree() -> None:
@@ -191,6 +195,91 @@ def test_append_datacube_multiple_times_builds_correct_tree() -> None:
 
     coords = q.all_unique_dim_coords()
     assert set(coords["class"]) == {"a", "b", "c"}
+
+
+def test_to_from_json_roundtrip() -> None:
+    """to_json / from_json should round-trip preserving the tree structure."""
+    qube = Qube.from_ascii("""root
+└── class=od
+    ├── expver=0001
+    │   └── param=1
+    └── expver=0002
+        └── param=2
+""")
+
+    json_str = qube.to_json()
+    import json
+
+    parsed = json.loads(json_str)
+    assert isinstance(parsed, dict)
+    # The nested JSON format uses "key=value" as object keys
+    assert any("class=od" in k for k in parsed.keys())
+
+    # Reconstruct and verify ascii equality
+    reconstructed = Qube.from_json(json_str)
+    assert reconstructed.to_ascii() == qube.to_ascii()
+
+
+def test_from_json_invalid_input() -> None:
+    """from_json should raise TypeError on invalid JSON."""
+    with pytest.raises(TypeError):
+        Qube.from_json("not valid json")
+
+
+def test_from_json_non_object_root() -> None:
+    """from_json should raise TypeError when root is not a JSON object."""
+    with pytest.raises(TypeError):
+        Qube.from_json("[1, 2, 3]")
+
+
+def test_to_from_tree_json_roundtrip() -> None:
+    """to_tree_json / from_tree_json should round-trip preserving the tree structure."""
+    qube = Qube.from_ascii("""root
+└── class=od
+    ├── expver=0001
+    │   └── param=1
+    └── expver=0002
+        └── param=2
+""")
+
+    tree_json_str = qube.to_tree_json()
+    import json
+
+    parsed = json.loads(tree_json_str)
+    assert isinstance(parsed, dict)
+    # The tree JSON format has key, values, metadata, children fields
+    assert "key" in parsed
+    assert "values" in parsed
+    assert "children" in parsed
+
+    # Reconstruct and verify ascii equality
+    reconstructed = Qube.from_tree_json(tree_json_str)
+    assert reconstructed.to_ascii() == qube.to_ascii()
+
+
+def test_from_tree_json_invalid_input() -> None:
+    """from_tree_json should raise TypeError on invalid JSON."""
+    with pytest.raises(TypeError):
+        Qube.from_tree_json("not valid json")
+
+
+def test_json_and_tree_json_produce_different_formats() -> None:
+    """to_json and to_tree_json should produce structurally different outputs."""
+    qube = Qube.from_ascii("""root
+└── class=od
+    └── param=1
+""")
+
+    import json
+
+    nested = json.loads(qube.to_json())
+    tree = json.loads(qube.to_tree_json())
+
+    # Nested format uses "key=value" keys
+    assert any("=" in k for k in nested.keys())
+    # Tree format uses "key", "values", "children" structure
+    assert "key" in tree
+    assert "children" in tree
 
 
 def test_arena_preserves_leading_zeros() -> None:
@@ -205,3 +294,178 @@ def test_arena_preserves_leading_zeros() -> None:
 
     reconstructed = Qube.from_arena_json(arena_json)
     assert "expver=0001" in reconstructed.to_ascii()
+
+
+def test_axes_returns_same_as_all_unique_dim_coords() -> None:
+    """axes() is an alias for all_unique_dim_coords()."""
+    q = Qube.from_ascii("""root
+└── class=od
+    ├── expver=0001
+    │   └── param=1
+    └── expver=0002
+        └── param=2
+""")
+
+    assert q.axes() == q.all_unique_dim_coords()
+
+
+def test_dimensions_returns_set_of_dim_names() -> None:
+    """dimensions() returns the set of dimension names in the tree."""
+    q = Qube.from_ascii("""root
+└── class=od
+    └── expver=0001
+        └── param=1
+""")
+
+    dims = q.dimensions()
+    assert isinstance(dims, set)
+    assert dims == {"class", "expver", "param"}
+
+
+def test_copy_creates_independent_qube() -> None:
+    """copy.copy() should produce an independent clone."""
+    q = Qube.from_ascii("""root
+└── class=od
+    └── param=1
+""")
+
+    q2 = copy.copy(q)
+    assert q2.to_ascii() == q.to_ascii()
+
+    # Mutating the copy should not affect the original
+    q2.append_datacube({"class": "rd", "param": "2"}, ["class", "param"])
+    assert "class=rd" not in q.to_ascii()
+    assert "class=rd" in q2.to_ascii()
+
+
+def test_deepcopy_creates_independent_qube() -> None:
+    """copy.deepcopy() should produce an independent clone."""
+    q = Qube.from_ascii("""root
+└── class=od
+    └── param=1
+""")
+
+    q2 = copy.deepcopy(q)
+    assert q2.to_ascii() == q.to_ascii()
+
+    q2.append_datacube({"class": "rd", "param": "2"}, ["class", "param"])
+    assert "class=rd" not in q.to_ascii()
+
+
+def test_or_operator_returns_merged_qube() -> None:
+    """The | operator should return a new merged Qube without mutating either operand."""
+    a = Qube.from_ascii("""root
+└── class=od
+    └── param=1
+""")
+    b = Qube.from_ascii("""root
+└── class=rd
+    └── param=2
+""")
+
+    merged = a | b
+
+    assert "class=od" in merged.to_ascii()
+    assert "class=rd" in merged.to_ascii()
+
+    # Originals unchanged
+    assert "class=rd" not in a.to_ascii()
+    assert "class=od" not in b.to_ascii()
+
+
+def test_drop_returns_new_qube() -> None:
+    """drop() should return a new Qube, not mutate in place."""
+    q = Qube.from_ascii("""root
+└── class=1
+    └── expver=0001
+        └── param=1
+""")
+
+    dropped = q.drop(["expver"])
+
+    # Original unchanged
+    assert "expver=0001" in q.to_ascii()
+    # Dropped version has no expver
+    assert "expver" not in dropped.to_ascii()
+    assert "param=1" in dropped.to_ascii()
+
+
+def test_squeeze_returns_new_qube() -> None:
+    """squeeze() should return a new Qube, not mutate in place."""
+    q = Qube.from_ascii("""root
+└── class=1
+    └── expver=0001
+        └── param=1/2
+""")
+
+    squeezed = q.squeeze()
+
+    # Original unchanged
+    assert "class=1" in q.to_ascii()
+    assert "expver=0001" in q.to_ascii()
+    # Squeezed version drops single-value dims
+    assert "class" not in squeezed.to_ascii()
+    assert "expver" not in squeezed.to_ascii()
+    assert "param=1/2" in squeezed.to_ascii()
+
+
+def test_repr() -> None:
+    """__repr__ should return the ASCII tree (same as __str__)."""
+    q = Qube.from_ascii("""root
+└── class=od
+    └── param=1
+""")
+    assert "class=od" in repr(q)
+    assert repr(q) == str(q)
+
+
+def test_prepend_wraps_tree_under_new_node() -> None:
+    """prepend({'dim': 'val'}) should wrap the tree under a new parent node."""
+    q = Qube.from_ascii("""root
+├── expver=0001
+│   └── param=1/2
+└── expver=0002
+    └── param=3
+""")
+
+    result = q.prepend({"dataset": "foo"})
+
+    assert "dataset=foo" in result.to_ascii()
+    assert "expver=0001" in result.to_ascii()
+    assert "param=1/2" in result.to_ascii()
+
+    coords = result.all_unique_dim_coords()
+    assert coords["dataset"] == ["foo"]
+    assert set(coords["expver"]) == {"0001", "0002"}
+
+    # Original unchanged
+    assert "dataset" not in q.to_ascii()
+
+
+def test_prepend_with_order() -> None:
+    """prepend with order controls nesting depth."""
+    q = Qube.from_ascii("""root
+└── param=1
+""")
+
+    result = q.prepend({"dataset": "foo", "class": "od"}, order=["dataset", "class"])
+    ascii = result.to_ascii()
+    # dataset should be above class
+    assert ascii.index("dataset") < ascii.index("class")
+
+    coords = result.all_unique_dim_coords()
+    assert coords["dataset"] == ["foo"]
+    assert coords["class"] == ["od"]
+    assert coords["param"] == [1]
+
+
+def test_prepend_with_multiple_values() -> None:
+    """prepend with slash-separated values should create multi-value coords."""
+    q = Qube.from_ascii("""root
+└── param=1
+""")
+
+    result = q.prepend({"class": "od/rd"})
+    coords = result.all_unique_dim_coords()
+    assert set(coords["class"]) == {"od", "rd"}
+    assert coords["param"] == [1]
