@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-a8d90e1f.js";
+            window.path_to_searchindex_js = "../searchindex-90bba797.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-78e66672.js"></script>
@@ -186,10 +186,10 @@ maturin develop --release
 <hr>
 <h2 id="functions"><a class="header" href="#functions">Functions</a></h2>
 <h3 id="from_mars_list_pytext-str---str"><a class="header" href="#from_mars_list_pytext-str---str"><code>from_mars_list_py(text: str) -&gt; str</code></a></h3>
-<p>Parse MARS list text and return the resulting Qube as an ASCII string. The returned string can be passed to <code>PyQube.from_ascii()</code> to get a <code>PyQube</code> object.</p>
+<p>Parse MARS list text and return the resulting Qube as an ASCII string. The returned string can be passed to <code>Qube.from_ascii()</code> to get a <code>Qube</code> object.</p>
 <p><strong>Input format:</strong> Indentation-based MARS listing where indented lines are children of preceding less-indented lines. Tokens are comma-separated <code>key=value</code> pairs; values can be slash-separated.</p>
 <pre><code class="language-python">from qubed_meteo import from_mars_list_py
-from qubed import PyQube
+from qubed import Qube
 
 mars_text = """class=od, expver=0001
   param=1/2
@@ -198,7 +198,7 @@ class=rd, expver=0002
   param=4"""
 
 ascii = from_mars_list_py(mars_text)
-q = PyQube.from_ascii(ascii)
+q = Qube.from_ascii(ascii)
 print(q)
 </code></pre>
 <hr>
@@ -206,7 +206,7 @@ print(q)
 <p>Build a Qube from a list of FDB-style comma-separated path strings. Returns an ASCII Qube string.</p>
 <p>Each string is a comma-separated sequence of <code>key=value</code> segments (e.g. <code>"class=od,expver=0001,param=1/2"</code>).</p>
 <pre><code class="language-python">from qubed_meteo import from_fdb_list_py
-from qubed import PyQube
+from qubed import Qube
 
 items = [
     "class=od,expver=0001,param=1/2",
@@ -215,7 +215,7 @@ items = [
 ]
 
 ascii = from_fdb_list_py(items)
-q = PyQube.from_ascii(ascii)
+q = Qube.from_ascii(ascii)
 print(q)
 # root
 # ├── class=od
@@ -246,7 +246,7 @@ for c in constraints:
 <p>Each object in the array has the same set of dimension keys. Dimensions not present in a particular datacube get an empty array <code>[]</code>.</p>
 <hr>
 <h2 id="complete-workflow-example"><a class="header" href="#complete-workflow-example">Complete Workflow Example</a></h2>
-<pre><code class="language-python">from qubed import PyQube
+<pre><code class="language-python">from qubed import Qube
 from qubed_meteo import from_fdb_list_py, to_dss_constraints_py
 import json
 
@@ -257,7 +257,7 @@ fdb_items = [
     "class=rd,expver=0001,param=1/2/3",
 ]
 
-qube = PyQube.from_ascii(from_fdb_list_py(fdb_items))
+qube = Qube.from_ascii(from_fdb_list_py(fdb_items))
 print(f"Built qube with {len(qube)} identifiers")
 print(qube)
 
@@ -266,14 +266,14 @@ constraints = json.loads(to_dss_constraints_py(str(qube)))
 print(json.dumps(constraints, indent=2))
 
 # 3. Merge with another qube
-extra = PyQube.from_ascii("root\n└── class=xd, expver=0001, param=99")
+extra = Qube.from_ascii("root\n└── class=xd, expver=0001, param=99")
 qube.append(extra)
 print(qube)
 </code></pre>
 <hr>
 <h2 id="notes"><a class="header" href="#notes">Notes</a></h2>
 <ul>
-<li>All adapter functions return ASCII strings as a lightweight bridge format. Use <code>PyQube.from_ascii()</code> to convert to a full <code>PyQube</code> object.</li>
+<li>All adapter functions return ASCII strings as a lightweight bridge format. Use <code>Qube.from_ascii()</code> to convert to a full <code>Qube</code> object.</li>
 <li>Leading zeros in coordinate values (e.g. <code>"0001"</code>) are preserved through all adapter functions.</li>
 <li>The functions raise <code>ValueError</code> on parse failures.</li>
 </ul>
