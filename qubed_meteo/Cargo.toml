@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.6"
+version = "0.4.7"
 
 [workspace.dependencies]
-qubed = { path = "../qubed", version = "0.4.6" }
+qubed = { path = "../qubed", version = "0.4.7" }
