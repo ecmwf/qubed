@@ -231,9 +231,7 @@ print(q)
 
 ### Structural utilities
 
-These methods implement the operations originally designed as
-`@support_qubed_output` helpers in the
-[forecast-in-a-box](https://github.com/ecmwf/forecast-in-a-box) project.
+These methods implement structural helpers to work with complex Qubes.
 
 #### `axes() -> dict[str, list[str]]`
 
