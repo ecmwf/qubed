@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-90bba797.js";
+            window.path_to_searchindex_js = "../searchindex-5c7bf402.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-78e66672.js"></script>
@@ -330,8 +330,110 @@ print(q)
 #     └── param=1/2
 </code></pre>
 <hr>
-<h3 id="query"><a class="header" href="#query">Query</a></h3>
-<h4 id="all_unique_dim_coords---dictstr-liststr"><a class="header" href="#all_unique_dim_coords---dictstr-liststr"><code>all_unique_dim_coords() -&gt; dict[str, list[str]]</code></a></h4>
+<h3 id="structural-utilities"><a class="header" href="#structural-utilities">Structural utilities</a></h3>
+<p>These methods implement structural helpers to work with complex Qubes.</p>
+<h4 id="axes---dictstr-liststr"><a class="header" href="#axes---dictstr-liststr"><code>axes() -&gt; dict[str, list[str]]</code></a></h4>
+<p>Return all dimension names and the union of their coordinate values across the
+entire Qube.  This is an alias for <code>all_unique_dim_coords()</code> with a name that
+matches the terminology used in the qubed-utils helper library.</p>
+<pre><code class="language-python">q = Qube.from_datacube({"param": "2t/tp", "time": "0/1/2"}, ["param", "time"])
+ax = q.axes()
+# {'param': ['2t', 'tp'], 'time': ['0', '1', '2']}
+assert set(ax["param"]) == {"2t", "tp"}
+</code></pre>
+<h4 id="dimensions---setstr"><a class="header" href="#dimensions---setstr"><code>dimensions() -&gt; set[str]</code></a></h4>
+<p>Return the set of all dimension names present anywhere in the Qube.</p>
+<pre><code class="language-python">q = Qube.from_datacube({"param": "2t/tp", "time": "0/1/2"}, ["param", "time"])
+assert q.dimensions() == {"param", "time"}
+</code></pre>
+<h4 id="common_dimensions---setstr"><a class="header" href="#common_dimensions---setstr"><code>common_dimensions() -&gt; set[str]</code></a></h4>
+<p>Return the set of dimension names that appear in <strong>every</strong> leaf path
+(datacube).  For a Qube with uniform depth this equals <code>dimensions()</code>.  For
+an irregular Qube where some branches are shallower, only the dimensions
+shared by all branches are returned.</p>
+<pre><code class="language-python">q1 = Qube.from_datacube({"param": "2t", "time": "0/1"}, ["param", "time"])
+q2 = Qube.from_datacube({"param": "msl"}, ["param"])
+q1.append(q2)
+assert q1.common_dimensions() == {"param"}  # "time" absent in branch 2
+</code></pre>
+<h4 id="expanddimension-dictstr-list---none"><a class="header" href="#expanddimension-dictstr-list---none"><code>expand(dimension: dict[str, list]) -&gt; None</code></a></h4>
+<p>Wrap the entire Qube tree under one or more new outer dimensions.  Each key
+in <code>dimension</code> becomes a new dimension name; the associated list supplies its
+coordinate values.</p>
+<p>Dimensions are applied in dict insertion order.  The <strong>last</strong> entry in the
+dict becomes the outermost dimension of the resulting tree.  The operation
+mutates the Qube in place.</p>
+<pre><code class="language-python">q = Qube.from_datacube({"param": "2t/tp", "time": "0/1/2"}, ["param", "time"])
+q.expand({"ensemble": ["ens1", "ens2"]})
+assert "ensemble" in q.dimensions()
+assert "param"    in q.dimensions()
+# The new dimension wraps the original tree:
+# root
+# └── ensemble=ens1/ens2
+#     └── param=2t/tp
+#         └── time=0/1/2
+
+# Multiple dimensions at once:
+q.expand({"member": ["m1"], "batch": ["b1", "b2"]})
+# "batch" ends up outermost since it was last in the dict.
+</code></pre>
+<h4 id="collapseaxis-str--liststr---none"><a class="header" href="#collapseaxis-str--liststr---none"><code>collapse(axis: str | list[str]) -&gt; None</code></a></h4>
+<p>Remove one or more dimensions from the Qube.  <code>axis</code> may be a single
+dimension name or a list of names.  Children of removed nodes are re-parented
+to their grandparent, preserving the rest of the structure.  The result is
+automatically compressed.</p>
+<p>Raises <code>ValueError</code> if any of the specified dimensions do not exist.</p>
+<pre><code class="language-python">q = Qube.from_datacube(
+    {"param": "2t/tp", "time": "0/1/2", "level": "1000/850"},
+    ["param", "time", "level"],
+)
+q.collapse("level")
+assert "level" not in q.dimensions()
+assert "param" in q.dimensions()
+
+# Remove multiple dimensions at once:
+q.collapse(["time", "param"])
+assert q.dimensions() == set()
+</code></pre>
+<h4 id="coxpandaxis-str--liststr-dimension-dictstr-list---none"><a class="header" href="#coxpandaxis-str--liststr-dimension-dictstr-list---none"><code>coxpand(axis: str | list[str], dimension: dict[str, list]) -&gt; None</code></a></h4>
+<p>Collapse one or more dimensions and then expand with new ones in a single
+call.  Equivalent to <code>collapse(axis)</code> followed by <code>expand(dimension)</code>.</p>
+<p>Useful for replacing a dimension with a different one while preserving the
+rest of the structure.</p>
+<pre><code class="language-python">q = Qube.from_datacube({"param": "2t/tp", "time": "0/1/2"}, ["param", "time"])
+q.coxpand("time", {"step": ["s1", "s2"]})
+assert "time" not in q.dimensions()
+assert "step" in q.dimensions()
+assert "param" in q.dimensions()
+</code></pre>
+<h4 id="containsitem-str--dict--qube---bool"><a class="header" href="#containsitem-str--dict--qube---bool"><code>contains(item: str | dict | Qube) -&gt; bool</code></a></h4>
+<p>Check whether the Qube contains a given dimension or set of values.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th><code>item</code> type</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>str</code></td><td>Returns <code>True</code> if the named dimension exists anywhere in the Qube.</td></tr>
+<tr><td><code>dict[str, list]</code></td><td>Returns <code>True</code> if every key exists as a dimension <strong>and</strong> every listed value is present in that dimension’s coordinate set.</td></tr>
+<tr><td><code>Qube</code></td><td>Returns <code>True</code> if every dimension+value from the other Qube is also present here (subset check).</td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-python">q = Qube.from_datacube({"param": "2t/tp", "time": "0/1/2"}, ["param", "time"])
+
+assert q.contains("param")                          # True
+assert q.contains("level")                          # False
+
+assert q.contains({"param": ["2t"]})                # True
+assert q.contains({"param": ["xyz"]})               # False
+assert q.contains({"param": ["2t"], "time": ["0"]}) # True
+assert q.contains({"time": ["0", "999"]})           # False – 999 absent
+
+subset = Qube.from_datacube({"param": "2t", "time": "0"}, ["param", "time"])
+assert q.contains(subset)                           # True
+</code></pre>
+<hr>
 <p>Return a dictionary mapping each dimension name to a list of all coordinate values that appear anywhere in the Qube.</p>
 <pre><code class="language-python">coords = q.all_unique_dim_coords()
 # {'class': ['1'], 'expver': ['0001', '0002'], 'param': ['1', '2']}
