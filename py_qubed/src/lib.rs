@@ -8,6 +8,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyModule, PySet};
 use serde_json::Value as JsonValue;
 
+mod helpers;
+
 #[pyclass(name = "Qube", unsendable)]
 pub struct PyQube {
     inner: Qube,
@@ -457,7 +459,7 @@ impl PyQube {
 
         // --- branch 2: item is a dict ---
         if let Ok(dict) = item.downcast::<PyDict>() {
-            return check_dict_against_axes(dict, &current_axes, py);
+            return helpers::check_dict_against_axes(dict, &current_axes, py);
         }
 
         // --- branch 3: item is a Qube ---
@@ -487,37 +489,6 @@ impl PyQube {
 
         Err(PyTypeError::new_err("contains: item must be a str, dict[str, list], or Qube"))
     }
-}
-
-/// Helper: check that every key→[values] entry in `dict` is satisfied by `axes`.
-fn check_dict_against_axes(
-    dict: &Bound<'_, PyDict>,
-    axes: &std::collections::BTreeMap<String, Vec<String>>,
-    _py: Python<'_>,
-) -> PyResult<bool> {
-    for (k, v) in dict.iter() {
-        let key: String =
-            k.extract().map_err(|_| PyTypeError::new_err("contains: dict keys must be strings"))?;
-
-        let query_vals: Vec<String> = if v.is_instance_of::<PyList>() {
-            let lst = v.downcast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
-            lst.iter().map(|it| Ok(it.str()?.extract::<String>()?)).collect::<PyResult<_>>()?
-        } else {
-            vec![v.str()?.extract::<String>()?]
-        };
-
-        match axes.get(&key) {
-            None => return Ok(false),
-            Some(cur_vals) => {
-                for qval in &query_vals {
-                    if !cur_vals.contains(qval) {
-                        return Ok(false);
-                    }
-                }
-            }
-        }
-    }
-    Ok(true)
 }
 
 fn pydict_to_datacube(datacube: Bound<'_, PyDict>) -> PyResult<Datacube> {
