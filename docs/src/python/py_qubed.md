@@ -229,9 +229,141 @@ print(q)
 
 ---
 
-### Query
+### Structural utilities
 
-#### `all_unique_dim_coords() -> dict[str, list[str]]`
+These methods implement the operations originally designed as
+`@support_qubed_output` helpers in the
+[forecast-in-a-box](https://github.com/ecmwf/forecast-in-a-box) project.
+
+#### `axes() -> dict[str, list[str]]`
+
+Return all dimension names and the union of their coordinate values across the
+entire Qube.  This is an alias for `all_unique_dim_coords()` with a name that
+matches the terminology used in the qubed-utils helper library.
+
+```python
+q = Qube.from_datacube({"param": "2t/tp", "time": "0/1/2"}, ["param", "time"])
+ax = q.axes()
+# {'param': ['2t', 'tp'], 'time': ['0', '1', '2']}
+assert set(ax["param"]) == {"2t", "tp"}
+```
+
+#### `dimensions() -> set[str]`
+
+Return the set of all dimension names present anywhere in the Qube.
+
+```python
+q = Qube.from_datacube({"param": "2t/tp", "time": "0/1/2"}, ["param", "time"])
+assert q.dimensions() == {"param", "time"}
+```
+
+#### `common_dimensions() -> set[str]`
+
+Return the set of dimension names that appear in **every** leaf path
+(datacube).  For a Qube with uniform depth this equals `dimensions()`.  For
+an irregular Qube where some branches are shallower, only the dimensions
+shared by all branches are returned.
+
+```python
+q1 = Qube.from_datacube({"param": "2t", "time": "0/1"}, ["param", "time"])
+q2 = Qube.from_datacube({"param": "msl"}, ["param"])
+q1.append(q2)
+assert q1.common_dimensions() == {"param"}  # "time" absent in branch 2
+```
+
+#### `expand(dimension: dict[str, list]) -> None`
+
+Wrap the entire Qube tree under one or more new outer dimensions.  Each key
+in `dimension` becomes a new dimension name; the associated list supplies its
+coordinate values.
+
+Dimensions are applied in dict insertion order.  The **last** entry in the
+dict becomes the outermost dimension of the resulting tree.  The operation
+mutates the Qube in place.
+
+```python
+q = Qube.from_datacube({"param": "2t/tp", "time": "0/1/2"}, ["param", "time"])
+q.expand({"ensemble": ["ens1", "ens2"]})
+assert "ensemble" in q.dimensions()
+assert "param"    in q.dimensions()
+# The new dimension wraps the original tree:
+# root
+# └── ensemble=ens1/ens2
+#     └── param=2t/tp
+#         └── time=0/1/2
+
+# Multiple dimensions at once:
+q.expand({"member": ["m1"], "batch": ["b1", "b2"]})
+# "batch" ends up outermost since it was last in the dict.
+```
+
+#### `collapse(axis: str | list[str]) -> None`
+
+Remove one or more dimensions from the Qube.  `axis` may be a single
+dimension name or a list of names.  Children of removed nodes are re-parented
+to their grandparent, preserving the rest of the structure.  The result is
+automatically compressed.
+
+Raises `ValueError` if any of the specified dimensions do not exist.
+
+```python
+q = Qube.from_datacube(
+    {"param": "2t/tp", "time": "0/1/2", "level": "1000/850"},
+    ["param", "time", "level"],
+)
+q.collapse("level")
+assert "level" not in q.dimensions()
+assert "param" in q.dimensions()
+
+# Remove multiple dimensions at once:
+q.collapse(["time", "param"])
+assert q.dimensions() == set()
+```
+
+#### `coxpand(axis: str | list[str], dimension: dict[str, list]) -> None`
+
+Collapse one or more dimensions and then expand with new ones in a single
+call.  Equivalent to `collapse(axis)` followed by `expand(dimension)`.
+
+Useful for replacing a dimension with a different one while preserving the
+rest of the structure.
+
+```python
+q = Qube.from_datacube({"param": "2t/tp", "time": "0/1/2"}, ["param", "time"])
+q.coxpand("time", {"step": ["s1", "s2"]})
+assert "time" not in q.dimensions()
+assert "step" in q.dimensions()
+assert "param" in q.dimensions()
+```
+
+#### `contains(item: str | dict | Qube) -> bool`
+
+Check whether the Qube contains a given dimension or set of values.
+
+| `item` type | Meaning |
+|---|---|
+| `str` | Returns `True` if the named dimension exists anywhere in the Qube. |
+| `dict[str, list]` | Returns `True` if every key exists as a dimension **and** every listed value is present in that dimension's coordinate set. |
+| `Qube` | Returns `True` if every dimension+value from the other Qube is also present here (subset check). |
+
+```python
+q = Qube.from_datacube({"param": "2t/tp", "time": "0/1/2"}, ["param", "time"])
+
+assert q.contains("param")                          # True
+assert q.contains("level")                          # False
+
+assert q.contains({"param": ["2t"]})                # True
+assert q.contains({"param": ["xyz"]})               # False
+assert q.contains({"param": ["2t"], "time": ["0"]}) # True
+assert q.contains({"time": ["0", "999"]})           # False – 999 absent
+
+subset = Qube.from_datacube({"param": "2t", "time": "0"}, ["param", "time"])
+assert q.contains(subset)                           # True
+```
+
+---
+
+
 
 Return a dictionary mapping each dimension name to a list of all coordinate values that appear anywhere in the Qube.
 
