@@ -192,6 +192,18 @@ impl PyQube {
         Ok(())
     }
 
+    /// Returns a new Qube containing every identifier in `self` that is not
+    /// present in `other`.  Neither operand is modified.
+    pub fn subtract(&self, other: &Bound<'_, PyQube>) -> PyResult<PyQube> {
+        let other_ref = other.borrow();
+        Ok(PyQube { inner: self.inner.subtract(&other_ref.inner) })
+    }
+
+    /// Python operator sugar: `a - b` delegates to `a.subtract(b)`.
+    pub fn __sub__(&self, other: &Bound<'_, PyQube>) -> PyResult<PyQube> {
+        self.subtract(other)
+    }
+
     pub fn append_many(&mut self, others: &Bound<'_, PyList>) -> PyResult<()> {
         // First validate all types so type errors happen before any mutation.
         let mut validated_qubes = Vec::with_capacity(others.len());
