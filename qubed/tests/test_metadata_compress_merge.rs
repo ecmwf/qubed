@@ -660,3 +660,398 @@ fn compress_partial_metadata_one_node_has_key_other_does_not() {
         );
     assert!(src_meta.contains_string("A"));
 }
+
+// ===========================================================================
+//  Arena JSON serialisation / deserialisation
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+//  17. Basic roundtrip: string and integer metadata survive to_arena_json /
+//      from_arena_json intact, at the exact nodes where they were stored.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn arena_json_roundtrip_preserves_string_and_integer_metadata() {
+    // Build:
+    //   root
+    //   ├── class=1 (region=EU)  →  param=1
+    //   └── class=2 (region=US)  →  param=1 (level=500)
+    //
+    // class=1 and class=2 have different `region` values → no consolidation to root.
+    // level=500 on param=1-under-class=2 consolidates to class=2 (single child chain).
+    let mut q = Qube::new();
+    let root = q.root();
+
+    // Build the full tree first, then set metadata.
+    // Setting metadata before all siblings exist would cause premature
+    // consolidation to the parent (try_consolidate_metadata sees only one child
+    // and promotes the value upward).
+    let c1 = q.get_or_create_child("class", root, Some(1.into())).unwrap();
+    q.get_or_create_child("param", c1, Some(1.into())).unwrap();
+
+    let c2 = q.get_or_create_child("class", root, Some(2.into())).unwrap();
+    let p2 = q.get_or_create_child("param", c2, Some(1.into())).unwrap();
+
+    // Now both class nodes exist → region values differ → no consolidation to root.
+    q.set_metadata(c1, "region", MetadataValues::single_string("EU")).unwrap();
+    q.set_metadata(c2, "region", MetadataValues::single_string("US")).unwrap();
+    q.set_metadata(p2, "level", MetadataValues::single_integer(500)).unwrap();
+    // level=500 consolidates from p2 to c2; then root's two children disagree on level
+    // (c1 has none) → level stays on c2.
+
+    let arena = q.to_arena_json();
+    let restored = Qube::from_arena_json(arena).expect("from_arena_json");
+
+    let rroot = restored.root();
+    let rc1 = find_child(&restored, rroot, "class", "1");
+    let rc2 = find_child(&restored, rroot, "class", "2");
+
+    // region metadata must survive on each class node (values differ → not consolidated to root).
+    let region1 = restored
+        .get_metadata(rc1, "region")
+        .expect("class=1 should still carry region=EU after arena roundtrip");
+    assert!(region1.contains_string("EU"), "region should be EU for class=1");
+
+    let region2 = restored
+        .get_metadata(rc2, "region")
+        .expect("class=2 should still carry region=US after arena roundtrip");
+    assert!(region2.contains_string("US"), "region should be US for class=2");
+
+    // Integer metadata (level=500) consolidated from param up to class=2 before serialisation.
+    let level = restored
+        .get_metadata(rc2, "level")
+        .or_else(|| restored.get_metadata(rroot, "level"))
+        .expect("level=500 should survive arena roundtrip");
+    assert!(level.contains_integer(500));
+
+    // root should have no region (values differ) and no level (only class=2 had it).
+    assert!(restored.get_metadata(rroot, "region").is_none(), "region should not be on root");
+}
+
+// ---------------------------------------------------------------------------
+//  18. Metadata that consolidated upward during set_metadata is stored at
+//      the parent in the arena JSON and restored there on deserialisation.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn metadata_moves_up_on_consolidation_then_survives_arena_roundtrip() {
+    // When all leaves under a node carry the same uniform metadata, set_metadata
+    // bubbles it upward automatically.  This test verifies that:
+    //   a) the metadata does reach the expected ancestor, and
+    //   b) the arena JSON roundtrip preserves it at that ancestor.
+    let mut q = Qube::new();
+    let root = q.root();
+    let class = q.get_or_create_child("class", root, Some(1.into())).unwrap();
+    let p1 = q.get_or_create_child("param", class, Some(1.into())).unwrap();
+    let p2 = q.get_or_create_child("param", class, Some(2.into())).unwrap();
+
+    // Set units=K on both leaves.
+    // First call: only p1 has units → can't consolidate to class yet (p2 is missing).
+    q.set_metadata(p1, "units", MetadataValues::single_string("K")).unwrap();
+    // Second call: both children of class now agree → consolidates to class,
+    // then class is the only child of root → consolidates again to root.
+    q.set_metadata(p2, "units", MetadataValues::single_string("K")).unwrap();
+
+    // Verify consolidation reached root.
+    assert!(
+        q.get_metadata(root, "units").is_some(),
+        "units=K should have bubbled all the way up to root"
+    );
+    assert!(
+        q.get_metadata(class, "units").is_none(),
+        "class should not have units (moved to root)"
+    );
+    assert!(q.get_metadata(p1, "units").is_none(), "p1 should not have units (moved to root)");
+    assert!(q.get_metadata(p2, "units").is_none(), "p2 should not have units (moved to root)");
+
+    // Arena JSON roundtrip.
+    let arena = q.to_arena_json();
+
+    // Verify the JSON has metadata on the root node.
+    let nodes_arr = arena.get("qube").and_then(|v| v.as_array()).expect("qube array");
+    let root_entry = &nodes_arr[0]; // BFS order → root is always first
+    assert!(
+        root_entry.get("metadata").map(|m| m.is_object()).unwrap_or(false),
+        "root node in arena JSON should carry the 'metadata' field (units consolidated to root)"
+    );
+
+    let restored = Qube::from_arena_json(arena).expect("from_arena_json");
+    let rroot = restored.root();
+
+    let units = restored
+        .get_metadata(rroot, "units")
+        .expect("units=K must be at root after arena roundtrip");
+    assert!(units.is_uniform());
+    assert!(units.contains_string("K"));
+
+    // Leaves must NOT carry the metadata (it was consolidated before serialisation).
+    let rclass = find_child(&restored, rroot, "class", "1");
+    let rp1 = find_child(&restored, rclass, "param", "1");
+    assert!(restored.get_metadata(rclass, "units").is_none(), "class should not have units");
+    assert!(restored.get_metadata(rp1, "units").is_none(), "param=1 should not have units");
+}
+
+// ---------------------------------------------------------------------------
+//  19. Metadata pushed down by compress is stored on the children in the
+//      arena JSON and restored there on deserialisation.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn metadata_moves_down_during_compress_then_survives_arena_roundtrip() {
+    // Two structurally identical nodes with *different* metadata: compress() must
+    // push the disagreeing values down to the children of the merged node.
+    let mut q = Qube::new();
+    let root = q.root();
+
+    // Build the full tree first, then set metadata.
+    // Setting src on ev1 before ev2 exists would cause premature consolidation
+    // to root (root sees only one child with uniform src and promotes it).
+    let ev1 = q.get_or_create_child("expver", root, Some("0001".into())).unwrap();
+    q.get_or_create_child("param", ev1, Some(1.into())).unwrap();
+
+    let ev2 = q.get_or_create_child("expver", root, Some("0002".into())).unwrap();
+    q.get_or_create_child("param", ev2, Some(1.into())).unwrap();
+
+    // Both expver siblings now exist → different values → no consolidation to root.
+    q.set_metadata(ev1, "src", MetadataValues::single_string("A")).unwrap();
+    q.set_metadata(ev2, "src", MetadataValues::single_string("B")).unwrap();
+
+    q.compress();
+
+    // After compress: expver=0001/0002 merged; src differs → pushed to param=1.
+    let merged_ev = find_child(&q, root, "expver", "0001");
+    assert!(
+        q.get_metadata(merged_ev, "src").is_none(),
+        "merged expver should not carry src after compress (values differ)"
+    );
+    let param_node = find_child(&q, merged_ev, "param", "1");
+    let src_before =
+        q.get_metadata(param_node, "src").expect("src should be on param after compress");
+    assert!(src_before.contains_string("A") && src_before.contains_string("B"));
+
+    // Arena JSON roundtrip.
+    let arena = q.to_arena_json();
+    let restored = Qube::from_arena_json(arena).expect("from_arena_json");
+
+    let rroot = restored.root();
+    let rmerged_ev = find_child(&restored, rroot, "expver", "0001");
+
+    // Merged node must still have no src.
+    assert!(
+        restored.get_metadata(rmerged_ev, "src").is_none(),
+        "merged expver should not carry src after arena roundtrip"
+    );
+
+    // src={A,B} must be on param=1.
+    let rparam = find_child(&restored, rmerged_ev, "param", "1");
+    let src_after = restored
+        .get_metadata(rparam, "src")
+        .expect("src union should be on param after arena roundtrip");
+    assert!(src_after.contains_string("A"), "src should contain A");
+    assert!(src_after.contains_string("B"), "src should contain B");
+}
+
+// ===========================================================================
+//  Adding metadata once a Qube is complete
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+//  20. Build a Qube from ASCII, then add metadata to the existing nodes.
+//      Verify consolidation and arena JSON roundtrip.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn add_metadata_to_complete_qube_from_ascii_then_roundtrip() {
+    // First build the full tree, then annotate it with metadata.
+    // Use concat! to avoid Rust's \n\ line-continuation eating the leading
+    // whitespace/tree-characters that encode depth in the ASCII format.
+    let mut q = Qube::from_ascii(concat!(
+        "root\n",
+        "├── class=1\n",
+        "│   ├── param=1\n",
+        "│   └── param=2\n",
+        "└── class=2\n",
+        "    ├── param=1\n",
+        "    └── param=2",
+    ))
+    .unwrap();
+
+    let root = q.root();
+    let class1 = find_child(&q, root, "class", "1");
+    let class2 = find_child(&q, root, "class", "2");
+
+    // Add metadata after the tree is already fully built.
+    // Different values → no consolidation to root; same key `region`.
+    q.set_metadata(class1, "region", MetadataValues::single_string("EU")).unwrap();
+    q.set_metadata(class2, "region", MetadataValues::single_string("US")).unwrap();
+
+    // Also add an integer key that WILL consolidate (both class nodes share units=K
+    // on all their params → propagates to class, then class nodes agree → propagates to root).
+    let c1p1 = find_child(&q, class1, "param", "1");
+    let c1p2 = find_child(&q, class1, "param", "2");
+    let c2p1 = find_child(&q, class2, "param", "1");
+    let c2p2 = find_child(&q, class2, "param", "2");
+    q.set_metadata(c1p1, "units", MetadataValues::single_string("K")).unwrap();
+    q.set_metadata(c1p2, "units", MetadataValues::single_string("K")).unwrap();
+    // After these two: units=K consolidates to class=1.
+    q.set_metadata(c2p1, "units", MetadataValues::single_string("K")).unwrap();
+    q.set_metadata(c2p2, "units", MetadataValues::single_string("K")).unwrap();
+    // After these two: units=K consolidates to class=2; then class=1 and class=2
+    // both agree on units=K → consolidates all the way to root.
+
+    assert!(
+        q.get_metadata(root, "units").is_some(),
+        "units=K should have consolidated to root after adding to all leaf params"
+    );
+    assert!(q.get_metadata(class1, "units").is_none(), "class=1 should not have units (at root)");
+
+    // region stays on each class node (values EU ≠ US).
+    assert!(q.get_metadata(class1, "region").is_some(), "class=1 should carry region=EU");
+    assert!(q.get_metadata(class2, "region").is_some(), "class=2 should carry region=US");
+    assert!(q.get_metadata(root, "region").is_none(), "root should not have region");
+
+    // Arena JSON roundtrip.
+    let arena = q.to_arena_json();
+    let restored = Qube::from_arena_json(arena).expect("from_arena_json");
+
+    let rroot = restored.root();
+    let rclass1 = find_child(&restored, rroot, "class", "1");
+    let rclass2 = find_child(&restored, rroot, "class", "2");
+
+    // units=K should still be at root.
+    let units = restored
+        .get_metadata(rroot, "units")
+        .expect("units=K must be at root after arena roundtrip");
+    assert!(units.contains_string("K"));
+
+    // region values must be preserved on each class node.
+    let rregion1 = restored
+        .get_metadata(rclass1, "region")
+        .expect("region=EU must be on class=1 after roundtrip");
+    assert!(rregion1.contains_string("EU"));
+
+    let rregion2 = restored
+        .get_metadata(rclass2, "region")
+        .expect("region=US must be on class=2 after roundtrip");
+    assert!(rregion2.contains_string("US"));
+}
+
+// ---------------------------------------------------------------------------
+//  21. Add metadata to a complete Qube, then merge two such Qubes.
+//      Verify that metadata is handled correctly across the merge boundary,
+//      and that the result survives an arena JSON roundtrip.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn add_metadata_to_complete_qube_then_merge_and_roundtrip() {
+    // qa: class=1 (version=1) → param=1  (disjoint subtree from qb)
+    let mut qa = Qube::new();
+    let root_a = qa.root();
+    let c1 = qa.get_or_create_child("class", root_a, Some(1.into())).unwrap();
+    qa.get_or_create_child("param", c1, Some(1.into())).unwrap();
+    // Add metadata after building the tree.
+    qa.set_metadata(c1, "version", MetadataValues::single_integer(1)).unwrap();
+
+    // qb: class=2 (version=2) → param=2  (different param → disjoint subtree)
+    let mut qb = Qube::new();
+    let root_b = qb.root();
+    let c2 = qb.get_or_create_child("class", root_b, Some(2.into())).unwrap();
+    qb.get_or_create_child("param", c2, Some(2.into())).unwrap();
+    qb.set_metadata(c2, "version", MetadataValues::single_integer(2)).unwrap();
+
+    qa.append(&mut qb);
+
+    // Both class nodes have different version values → no consolidation to root.
+    let root = qa.root();
+    let class1 = find_child(&qa, root, "class", "1");
+    let class2 = find_child(&qa, root, "class", "2");
+
+    let v1 = qa
+        .get_metadata(class1, "version")
+        .or_else(|| qa.get_metadata(root, "version"))
+        .expect("version=1 must be present for class=1 after merge");
+    assert!(v1.contains_integer(1), "version for class=1 should be 1");
+
+    let v2 = qa
+        .get_metadata(class2, "version")
+        .or_else(|| qa.get_metadata(root, "version"))
+        .expect("version=2 must be present for class=2 after merge");
+    assert!(v2.contains_integer(2), "version for class=2 should be 2");
+
+    // Arena JSON roundtrip.
+    let arena = qa.to_arena_json();
+    let restored = Qube::from_arena_json(arena).expect("from_arena_json");
+
+    let rroot = restored.root();
+    let rclass1 = find_child(&restored, rroot, "class", "1");
+    let rclass2 = find_child(&restored, rroot, "class", "2");
+
+    let rv1 = restored
+        .get_metadata(rclass1, "version")
+        .or_else(|| restored.get_metadata(rroot, "version"))
+        .expect("version=1 must survive arena roundtrip");
+    assert!(rv1.contains_integer(1));
+
+    let rv2 = restored
+        .get_metadata(rclass2, "version")
+        .or_else(|| restored.get_metadata(rroot, "version"))
+        .expect("version=2 must survive arena roundtrip");
+    assert!(rv2.contains_integer(2));
+}
+
+// ---------------------------------------------------------------------------
+//  22. Add metadata to a complete Qube, then compress it.
+//      Verify that compress handles metadata correctly (same-value metadata
+//      consolidates upward; different-value metadata is pushed to children),
+//      and that the result survives an arena JSON roundtrip.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn add_metadata_to_complete_qube_then_compress_and_roundtrip() {
+    // Build a tree with two structurally identical branches, then add metadata
+    // with the same value on both → after compress they merge and the agreed
+    // value stays on the merged node.
+    //
+    //   root
+    //   ├── expver=0001 (tag=X) → param=1/2
+    //   └── expver=0002 (tag=X) → param=1/2   ← same subtree, same tag
+    let mut q = Qube::new();
+    let root = q.root();
+
+    let ev1 = q.get_or_create_child("expver", root, Some("0001".into())).unwrap();
+    q.get_or_create_child("param", ev1, Some(Coordinates::from_string("1/2"))).unwrap();
+
+    let ev2 = q.get_or_create_child("expver", root, Some("0002".into())).unwrap();
+    q.get_or_create_child("param", ev2, Some(Coordinates::from_string("1/2"))).unwrap();
+
+    // Add metadata *after* the full tree is built.
+    q.set_metadata(ev1, "tag", MetadataValues::single_string("X")).unwrap();
+    q.set_metadata(ev2, "tag", MetadataValues::single_string("X")).unwrap();
+    // Both expver nodes agree on tag=X; they also both have the same subtree.
+
+    q.compress();
+
+    // After compress: expver=0001/0002 merged; both had tag=X → stays on merged node
+    // (or consolidates to root since root has only this one merged child).
+    let merged_ev = find_child(&q, root, "expver", "0001");
+    let tag = q
+        .get_metadata(merged_ev, "tag")
+        .or_else(|| q.get_metadata(root, "tag"))
+        .expect("tag=X should be on the merged expver node or at root after compress");
+    assert!(tag.is_uniform(), "tag should be uniform");
+    assert!(tag.contains_string("X"), "tag should be X");
+
+    // Arena JSON roundtrip.
+    let arena = q.to_arena_json();
+    let restored = Qube::from_arena_json(arena).expect("from_arena_json");
+
+    let rroot = restored.root();
+    let rmerged_ev = find_child(&restored, rroot, "expver", "0001");
+
+    let rtag = restored
+        .get_metadata(rmerged_ev, "tag")
+        .or_else(|| restored.get_metadata(rroot, "tag"))
+        .expect("tag=X must survive arena roundtrip after compress");
+    assert!(rtag.is_uniform());
+    assert!(rtag.contains_string("X"));
+}
