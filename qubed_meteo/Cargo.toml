@@ -1,21 +1,13 @@
-[package]
-name = "qubed_meteo"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+resolver = "3"
 
-[dependencies]
-qubed = { path = "../qubed" }
-serde = "1.0.228"
-serde_json = "1.0.145"
-rsfdb = { git = "https://github.com/ecmwf/rsfdb" }
+members = [
+    "qubed_meteo",
+    "py_qubed_meteo",
+]
 
-[lib]
-path = "src/lib.rs"
-crate-type = ["rlib"]
+[workspace.package]
+version = "0.4.7"
 
-[patch.'https://github.com/ecmwf/rsfdb']
-rsfdb = { path = "../rsfdb" }
-
-[patch.'https://github.com/ecmwf-projects/rsfindlibs']
-rsfindlibs = { path = "../rsfindlibs" }
-
+[workspace.dependencies]
+qubed = { path = "../qubed", version = "0.4.7" }

@@ -3,13 +3,12 @@ resolver = "3"
 
 members = [
     "qubed",
-    "qubed_meteo",
     "py_qubed",
-    "py_qubed_meteo",
 ]
 
-[patch.'https://github.com/ecmwf/rsfdb']
-rsfdb = { path = "../rsfdb" }
+exclude = [
+    "qubed_meteo",
+]
 
-[patch.'https://github.com/ecmwf-projects/rsfindlibs']
-rsfindlibs = { path = "../rsfindlibs" }
+[workspace.package]
+version = "0.4.7"
