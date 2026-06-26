@@ -179,6 +179,45 @@ print(q)
 
 ---
 
+### Set Operations
+
+#### `subtract(other: Qube) -> Qube`
+
+Return a **new** Qube containing every identifier that is in `self` but not in `other`. Neither operand is modified.
+
+```python
+a = Qube.from_ascii("""root
+└── class=od/rd
+    └── param=1
+""")
+b = Qube.from_ascii("""root
+└── class=od
+    └── param=1
+""")
+
+result = a.subtract(b)
+print(result)
+# root
+# └── class=rd
+#     └── param=1
+```
+
+Also available as the `−` operator via `__sub__`:
+
+```python
+result = a - b            # same as a.subtract(b)
+result = a - b - c        # chaining removes identifiers from b and c
+```
+
+Key properties:
+- `a.subtract(a)` → empty Qube
+- `a.subtract(Qube())` → equivalent to `a` (subtracting empty changes nothing)
+- `Qube().subtract(b)` → empty Qube
+- `a - b` and `a.subtract(b)` produce identical results
+- Both operands are left unchanged; the result is an independent Qube
+
+---
+
 ### Manipulation
 
 #### `compress() -> None`
@@ -391,6 +430,7 @@ selected = q.select({"class": [1], "param": [1, 2]}, None, None)
 | `__str__()` | Same as `to_ascii()` |
 | `__repr__()` | Returns `Qube(root_id=...)` |
 | `__len__()` | Returns `datacube_count()` — the number of leaf identifiers |
+| `__sub__(other)` | Same as `subtract(other)` — enables `a - b` syntax |
 
 ```python
 q = Qube.from_ascii("root\n├── class=od, param=1/2\n└── class=rd, param=3")
