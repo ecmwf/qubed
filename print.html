@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5c7bf402.js";
+            window.path_to_searchindex_js = "searchindex-2863fc03.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-78e66672.js"></script>
@@ -314,7 +314,7 @@ time=0000/0600/1200/1800
 <tbody>
 <tr><td><strong>Union</strong></td><td><code>a.append(&amp;mut b)</code></td><td>All identifiers in A or B (or both)</td></tr>
 <tr><td><strong>Intersection</strong></td><td><code>select</code> with intersection logic</td><td>Identifiers in both A and B</td></tr>
-<tr><td><strong>Difference</strong></td><td>internal set operation</td><td>Identifiers in A but not B</td></tr>
+<tr><td><strong>Difference</strong></td><td><code>a.subtract(&amp;b)</code></td><td>Identifiers in A but not B</td></tr>
 <tr><td><strong>Symmetric difference</strong></td><td>internal set operation</td><td>Identifiers in exactly one of A or B</td></tr>
 </tbody>
 </table>
@@ -1330,6 +1330,37 @@ print(q)
 #     └── param=1/2  (structure may vary)
 </code></pre>
 <hr>
+<h3 id="set-operations-2"><a class="header" href="#set-operations-2">Set Operations</a></h3>
+<h4 id="subtractother-qube---qube"><a class="header" href="#subtractother-qube---qube"><code>subtract(other: Qube) -&gt; Qube</code></a></h4>
+<p>Return a <strong>new</strong> Qube containing every identifier that is in <code>self</code> but not in <code>other</code>. Neither operand is modified.</p>
+<pre><code class="language-python">a = Qube.from_ascii("""root
+└── class=od/rd
+    └── param=1
+""")
+b = Qube.from_ascii("""root
+└── class=od
+    └── param=1
+""")
+
+result = a.subtract(b)
+print(result)
+# root
+# └── class=rd
+#     └── param=1
+</code></pre>
+<p>Also available as the <code>−</code> operator via <code>__sub__</code>:</p>
+<pre><code class="language-python">result = a - b            # same as a.subtract(b)
+result = a - b - c        # chaining removes identifiers from b and c
+</code></pre>
+<p>Key properties:</p>
+<ul>
+<li><code>a.subtract(a)</code> → empty Qube</li>
+<li><code>a.subtract(Qube())</code> → equivalent to <code>a</code> (subtracting empty changes nothing)</li>
+<li><code>Qube().subtract(b)</code> → empty Qube</li>
+<li><code>a - b</code> and <code>a.subtract(b)</code> produce identical results</li>
+<li>Both operands are left unchanged; the result is an independent Qube</li>
+</ul>
+<hr>
 <h3 id="manipulation"><a class="header" href="#manipulation">Manipulation</a></h3>
 <h4 id="compress---none"><a class="header" href="#compress---none"><code>compress() -&gt; None</code></a></h4>
 <p>Compress the Qube in-place. Merges structurally identical sibling nodes, removes empty nodes, and deduplicates. Called automatically by <code>append</code> and <code>append_many</code>.</p>
@@ -1494,6 +1525,7 @@ assert q.contains(subset)                           # True
 <tr><td><code>__str__()</code></td><td>Same as <code>to_ascii()</code></td></tr>
 <tr><td><code>__repr__()</code></td><td>Returns <code>Qube(root_id=...)</code></td></tr>
 <tr><td><code>__len__()</code></td><td>Returns <code>datacube_count()</code> — the number of leaf identifiers</td></tr>
+<tr><td><code>__sub__(other)</code></td><td>Same as <code>subtract(other)</code> — enables <code>a - b</code> syntax</td></tr>
 </tbody>
 </table>
 </div>
