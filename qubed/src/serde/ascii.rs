@@ -134,7 +134,7 @@ fn serialize_children(qube: &Qube, parent_id: NodeIdx, prefix: &str, output: &mu
 
         let key = child_node.dimension().unwrap_or("unknown");
         let values = child_node.coordinates();
-        let values_str = values.to_string();
+        let values_str = values.to_ascii_string();
 
         output.push_str(prefix);
         output.push_str(branch);
@@ -224,5 +224,87 @@ mod tests {
 
         assert_eq!(input, serialized);
         assert_eq!(serialized, re_serialized);
+    }
+
+    #[test]
+    fn test_ascii_integer_range_step1_roundtrip() {
+        // ASCII format for a step-1 integer range
+        let input = "root\n└── param=1/to/10\n";
+        let qube = Qube::from_ascii(input).unwrap();
+        let out = qube.to_ascii();
+        assert_eq!(input, out, "Step-1 integer range ASCII roundtrip failed:\n{}", out);
+    }
+
+    #[test]
+    fn test_ascii_integer_range_stepped_roundtrip() {
+        // ASCII format for a stepped integer range
+        let input = "root\n└── param=0/to/10/by/2\n";
+        let qube = Qube::from_ascii(input).unwrap();
+        let out = qube.to_ascii();
+        assert_eq!(input, out, "Stepped integer range ASCII roundtrip failed:\n{}", out);
+    }
+
+    #[test]
+    fn test_ascii_integer_multi_range_roundtrip() {
+        // Two ranges joined by `|`, plus a singleton
+        let input = "root\n└── param=1/to/5|7|10/to/15\n";
+        let qube = Qube::from_ascii(input).unwrap();
+        let out = qube.to_ascii();
+        assert_eq!(input, out, "Multi-range ASCII roundtrip failed:\n{}", out);
+    }
+
+    #[test]
+    fn test_ascii_datetime_range_daily_roundtrip() {
+        // Daily datetime range (no /by/ suffix — daily is the default)
+        let input = "root\n└── date=2020-01-01T00:00:00/to/2020-01-10T00:00:00\n";
+        let qube = Qube::from_ascii(input).unwrap();
+        let out = qube.to_ascii();
+        assert_eq!(input, out, "Daily datetime range ASCII roundtrip failed:\n{}", out);
+    }
+
+    #[test]
+    fn test_ascii_datetime_range_hourly_roundtrip() {
+        // Hourly datetime range (3600s step)
+        let input = "root\n└── date=2020-01-01T00:00:00/to/2020-01-01T06:00:00/by/3600s\n";
+        let qube = Qube::from_ascii(input).unwrap();
+        let out = qube.to_ascii();
+        assert_eq!(input, out, "Hourly datetime range ASCII roundtrip failed:\n{}", out);
+    }
+
+    #[test]
+    fn test_ascii_datetime_multi_range_roundtrip() {
+        // Two daily ranges joined by `|`
+        let input = "root\n└── date=2020-01-01T00:00:00/to/2020-01-05T00:00:00|2020-02-01T00:00:00/to/2020-02-05T00:00:00\n";
+        let qube = Qube::from_ascii(input).unwrap();
+        let out = qube.to_ascii();
+        assert_eq!(input, out, "Multi datetime range ASCII roundtrip failed:\n{}", out);
+    }
+
+    #[test]
+    fn test_compress_then_ascii_roundtrip() {
+        // Build a Qube with 10 individual integer params, compress, then verify
+        // the ASCII output uses range notation and round-trips correctly.
+        let mut qube = Qube::new();
+        let root = qube.root();
+        let class = {
+            let mut c = Coordinates::Empty;
+            c.append("od".to_string());
+            qube.get_or_create_child("class", root, Some(c)).unwrap()
+        };
+        for v in 1..=10i32 {
+            let mut c = Coordinates::Empty;
+            c.append(v);
+            qube.get_or_create_child("param", class, Some(c)).unwrap();
+        }
+        qube.compress();
+
+        let ascii = qube.to_ascii();
+        println!("Compressed ASCII:\n{}", ascii);
+        assert!(ascii.contains("1/to/10"), "Expected range notation in ASCII: {}", ascii);
+
+        // Roundtrip: parse back and re-serialize
+        let reparsed = Qube::from_ascii(&ascii).unwrap();
+        let re_ascii = reparsed.to_ascii();
+        assert_eq!(ascii, re_ascii, "ASCII roundtrip after compress failed");
     }
 }

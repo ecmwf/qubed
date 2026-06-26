@@ -204,7 +204,8 @@ impl Qube {
         }
     }
 
-    /// Merges the coordinates of a group of nodes into the first node in the group.
+    /// Merges the coordinates of a group of nodes into the first node in the group,
+    /// then attempts to compress the merged coordinates into a tighter range representation.
     fn merge_coords(&mut self, group: Vec<NodeIdx>) {
         // The coordinates of all other nodes in the group are set to `Coordinates::Empty`.
 
@@ -216,6 +217,9 @@ impl Qube {
             let coords = self.node_ref(id).unwrap().coords();
             merged.extend(coords);
         }
+
+        // Try to compress consecutive integer or datetime values into ranges.
+        merged.try_compress();
 
         {
             let node = self.node_mut(group[0]).unwrap();
