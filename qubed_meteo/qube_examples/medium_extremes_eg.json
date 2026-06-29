@@ -1,0 +1,4 @@
+{
+  "version": "1",
+  "qube": [{"children":[1],"coords":{},"dim":"root","parent":null},{"children":[2],"coords":{"strings":["d1"]},"dim":"class","parent":0},{"children":[3],"coords":{"strings":["extremes-dt"]},"dim":"dataset","parent":1},{"children":[4],"coords":{"ints":[20260303]},"dim":"date","parent":2},{"children":[5],"coords":{"strings":["0001"]},"dim":"expver","parent":3},{"children":[6],"coords":{"strings":["oper"]},"dim":"stream","parent":4},{"children":[7],"coords":{"strings":["0000"]},"dim":"time","parent":5},{"children":[8],"coords":{"strings":["sfc"]},"dim":"levtype","parent":6},{"children":[9],"coords":{"strings":["fc"]},"dim":"type","parent":7},{"children":[10],"coords":{"ints":[31,34,78,134,136,137,151,165,166,167,168,235,3020,228029,228050,228218,228219,228221,228235,260015]},"dim":"param","parent":8},{"children":[],"coords":{"ints":[0]},"dim":"step","parent":9}]
+}
