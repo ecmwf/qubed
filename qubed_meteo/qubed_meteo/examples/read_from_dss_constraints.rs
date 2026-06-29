@@ -4,6 +4,10 @@ use std::time::Instant;
 
 fn main() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/data/medium2_era5_constraints.json");
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/examples/data/reanalysis-era5-single-levels-constraints.json"
+    );
 
     let dss_json = std::fs::read_to_string(path).expect("Failed to read DSS constraints JSON file");
 
@@ -20,7 +24,22 @@ fn main() {
     // Print the time taken
     println!("Time taken to construct Qube: {:?}", duration);
 
-    println!("Constructed Qube: {:?}", qube.unwrap().to_ascii());
+    // println!("Constructed Qube: {:?}", qube.unwrap().to_ascii());
+    let output_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/examples/data/reanalysis-era5-single-levels-constraints-qube.json"
+    );
+
+    let arena_json = qube.unwrap().to_arena_json();
+
+    std::fs::write(output_path, serde_json::to_string(&arena_json).unwrap())
+        .expect("Failed to write JSON file");
+
+    println!("Saved arena JSON to {}", output_path);
+    // let dss_output_json = std::fs::read_to_string(output_path).expect("Failed to read DSS constraints JSON file");
+    // let arena_json: serde_json::Value = serde_json::from_str(&dss_output_json).expect("Failed to parse arena JSON");
+    // let qube = Qube::from_arena_json(arena_json).expect("Failed to parse arena JSON");
+    // println!("Parsed Qube from arena JSON:\n{}", qube.to_ascii());
 }
 
 // #[cfg(test)]
