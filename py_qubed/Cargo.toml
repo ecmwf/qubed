@@ -1,6 +1,6 @@
 [package]
 name = "py_qubed"
-version = "0.1.0"
+version.workspace = true
 edition = "2024"
 
 [dependencies]
@@ -12,3 +12,4 @@ pyo3 = { version = "0.28", features = ["extension-module", "abi3-py38"] }
 name = "qubed"
 path = "src/lib.rs"
 crate-type = ["cdylib"]
+

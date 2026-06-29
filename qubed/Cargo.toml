@@ -1,7 +1,14 @@
 [package]
 name = "qubed"
-version = "0.1.0"
+version.workspace = true
 edition = "2024"
+description = "A new data structure to efficiently represent complex data spaces."
+license = "Apache-2.0"
+readme = "../README.md"
+repository = "https://github.com/ecmwf/qubed"
+homepage = "https://github.com/ecmwf/qubed"
+documentation = "https://ecmwf.github.io/qubed/"
+
 
 [dependencies]
 arrayvec = "0.7.6"

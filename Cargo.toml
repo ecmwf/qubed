@@ -4,7 +4,11 @@ resolver = "3"
 members = [
     "qubed",
     "py_qubed",
-    "qubed_meteo",
-    "py_qubed_meteo",
 ]
 
+exclude = [
+    "qubed_meteo",
+]
+
+[workspace.package]
+version = "0.4.7"

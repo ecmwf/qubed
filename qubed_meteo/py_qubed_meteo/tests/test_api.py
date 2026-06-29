@@ -1,8 +1,10 @@
 import json
+import pytest
 
 import qubed_meteo
 
 
+@pytest.mark.skip(reason="Uses fdb optional dependency which is not enabled in CI")
 def test_from_fdb_list_py_basic() -> None:
     items = [
         "class=od,expver=0001,param=1/2",
@@ -17,6 +19,7 @@ def test_from_fdb_list_py_basic() -> None:
     assert "param=1/2" in ascii_out
 
 
+@pytest.mark.skip(reason="Uses fdb optional dependency which is not enabled in CI")
 def test_to_dss_constraints_py_basic() -> None:
     items = [
         "class=od,expver=0001,param=1/2",

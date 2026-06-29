@@ -26,6 +26,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check workspace versions match
+        run: |
+          python3 - <<'EOF'
+          import re, sys
+
+          def workspace_version(path):
+              in_section = False
+              for line in open(path):
+                  if line.strip() == "[workspace.package]":
+                      in_section = True
+                  elif line.strip().startswith("[") and in_section:
+                      break
+                  elif in_section:
+                      m = re.match(r'\s*version\s*=\s*"([^"]+)"', line)
+                      if m:
+                          return m.group(1)
+              raise ValueError(f"No version found in {path}")
+
+          v1 = workspace_version("Cargo.toml")
+          v2 = workspace_version("qubed_meteo/Cargo.toml")
+          if v1 != v2:
+              print(f"Version mismatch: Cargo.toml={v1!r}  qubed_meteo/Cargo.toml={v2!r}", file=sys.stderr)
+              sys.exit(1)
+          print(f"Workspace versions match: {v1}")
+          EOF
+
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -45,28 +71,41 @@ jobs:
       - name: Install maturin
         run: uv tool install maturin
 
-      - name: Check Rust formatting
+      - name: Check Rust formatting (qubed workspace)
         run: cargo fmt -- --check
 
-      - name: Run Rust tests
-        run: cargo test --workspace
+      - name: Check Rust formatting (qubed_meteo workspace)
+        run: cargo fmt --manifest-path qubed_meteo/qubed_meteo/Cargo.toml -- --check
+
+      - name: Run Rust tests (qubed workspace)
+        run: cargo test -p qubed
+
+      - name: Run Rust tests (qubed_meteo workspace)
+        run: cargo test --manifest-path qubed_meteo/qubed_meteo/Cargo.toml
 
       # Build the two Python extension packages that wrap the Rust crates.
       - name: Build qubed wheel
         run: uv tool run maturin build -m py_qubed/Cargo.toml
 
-      - name: Build qubed_meteo wheel
-        run: uv tool run maturin build -m py_qubed_meteo/Cargo.toml
+      - name: Build qubed-meteo wheel
+        working-directory: qubed_meteo
+        run: |
+          uv tool run maturin build \
+            -m py_qubed_meteo/Cargo.toml
 
       # Install built wheels into an isolated uv-managed venv and run pytest.
       - name: Run Python binding tests
         run: |
           uv venv .ci-venv
-          uv pip install --python .ci-venv pytest target/wheels/qubed-*.whl target/wheels/qubed_meteo-*.whl
-          uv run --python .ci-venv pytest -q py_qubed/tests py_qubed_meteo/tests
+          uv pip install --python .ci-venv pytest target/wheels/qubed-*.whl
+          .ci-venv/bin/python -m pytest -q py_qubed/tests
+          uv pip install --python .ci-venv qubed_meteo/target/wheels/qubed_meteo-*.whl
+          .ci-venv/bin/python -m pytest -q qubed_meteo/py_qubed_meteo/tests
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
         with:
           name: wheels-linux
-          path: target/wheels/*.whl
+          path: |
+            target/wheels/*.whl
+            qubed_meteo/target/wheels/*.whl

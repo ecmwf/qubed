@@ -1,4 +1,5 @@
 use ::qubed::Coordinates;
+use ::qubed::Datacube;
 use ::qubed::Qube;
 use ::qubed::select::SelectMode;
 use pyo3::exceptions::PyTypeError;
@@ -6,7 +7,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyModule};
 use serde_json::Value as JsonValue;
 
-#[pyclass(unsendable)]
+#[pyclass(name = "Qube", unsendable)]
 pub struct PyQube {
     inner: Qube,
 }
@@ -69,6 +70,30 @@ impl PyQube {
             Ok(qube) => Ok(PyQube { inner: qube }),
             Err(e) => Err(PyTypeError::new_err(e)),
         }
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (datacube, order=None))]
+    pub fn from_datacube(
+        datacube: Bound<'_, PyDict>,
+        order: Option<Vec<String>>,
+    ) -> PyResult<Self> {
+        let dc = pydict_to_datacube(datacube)?;
+        let order_slices: Option<&[String]> = order.as_deref();
+        Ok(Self { inner: Qube::from_datacube(&dc, order_slices) })
+    }
+
+    #[pyo3(signature = (datacube, order=None, accept_existing_order=false))]
+    pub fn append_datacube(
+        &mut self,
+        datacube: Bound<'_, PyDict>,
+        order: Option<Vec<String>>,
+        accept_existing_order: bool,
+    ) -> PyResult<()> {
+        let dc = pydict_to_datacube(datacube)?;
+        let order_slices: Option<&[String]> = order.as_deref();
+        self.inner.append_datacube(dc, order_slices, accept_existing_order);
+        Ok(())
     }
 
     pub fn select(
@@ -172,7 +197,7 @@ impl PyQube {
         let mut validated_qubes = Vec::with_capacity(others.len());
         for item in others.iter() {
             let other_cell =
-                item.cast::<PyQube>().map_err(|_| PyTypeError::new_err("expected PyQube"))?;
+                item.cast::<PyQube>().map_err(|_| PyTypeError::new_err("expected Qube"))?;
             validated_qubes.push(other_cell.clone().unbind());
         }
 
@@ -188,6 +213,17 @@ impl PyQube {
     pub fn __repr__(&self) -> PyResult<String> {
         Ok(format!("PyQube(root_id={:?})", self.inner.root()))
     }
+}
+
+fn pydict_to_datacube(datacube: Bound<'_, PyDict>) -> PyResult<Datacube> {
+    let mut dc = Datacube::new();
+    for (k, v) in datacube.iter() {
+        let key: String =
+            k.extract().map_err(|_| PyTypeError::new_err("datacube keys must be strings"))?;
+        let val_str: String = v.str()?.extract()?;
+        dc.add_coordinate(&key, Coordinates::from_string(&val_str));
+    }
+    Ok(dc)
 }
 
 pub(crate) fn join_pylist_as_path(lst: &Bound<'_, PyList>) -> PyResult<String> {

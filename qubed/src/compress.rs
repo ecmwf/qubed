@@ -57,10 +57,6 @@ impl Qube {
         node.structural_hash().store(0, Ordering::Release);
     }
 
-    // -------------------------------------------------------------------------
-    //  Metadata helpers used by merge_coords and dedup_children_locally
-    // -------------------------------------------------------------------------
-
     /// Given a group of node IDs, partition their metadata into two buckets:
     ///
     /// - `meta_for_node`: keys where **every** node in the group carries the same,
@@ -147,8 +143,6 @@ impl Qube {
             }
         }
     }
-
-    // -------------------------------------------------------------------------
 
     /// Deduplicates the children of a node by merging nodes with identical structural hashes.
     /// Metadata from dropped duplicates is merged into the kept node's metadata.
@@ -306,16 +300,6 @@ impl Qube {
     }
 
     /// Merges the coordinates of a group of nodes into the first node in the group.
-    ///
-    /// Metadata is handled as follows:
-    /// - Keys where every node in the group carries the **same** value are kept on
-    ///   the merged node.
-    /// - Keys where nodes disagree have their values **unioned** and pushed down to
-    ///   the children of the merged node (or onto the merged node itself if it is a
-    ///   leaf and has no children to push to).
-    ///
-    /// Nodes at indices `1..` are set to `Coordinates::Empty` so they are pruned
-    /// in the next pass; their metadata is no longer needed.
     fn merge_coords(&mut self, group: Vec<NodeIdx>) {
         assert!(!group.is_empty());
 

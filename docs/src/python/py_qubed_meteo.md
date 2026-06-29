@@ -21,13 +21,13 @@ from qubed_meteo import from_mars_list_py, from_fdb_list_py, to_dss_constraints_
 
 ### `from_mars_list_py(text: str) -> str`
 
-Parse MARS list text and return the resulting Qube as an ASCII string. The returned string can be passed to `PyQube.from_ascii()` to get a `PyQube` object.
+Parse MARS list text and return the resulting Qube as an ASCII string. The returned string can be passed to `Qube.from_ascii()` to get a `Qube` object.
 
 **Input format:** Indentation-based MARS listing where indented lines are children of preceding less-indented lines. Tokens are comma-separated `key=value` pairs; values can be slash-separated.
 
 ```python
 from qubed_meteo import from_mars_list_py
-from qubed import PyQube
+from qubed import Qube
 
 mars_text = """class=od, expver=0001
   param=1/2
@@ -36,7 +36,7 @@ class=rd, expver=0002
   param=4"""
 
 ascii = from_mars_list_py(mars_text)
-q = PyQube.from_ascii(ascii)
+q = Qube.from_ascii(ascii)
 print(q)
 ```
 
@@ -50,7 +50,7 @@ Each string is a comma-separated sequence of `key=value` segments (e.g. `"class=
 
 ```python
 from qubed_meteo import from_fdb_list_py
-from qubed import PyQube
+from qubed import Qube
 
 items = [
     "class=od,expver=0001,param=1/2",
@@ -59,7 +59,7 @@ items = [
 ]
 
 ascii = from_fdb_list_py(items)
-q = PyQube.from_ascii(ascii)
+q = Qube.from_ascii(ascii)
 print(q)
 # root
 # ├── class=od
@@ -100,7 +100,7 @@ Each object in the array has the same set of dimension keys. Dimensions not pres
 ## Complete Workflow Example
 
 ```python
-from qubed import PyQube
+from qubed import Qube
 from qubed_meteo import from_fdb_list_py, to_dss_constraints_py
 import json
 
@@ -111,7 +111,7 @@ fdb_items = [
     "class=rd,expver=0001,param=1/2/3",
 ]
 
-qube = PyQube.from_ascii(from_fdb_list_py(fdb_items))
+qube = Qube.from_ascii(from_fdb_list_py(fdb_items))
 print(f"Built qube with {len(qube)} identifiers")
 print(qube)
 
@@ -120,7 +120,7 @@ constraints = json.loads(to_dss_constraints_py(str(qube)))
 print(json.dumps(constraints, indent=2))
 
 # 3. Merge with another qube
-extra = PyQube.from_ascii("root\n└── class=xd, expver=0001, param=99")
+extra = Qube.from_ascii("root\n└── class=xd, expver=0001, param=99")
 qube.append(extra)
 print(qube)
 ```
@@ -129,6 +129,6 @@ print(qube)
 
 ## Notes
 
-- All adapter functions return ASCII strings as a lightweight bridge format. Use `PyQube.from_ascii()` to convert to a full `PyQube` object.
+- All adapter functions return ASCII strings as a lightweight bridge format. Use `Qube.from_ascii()` to convert to a full `Qube` object.
 - Leading zeros in coordinate values (e.g. `"0001"`) are preserved through all adapter functions.
 - The functions raise `ValueError` on parse failures.
