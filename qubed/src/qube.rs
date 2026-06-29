@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tiny_vec::TinyVec;
 
 use crate::coordinates::Coordinates;
+use crate::metadata::{Metadata, MetadataValues};
 
 new_key_type! {
     pub struct NodeIdx;
@@ -29,6 +30,7 @@ pub(crate) struct Node {
     coords: Coordinates,
     parent: Option<NodeIdx>,
     children: BTreeMap<Dimension, TinyVec<NodeIdx, 4>>,
+    metadata: Metadata,
 }
 
 #[derive(Debug)]
@@ -73,6 +75,14 @@ impl Node {
     pub(crate) fn parent(&self) -> &Option<NodeIdx> {
         &self.parent
     }
+
+    pub(crate) fn metadata(&self) -> &Metadata {
+        &self.metadata
+    }
+
+    pub(crate) fn metadata_mut(&mut self) -> &mut Metadata {
+        &mut self.metadata
+    }
 }
 
 impl Qube {
@@ -102,6 +112,7 @@ impl Qube {
             coords: Coordinates::Empty,
             parent: None,
             children: BTreeMap::new(),
+            metadata: Metadata::new(),
         });
 
         Qube { nodes, root_id, key_store }
@@ -180,6 +191,7 @@ impl Qube {
             coords,
             parent: Some(parent_id),
             children: BTreeMap::new(),
+            metadata: Metadata::new(),
         });
 
         // Add to parent's children
@@ -615,21 +627,24 @@ impl Qube {
 }
 
 impl Qube {
-    /// Recursively copies the subtree from `other_node` in `other` to `new_node` in `self`.
+    /// Recursively copies the subtree from `other_node` in `other` to `new_node` in `self`,
+    /// including the metadata of every copied node.
     pub(crate) fn copy_subtree(&mut self, other: &Qube, other_node: NodeIdx, new_node: NodeIdx) {
         // Get the children of the `other_node`
         let other_children = other.node_ref(other_node).unwrap().children().clone();
 
         for (dim, child_ids) in other_children {
             for child_id in child_ids {
-                // Get the coordinates of the child node
+                // Clone both coordinates and metadata before any mutable borrow
                 let child_coords = other.node_ref(child_id).unwrap().coords().clone();
+                let child_metadata = other.node_ref(child_id).unwrap().metadata().clone();
 
-                // Create a new child node in `self` with the same dimension and coordinates
-                // let new_child = self.get_or_create_child(&self.dimension_str(&dim).unwrap(), new_node, Some(child_coords)).unwrap();
-                let dim_str = other.dimension_str(&dim).unwrap().to_owned(); // Immutable borrow ends here
+                let dim_str = other.dimension_str(&dim).unwrap().to_owned();
                 let new_child =
-                    self.get_or_create_child(&dim_str, new_node, Some(child_coords)).unwrap(); // Mutable borrow starts here
+                    self.get_or_create_child(&dim_str, new_node, Some(child_coords)).unwrap();
+
+                // Propagate metadata to the newly created child
+                *self.node_mut(new_child).unwrap().metadata_mut() = child_metadata;
 
                 // Recursively copy the subtree of the child
                 self.copy_subtree(other, child_id, new_child);
@@ -643,14 +658,18 @@ impl Qube {
 
         for (dim, child_ids) in source_children {
             for child_id in child_ids {
-                // Clone the coordinates of the child
+                // Clone coordinates and metadata before any mutable borrow
                 let child_coords = self.node_ref(child_id).unwrap().coords().clone();
+                let child_metadata = self.node_ref(child_id).unwrap().metadata().clone();
 
                 // Create a new child node in `target_node` with the same dimension and coordinates
                 let dim_str = self.dimension_str(&dim).unwrap().to_owned();
                 let new_child = self
                     .get_or_create_child(&dim_str, target_node, Some(child_coords))
                     .expect("Failed to create child node");
+
+                // Propagate metadata to the newly created child
+                *self.node_mut(new_child).unwrap().metadata_mut() = child_metadata;
 
                 // Recursively copy the subtree of the child
                 self.copy_branch(child_id, new_child);
@@ -768,6 +787,175 @@ impl<'a> NodeRef<'a> {
 
     pub fn coordinates_count(&self) -> usize {
         self.node.coords.len()
+    }
+
+    /// Get the metadata stored on this node.
+    pub fn metadata(&self) -> &Metadata {
+        &self.node.metadata
+    }
+
+    /// Get metadata values for a specific key on this node.
+    pub fn get_metadata(&self, key: &str) -> Option<&MetadataValues> {
+        self.node.metadata.get(key)
+    }
+}
+
+// -------------------------
+//  Metadata Operations
+// -------------------------
+
+impl Qube {
+    /// Set metadata on a node. The number of values must not exceed the node's coordinate count.
+    ///
+    /// After setting, attempts to consolidate the metadata upward: if all children of the
+    /// parent have a uniform (single-value) metadata set with the same value for this key,
+    /// the metadata is moved to the parent. This process repeats recursively.
+    pub fn set_metadata(
+        &mut self,
+        node_id: NodeIdx,
+        key: &str,
+        values: MetadataValues,
+    ) -> Result<(), String> {
+        let node =
+            self.nodes.get(node_id).ok_or_else(|| format!("Node {:?} not found", node_id))?;
+        let coord_count = node.coords.len();
+        let value_count = values.len();
+
+        if value_count > coord_count && coord_count > 0 {
+            return Err(format!(
+                "Metadata value count ({}) must not exceed coordinate count ({})",
+                value_count, coord_count
+            ));
+        }
+
+        let node = self.nodes.get_mut(node_id).unwrap();
+        node.metadata.set(key.to_string(), values);
+
+        // Attempt consolidation upward from this node's parent
+        if let Some(parent_id) = self.nodes.get(node_id).and_then(|n| n.parent) {
+            self.try_consolidate_metadata(parent_id, key);
+        }
+
+        Ok(())
+    }
+
+    /// Get metadata values for a specific key on a node.
+    pub fn get_metadata(&self, node_id: NodeIdx, key: &str) -> Option<&MetadataValues> {
+        self.nodes.get(node_id).and_then(|n| n.metadata.get(key))
+    }
+
+    /// Get the full metadata map for a node.
+    pub fn get_node_metadata(&self, node_id: NodeIdx) -> Option<&Metadata> {
+        self.nodes.get(node_id).map(|n| &n.metadata)
+    }
+
+    /// Try to consolidate metadata for a given key at `parent_id`.
+    ///
+    /// Checks all children of the parent: if every child has a uniform (size-1) metadata
+    /// set for `key` with the same value, removes it from all children and sets it on the parent.
+    /// Then recursively tries to consolidate from the parent's parent.
+    fn try_consolidate_metadata(&mut self, parent_id: NodeIdx, key: &str) {
+        // Collect all child node IDs under this parent
+        let all_children: Vec<NodeIdx> = match self.nodes.get(parent_id) {
+            Some(parent) => parent.children.values().flatten().copied().collect(),
+            None => return,
+        };
+
+        // Parent must have children to consolidate
+        if all_children.is_empty() {
+            return;
+        }
+
+        // Check if ALL children have metadata for this key, all are uniform (size 1),
+        // and all share the same value
+        let first_child_meta =
+            match self.nodes.get(all_children[0]).and_then(|n| n.metadata.get(key)) {
+                Some(v) if v.is_uniform() => v.clone(),
+                _ => return,
+            };
+
+        for &child_id in &all_children[1..] {
+            match self.nodes.get(child_id).and_then(|n| n.metadata.get(key)) {
+                Some(v) if v.is_uniform() && *v == first_child_meta => {}
+                _ => return,
+            }
+        }
+
+        // All children agree — consolidate: remove from all children, set on parent
+        for &child_id in &all_children {
+            if let Some(node) = self.nodes.get_mut(child_id) {
+                node.metadata.remove(key);
+            }
+        }
+
+        if let Some(parent) = self.nodes.get_mut(parent_id) {
+            parent.metadata.set(key.to_string(), first_child_meta);
+        }
+
+        // Recursively try to consolidate further up
+        if let Some(grandparent_id) = self.nodes.get(parent_id).and_then(|n| n.parent) {
+            self.try_consolidate_metadata(grandparent_id, key);
+        }
+    }
+
+    /// Pushes all metadata from `node_id` down to its direct children, merging with
+    /// any metadata already on each child, then clears the node's own metadata.
+    ///
+    /// This is the inverse of `try_consolidate_metadata`: it de-consolidates metadata
+    /// that has been bubbled up, ensuring the metadata travels with its subtree when
+    /// the subtree is copied during `append` / `append_many`.
+    ///
+    /// No-op if the node has no metadata or has no children (i.e. is a leaf).
+    pub(crate) fn push_metadata_to_children(&mut self, node_id: NodeIdx) {
+        let node_metadata = match self.node_ref(node_id) {
+            Some(n) if !n.metadata().is_empty() => n.metadata().clone(),
+            _ => return,
+        };
+
+        let children: Vec<NodeIdx> = match self.node_ref(node_id) {
+            Some(n) => n.children().values().flat_map(|v| v.iter().copied()).collect(),
+            None => return,
+        };
+
+        if children.is_empty() {
+            return;
+        }
+
+        for child_id in children {
+            let existing = self.node_ref(child_id).unwrap().metadata().clone();
+            let new_meta = existing.merge_with(&node_metadata);
+            *self.node_mut(child_id).unwrap().metadata_mut() = new_meta;
+        }
+
+        if let Some(node) = self.node_mut(node_id) {
+            *node.metadata_mut() = Metadata::new();
+        }
+    }
+
+    /// Run a full bottom-up metadata consolidation pass over the subtree rooted at `node_id`.
+    ///
+    /// Processes nodes deepest-first. At each node, for every metadata key present on
+    /// its children, attempts to consolidate that key upward if all children share the
+    /// same uniform value.
+    pub(crate) fn consolidate_all_metadata(&mut self, node_id: NodeIdx) {
+        let children: Vec<NodeIdx> = {
+            let node = self.node_ref(node_id).unwrap();
+            node.children().values().flat_map(|v| v.iter().copied()).collect()
+        };
+
+        for &child in &children {
+            self.consolidate_all_metadata(child);
+        }
+
+        // Collect all metadata keys present across children, then try to consolidate each
+        let child_keys: std::collections::HashSet<String> = children
+            .iter()
+            .flat_map(|&id| self.node_ref(id).unwrap().metadata().keys().cloned())
+            .collect();
+
+        for key in child_keys {
+            self.try_consolidate_metadata(node_id, &key);
+        }
     }
 }
 

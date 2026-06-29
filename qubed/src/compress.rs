@@ -1,4 +1,5 @@
 use crate::coordinates::Coordinates;
+use crate::metadata::{Metadata, MetadataValues};
 use crate::qube::{Dimension, NodeIdx, Qube};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -60,7 +61,95 @@ impl Qube {
         node.structural_hash().store(0, Ordering::Release);
     }
 
+    /// Given a group of node IDs, partition their metadata into two buckets:
+    ///
+    /// - `meta_for_node`: keys where **every** node in the group carries the same,
+    ///   identical value.  The merged node may inherit these directly.
+    /// - `meta_for_children`: keys where nodes disagree (different values, or some
+    ///   nodes are missing the key).  The union of all values is stored here; the
+    ///   caller is responsible for distributing it to the children (or to the node
+    ///   itself when it has no children).
+    fn compute_merged_metadata(&self, group: &[NodeIdx]) -> (Metadata, Metadata) {
+        let all_keys: std::collections::HashSet<String> = group
+            .iter()
+            .flat_map(|&id| self.node_ref(id).unwrap().metadata().keys().cloned())
+            .collect();
+
+        let mut meta_for_node = Metadata::new();
+        let mut meta_for_children = Metadata::new();
+
+        for key in &all_keys {
+            let values: Vec<Option<MetadataValues>> = group
+                .iter()
+                .map(|&id| self.node_ref(id).unwrap().metadata().get(key).cloned())
+                .collect();
+
+            let first = values[0].as_ref();
+            let all_same = values.iter().all(|v| v.as_ref() == first);
+
+            if all_same {
+                // All nodes carry the same value (including "no value") — promote to node.
+                if let Some(v) = first {
+                    meta_for_node.set(key.clone(), v.clone());
+                }
+            } else {
+                // Disagreement: compute union of all non-empty values.
+                let union_val = values
+                    .iter()
+                    .filter_map(|v| v.as_ref())
+                    .cloned()
+                    .reduce(|acc, v| acc.merge_with(&v))
+                    .unwrap_or(MetadataValues::Empty);
+
+                if !union_val.is_empty() {
+                    meta_for_children.set(key.clone(), union_val);
+                }
+            }
+        }
+
+        (meta_for_node, meta_for_children)
+    }
+
+    /// Apply the two-bucket metadata result to a node:
+    ///
+    /// - `meta_for_node` is written directly onto `node_id`.
+    /// - `meta_for_children` is merged into each direct child of `node_id`.
+    ///   If `node_id` is a leaf (no children), `meta_for_children` is merged
+    ///   onto `node_id` itself instead — there is nowhere lower to push it.
+    fn apply_node_metadata(
+        &mut self,
+        node_id: NodeIdx,
+        meta_for_node: Metadata,
+        meta_for_children: Metadata,
+    ) {
+        *self.node_mut(node_id).unwrap().metadata_mut() = meta_for_node;
+
+        if meta_for_children.is_empty() {
+            return;
+        }
+
+        let children: Vec<NodeIdx> = {
+            let node = self.node_ref(node_id).unwrap();
+            node.children().values().flat_map(|v| v.iter().copied()).collect()
+        };
+
+        if children.is_empty() {
+            // Leaf: merge the disagreed values onto the node itself.
+            let existing = self.node_ref(node_id).unwrap().metadata().clone();
+            *self.node_mut(node_id).unwrap().metadata_mut() =
+                existing.merge_with(&meta_for_children);
+        } else {
+            // Inner node: push the disagreed values down to every child.
+            for child_id in children {
+                let existing = self.node_ref(child_id).unwrap().metadata().clone();
+                let new_meta = existing.merge_with(&meta_for_children);
+                *self.node_mut(child_id).unwrap().metadata_mut() = new_meta;
+            }
+        }
+    }
+
     /// Deduplicates the children of a node by merging nodes with identical structural hashes.
+    /// Metadata from dropped duplicates is merged into the kept node's metadata.
     fn dedup_children_locally(&mut self, parent: NodeIdx) {
         let snapshot = {
             let node = self.node_ref(parent).unwrap();
@@ -73,8 +162,19 @@ impl Qube {
 
             for &child in &kids {
                 let h = self.compute_structural_hash(child);
+                // Copy the kept-node ID (NodeIdx: Copy) so we release the borrow on `seen`.
+                let existing = seen.get(&h).copied();
 
-                if seen.insert(h, child).is_none() {
+                if let Some(kept_id) = existing {
+                    // Merge this duplicate's metadata into the kept node.
+                    let dup_meta = self.node_ref(child).unwrap().metadata().clone();
+                    if !dup_meta.is_empty() {
+                        let kept_meta = self.node_ref(kept_id).unwrap().metadata().clone();
+                        let merged = kept_meta.merge_with(&dup_meta);
+                        *self.node_mut(kept_id).unwrap().metadata_mut() = merged;
+                    }
+                } else {
+                    seen.insert(h, child);
                     unique.push(child);
                 }
             }
@@ -139,16 +239,15 @@ impl Qube {
     }
 
     /// Compresses the tree by merging nodes, pruning empty nodes, and deduplicating nodes.
+    /// After all structural operations, runs a bottom-up metadata consolidation pass so
+    /// that uniform metadata is bubbled up to the highest node where it applies.
     pub fn compress(&mut self) {
-        // This method performs the following steps:
-        // 1. Compresses nodes recursively.
-        // 2. Prunes empty nodes from the tree.
-        // 3. Deduplicates nodes that may have become identical after compression.
-
         let root = self.root();
         self.compress_recursively(root);
         self.prune_empty_nodes_recursively(root);
         self.dedup_recursively(root);
+        // Bubble up consistent metadata after all structural merging is done.
+        self.consolidate_all_metadata(root);
     }
 
     /// Recursively compresses the tree, merging coordinates of child nodes where possible.
@@ -206,10 +305,9 @@ impl Qube {
 
     /// Merges the coordinates of a group of nodes into the first node in the group.
     fn merge_coords(&mut self, group: Vec<NodeIdx>) {
-        // The coordinates of all other nodes in the group are set to `Coordinates::Empty`.
-
         assert!(!group.is_empty());
 
+        // 1. Merge coordinates into group[0].
         let mut merged: Coordinates = { self.node_ref(group[0]).unwrap().coords().clone() };
 
         for &id in group.iter().skip(1) {
@@ -222,6 +320,14 @@ impl Qube {
             *node.coords_mut() = merged;
         }
 
+        // 2. Compute the two-bucket metadata split for the whole group.
+        let (meta_for_node, meta_for_children) = self.compute_merged_metadata(&group);
+
+        // 3. Apply: agreed metadata on the node, disagreed metadata pushed to children.
+        self.apply_node_metadata(group[0], meta_for_node, meta_for_children);
+
+        // 4. Empty the remaining nodes so they are pruned later.
+        //    Their metadata is no longer relevant (the information has been merged above).
         for &id in group.iter().skip(1) {
             let node = self.node_mut(id).unwrap();
             *node.coords_mut() = Coordinates::Empty;

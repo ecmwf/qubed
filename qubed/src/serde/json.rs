@@ -1,4 +1,4 @@
-use crate::{Coordinates, NodeIdx, Qube};
+use crate::{Coordinates, MetadataValues, NodeIdx, Qube};
 use serde_json::{Map, Value};
 
 // ---------------- JSON Deserialization ----------------
@@ -165,6 +165,26 @@ impl Qube {
             };
             map.insert("children".to_string(), Value::Array(children_indices));
 
+            // Serialise metadata (only when non-empty).  Keys are sorted for
+            // deterministic output.  Each value is a typed object:
+            // `{"ints": [...]}` or `{"strings": [...]}`.
+            let meta = nref.metadata();
+            if !meta.is_empty() {
+                let mut sorted_keys: Vec<(&String, &MetadataValues)> = meta.iter().collect();
+                sorted_keys.sort_by_key(|(k, _)| k.as_str());
+                let mut meta_map = Map::new();
+                for (key, values) in sorted_keys {
+                    let serialized = serialize_metadata_values(values);
+                    // Skip Empty values – they carry no information.
+                    if !serialized.is_null() {
+                        meta_map.insert(key.clone(), serialized);
+                    }
+                }
+                if !meta_map.is_empty() {
+                    map.insert("metadata".to_string(), Value::Object(meta_map));
+                }
+            }
+
             nodes_json.push(Value::Object(map));
         }
 
@@ -307,9 +327,62 @@ impl Qube {
             };
 
             index_to_node.insert(i, created);
+
+            // Restore metadata directly on the node, bypassing set_metadata's
+            // consolidation logic so that the exact serialised state is reproduced.
+            if let Some(Value::Object(meta_map)) = obj.get("metadata") {
+                for (key, meta_val) in meta_map {
+                    if let Some(values) = deserialize_metadata_values(meta_val) {
+                        if let Some(node) = qube.node_mut(created) {
+                            node.metadata_mut().set(key.clone(), values);
+                        }
+                    }
+                }
+            }
         }
 
         Ok(qube)
+    }
+}
+
+// -------- Metadata serialisation helpers --------
+
+/// Serialise a `MetadataValues` into a typed JSON object:
+/// `{"ints": [...]}` or `{"strings": [...]}`.  Returns `null` for `Empty`.
+fn serialize_metadata_values(values: &MetadataValues) -> Value {
+    match values {
+        MetadataValues::Empty => Value::Null,
+        MetadataValues::Integers(set) => {
+            let arr: Vec<Value> =
+                set.iter().map(|&v| Value::Number(serde_json::Number::from(v))).collect();
+            let mut m = Map::new();
+            m.insert("ints".to_string(), Value::Array(arr));
+            Value::Object(m)
+        }
+        MetadataValues::Strings(set) => {
+            let arr: Vec<Value> = set.iter().map(|v| Value::String(v.to_string())).collect();
+            let mut m = Map::new();
+            m.insert("strings".to_string(), Value::Array(arr));
+            Value::Object(m)
+        }
+    }
+}
+
+/// Deserialise a typed metadata JSON object produced by `serialize_metadata_values`.
+/// Returns `None` for unrecognised shapes.
+fn deserialize_metadata_values(val: &Value) -> Option<MetadataValues> {
+    match val {
+        Value::Object(vm) if vm.contains_key("ints") => {
+            let arr = vm.get("ints")?.as_array()?;
+            let ints: Vec<i32> = arr.iter().filter_map(|v| v.as_i64().map(|n| n as i32)).collect();
+            Some(MetadataValues::from_integers(&ints))
+        }
+        Value::Object(vm) if vm.contains_key("strings") => {
+            let arr = vm.get("strings")?.as_array()?;
+            let string_refs: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
+            Some(MetadataValues::from_strings(&string_refs))
+        }
+        _ => None,
     }
 }
 
