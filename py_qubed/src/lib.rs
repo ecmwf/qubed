@@ -1,3 +1,5 @@
+mod helpers;
+
 use ::qubed::Coordinates;
 use ::qubed::Datacube;
 use ::qubed::Qube;
