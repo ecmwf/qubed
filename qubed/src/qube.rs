@@ -577,7 +577,7 @@ impl Qube {
         hash
     }
 
-    pub(crate) fn leaf_node_ids_paths(&self) -> Vec<Vec<NodeIdx>> {
+    pub fn leaf_node_ids_paths(&self) -> Vec<Vec<NodeIdx>> {
         let mut paths = Vec::new();
 
         fn traverse(

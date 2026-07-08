@@ -128,6 +128,18 @@ impl MetadataValues {
             _ => false,
         }
     }
+
+    /// Return all values as a `Vec<String>`, regardless of the underlying type.
+    ///
+    /// Integers are formatted with `i32::to_string`. Strings are returned as-is.
+    /// An `Empty` set produces an empty Vec.
+    pub fn as_string_vec(&self) -> Vec<String> {
+        match self {
+            MetadataValues::Empty => vec![],
+            MetadataValues::Integers(set) => set.iter().map(|v| v.to_string()).collect(),
+            MetadataValues::Strings(set) => set.iter().map(|v| v.to_string()).collect(),
+        }
+    }
 }
 
 impl Metadata {
