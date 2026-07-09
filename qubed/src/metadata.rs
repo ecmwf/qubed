@@ -147,6 +147,13 @@ impl Metadata {
         Self { values: HashMap::new() }
     }
 
+    /// Create a `Metadata` containing a single key→value entry.
+    pub fn single_key(key: &str, values: MetadataValues) -> Self {
+        let mut m = Self::new();
+        m.set(key.to_string(), values);
+        m
+    }
+
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }

@@ -41,20 +41,26 @@ impl Qube {
             let self_is_leaf = self.node_ref(self_id).map_or(true, |n| n.children().is_empty());
 
             if self_is_leaf {
-                // Leaf node: push_metadata_to_children would be a no-op and the
+                // Leaf node: push_metadata_to_leaves would be a no-op and the
                 // children loop below never runs, so other_meta would be silently
                 // dropped.  Union it directly onto self instead.
                 let merged = self_meta.merge_with(&other_meta);
                 *self.node_mut(self_id).unwrap().metadata_mut() = merged;
             } else {
-                self.push_metadata_to_children(self_id);
-                other.push_metadata_to_children(other_id);
-                // After pushing down, set the union of both sides' metadata on the
-                // intersection node itself.  compress/consolidation will move it to the
-                // highest ancestor where all descendants agree, but we need it here so
-                // the merge result explicitly carries the combined provenance.
-                let merged = self_meta.merge_with(&other_meta);
-                *self.node_mut(self_id).unwrap().metadata_mut() = merged;
+                self.push_metadata_to_leaves(self_id);
+                other.push_metadata_to_leaves(other_id);
+                // After pushing down, write the union back onto the intersection node
+                // ONLY when self originally carried some metadata.  If self was empty,
+                // the push above was a no-op for self and other's metadata has already
+                // been distributed to other's leaves; it will travel with those leaves
+                // when they are copied into self.  Writing the union onto an otherwise-empty
+                // self node creates a spurious ancestor entry that dedup would later treat
+                // as the canonical value, causing it to strip the correctly-placed metadata
+                // from the leaves (see `append_only_other_node_gets_other_metadata`).
+                if !self_meta.is_empty() {
+                    let merged = self_meta.merge_with(&other_meta);
+                    *self.node_mut(self_id).unwrap().metadata_mut() = merged;
+                }
             }
         }
 
@@ -251,12 +257,13 @@ impl Qube {
             let other_root_meta =
                 other.get_node_metadata(other_root_id).cloned().unwrap_or_default();
             if self_root_meta != other_root_meta {
-                other.push_metadata_to_children(other_root_id);
+                other.push_metadata_to_leaves(other_root_id);
             }
             self.copy_subtree(other, other_root_id, self_root_id);
             *other = Qube::new();
-            // Ensure append behavior is consistent: always compress after merging.
+            // Ensure append behavior is consistent: always compress and dedup after merging.
             self.compress();
+            self.deduplicate_metadata();
             return;
         }
 
@@ -268,6 +275,7 @@ impl Qube {
         // level where the two sides disagree, so no explicit push is needed here.
         self.node_merge(other, self_root_id, other_root_id, &dim_map);
         self.compress();
+        self.deduplicate_metadata();
         // Clear the other Qube
         *other = Qube::new();
     }
@@ -296,5 +304,6 @@ impl Qube {
         }
         // Final compression after all unions are complete
         self.compress();
+        self.deduplicate_metadata();
     }
 }

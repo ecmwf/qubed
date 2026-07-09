@@ -133,7 +133,7 @@ fn compress_identical_inner_nodes_different_metadata_pushed_to_children() {
 // ===========================================================================
 
 #[test]
-fn compress_sibling_leaves_different_metadata_union_kept_on_merged_leaf() {
+fn compress_sibling_leaves_different_metadata_kept_separate() {
     // Build:
     //   root
     //   └── class=1
@@ -150,13 +150,26 @@ fn compress_sibling_leaves_different_metadata_union_kept_on_merged_leaf() {
 
     q.compress();
 
-    // param=1 and param=2 are both leaves → merged into param=1/2.
-    // With Change 3 consolidation the union {K, Pa} is first set on the merged leaf,
-    // then bubbles up through class → root (single-child chain at each level).
-    let meta = q.get_metadata(root, "units").expect("units union should have consolidated to root");
-    assert_eq!(meta.len(), 2);
-    assert!(meta.contains_string("K"));
-    assert!(meta.contains_string("Pa"));
+    // With the leaf-provenance fix, leaves with *different* direct metadata are
+    // placed in separate merge groups and therefore NOT merged.
+    // param=1 (units=K) and param=2 (units=Pa) must remain as distinct nodes.
+    //
+    // The per-leaf metadata is preserved and nothing bubbles to root (since the
+    // two leaves disagree, consolidation stops at class level).
+    let p1_after = find_child(&q, class, "param", "1");
+    let p2_after = find_child(&q, class, "param", "2");
+
+    let u1 = q.get_metadata(p1_after, "units").expect("param=1 should retain units=K");
+    assert!(u1.contains_string("K"), "param=1 units must be K, got {:?}", u1);
+
+    let u2 = q.get_metadata(p2_after, "units").expect("param=2 should retain units=Pa");
+    assert!(u2.contains_string("Pa"), "param=2 units must be Pa, got {:?}", u2);
+
+    // Root must have no units metadata (leaves disagree → no consolidation past class).
+    assert!(
+        q.get_metadata(root, "units").is_none(),
+        "root must not acquire units when leaf values differ"
+    );
 }
 
 // ===========================================================================
@@ -1052,4 +1065,299 @@ fn add_metadata_to_complete_qube_then_compress_and_roundtrip() {
         .expect("tag=X must survive arena roundtrip after compress");
     assert!(rtag.is_uniform());
     assert!(rtag.contains_string("X"));
+}
+
+// ===========================================================================
+//  21. deduplicate_metadata – explicit dedup tests
+// ===========================================================================
+
+/// After dedup, a child node whose metadata exactly matches the nearest ancestor
+/// loses its direct copy but the effective (resolved) value is unchanged.
+///
+/// Setup: root (src=A) → class=1/2 with same src=A.
+/// We create this via append: qa (class=1, src=A) + qb (class=2, src=A) → both have same
+/// subtree, src consolidates to root on each side.  After append+compress the union {A,A}=A
+/// is on root (since both roots had A).  After dedup the merged class node should have no
+/// direct src (it would match root's A).
+#[test]
+fn deduplicate_metadata_removes_redundant_child_copy() {
+    // qa: root(src=A) → class=1 → param=1   (src consolidates to root via single-child chain)
+    let mut qa = Qube::new();
+    let root_a = qa.root();
+    let c1 = qa.get_or_create_child("class", root_a, Some(1.into())).unwrap();
+    let p1 = qa.get_or_create_child("param", c1, Some(1.into())).unwrap();
+    qa.set_metadata(p1, "src", MetadataValues::single_string("A")).unwrap();
+    // Consolidation: src=A bubbles p1→c1→root_a.
+
+    // qb: root(src=A) → class=2 → param=1   (same structure, same src=A)
+    let mut qb = Qube::new();
+    let root_b = qb.root();
+    let c2 = qb.get_or_create_child("class", root_b, Some(2.into())).unwrap();
+    let p2 = qb.get_or_create_child("param", c2, Some(1.into())).unwrap();
+    qb.set_metadata(p2, "src", MetadataValues::single_string("A")).unwrap();
+    // Consolidation: src=A bubbles p2→c2→root_b.
+
+    // Both roots have src=A.  After append:
+    // - roots agree (A==A) → no push, no conflict at root level
+    // - class=1 and class=2 have same subtree → merged into class=1/2
+    // - After compress+consolidate: src=A ends up on root
+    // - After dedup: any internal node that directly copies src=A from root is removed
+    qa.append(&mut qb);
+
+    // The merged class node must NOT carry a direct src copy.
+    let merged_class = find_child(&qa, root_a, "class", "1");
+    assert!(
+        qa.get_metadata(merged_class, "src").is_none(),
+        "merged class node must not carry a direct src copy after dedup (root has it)"
+    );
+    // root must still have src=A.
+    let root_src = qa.get_metadata(root_a, "src").expect("root must carry src=A");
+    assert!(root_src.contains_string("A"));
+    // resolve_all_metadata at the merged class node must still return src=A via inheritance.
+    let resolved = qa.resolve_all_metadata(merged_class);
+    assert!(
+        resolved.get("src").map(|v| v.contains_string("A")).unwrap_or(false),
+        "resolve_all_metadata must return inherited src=A for the merged class node"
+    );
+}
+
+/// A child node whose metadata differs from the ancestor is preserved.
+#[test]
+fn deduplicate_metadata_keeps_distinct_child_metadata() {
+    // root (src=A) → class=1 (src=B, disjoint subtree so no structural merge)
+    //              → class=2 (no src)
+    // After append: root has src=A (from one qube), class=1 has src=B
+    // We create this by: qa has class=1 (src=A) and qb has class=2 with a DIFFERENT subtree
+    // but qb has src=B.  Since class=2 has a different subtree it is kept as-is.
+    // Actually let's keep it simpler: two disjoint sources, one with src=A on root,
+    // one with src=B on its root.  Since both roots are non-empty (A≠B), merged is set on root.
+    // Then dedup must NOT remove class-level metadata that differs from root.
+    //
+    // We build: qa root(src=A)→class=1→param=1, qb root(src=B)→class=2→param=99.
+    // After append: root gets src=[A,B] (union), class=2 gets src=B (from copy),
+    // dedup: root has src=[A,B], class=2 has src=B which != [A,B] → keep it.
+    let mut qa = Qube::new();
+    let root_a = qa.root();
+    let c1 = qa.get_or_create_child("class", root_a, Some(1.into())).unwrap();
+    let p1 = qa.get_or_create_child("param", c1, Some(1.into())).unwrap();
+    qa.set_metadata(p1, "src", MetadataValues::single_string("A")).unwrap();
+
+    let mut qb = Qube::new();
+    let root_b = qb.root();
+    let c2 = qb.get_or_create_child("class", root_b, Some(2.into())).unwrap();
+    qb.get_or_create_child("param", c2, Some(99.into())).unwrap();
+    let p99 = qb.get_or_create_child("param", c2, Some(99.into())).unwrap_or(c2);
+    // set src=B on root_b directly (no consolidation since root has no parent)
+    qb.set_metadata(root_b, "src", MetadataValues::single_string("B")).unwrap();
+    let _ = p99; // silence warning
+
+    qa.append(&mut qb);
+
+    // class=2 should keep its distinct src=B (≠ root's src=[A,B]).
+    let class2 = find_child(&qa, root_a, "class", "2");
+    let c2_src = qa
+        .get_metadata(class2, "src")
+        .expect("class=2 must keep src=B after dedup (differs from root's [A,B])");
+    assert!(c2_src.contains_string("B"), "class=2 src must contain B");
+}
+
+/// A key present on a child but absent from the ancestor is always kept.
+#[test]
+fn deduplicate_metadata_keeps_key_absent_from_ancestor() {
+    // qa: root (no metadata) → class=1 → param=1
+    // qb: root (no metadata) → class=2 (src=X) → param=99   (disjoint subtree)
+    // After append: root_a stays metadata-free; class=2 should retain src=X.
+    let mut qa = Qube::new();
+    let root_a = qa.root();
+    let c1 = qa.get_or_create_child("class", root_a, Some(1.into())).unwrap();
+    qa.get_or_create_child("param", c1, Some(1.into())).unwrap();
+
+    let mut qb = Qube::new();
+    let root_b = qb.root();
+    let c2 = qb.get_or_create_child("class", root_b, Some(2.into())).unwrap();
+    qb.get_or_create_child("param", c2, Some(99.into())).unwrap();
+    qb.set_metadata(c2, "src", MetadataValues::single_string("X")).unwrap();
+
+    qa.append(&mut qb);
+
+    // Root must be metadata-free after the merge (neither side had root metadata).
+    assert!(qa.get_metadata(root_a, "src").is_none(), "root must not acquire src");
+    // class=2 must retain src=X.
+    let class2 = find_child(&qa, root_a, "class", "2");
+    let c2_src = qa.get_metadata(class2, "src").expect("class=2 must keep src=X");
+    assert!(c2_src.contains_string("X"));
+}
+
+// ===========================================================================
+//  22. resolve_all_metadata – explicit resolution tests
+// ===========================================================================
+
+/// resolve_all_metadata at the root returns only root's own metadata.
+#[test]
+fn resolve_all_metadata_at_root() {
+    let mut q = Qube::new();
+    let root = q.root();
+    q.set_metadata(root, "loc", MetadataValues::single_string("A")).unwrap();
+
+    let resolved = q.resolve_all_metadata(root);
+    let loc = resolved.get("loc").expect("root's loc should be resolved");
+    assert!(loc.contains_string("A"));
+}
+
+/// resolve_all_metadata inherits from root when child has no direct metadata.
+#[test]
+fn resolve_all_metadata_inherits_from_ancestor() {
+    let mut q = Qube::new();
+    let root = q.root();
+    // Set metadata on root first (root has no parent so no consolidation).
+    q.set_metadata(root, "loc", MetadataValues::single_string("A")).unwrap();
+    // Now create a child; it has no direct metadata.
+    let child = q.get_or_create_child("class", root, Some(1.into())).unwrap();
+
+    let resolved = q.resolve_all_metadata(child);
+    let loc = resolved.get("loc").expect("child should inherit loc=A from root");
+    assert!(loc.contains_string("A"));
+}
+
+/// resolve_all_metadata: child value overrides ancestor for the same key.
+#[test]
+fn resolve_all_metadata_child_wins_over_ancestor() {
+    let mut q = Qube::new();
+    let root = q.root();
+    // Put loc=A on root first.
+    q.set_metadata(root, "loc", MetadataValues::single_string("A")).unwrap();
+    // Add two children so that loc=B on class=1 does NOT consolidate to root.
+    let child1 = q.get_or_create_child("class", root, Some(1.into())).unwrap();
+    let child2 = q.get_or_create_child("class", root, Some(2.into())).unwrap();
+    q.set_metadata(child1, "loc", MetadataValues::single_string("B")).unwrap();
+    q.set_metadata(child2, "loc", MetadataValues::single_string("C")).unwrap();
+    // loc=B and loc=C differ → no consolidation to root; root retains loc=A.
+
+    let resolved = q.resolve_all_metadata(child1);
+    let loc = resolved.get("loc").expect("resolved loc must exist");
+    assert!(loc.contains_string("B"), "child's loc=B must override root's loc=A in resolution");
+    // root's loc=A must NOT appear in child1's resolved metadata.
+    assert!(
+        !loc.contains_string("A"),
+        "root's loc=A must not bleed into child1's resolved metadata"
+    );
+}
+
+/// resolve_all_metadata merges non-conflicting keys from different levels.
+#[test]
+fn resolve_all_metadata_merges_distinct_keys_from_ancestors() {
+    let mut q = Qube::new();
+    let root = q.root();
+    // Set color=red on root.
+    q.set_metadata(root, "color", MetadataValues::single_string("red")).unwrap();
+    // Add class=1 with size=10; add class=2 with no size so size doesn't consolidate to root.
+    let child = q.get_or_create_child("class", root, Some(1.into())).unwrap();
+    let child2 = q.get_or_create_child("class", root, Some(2.into())).unwrap();
+    q.set_metadata(child, "size", MetadataValues::single_integer(10)).unwrap();
+    // child2 has no size → size stays on child (doesn't consolidate).
+    let _ = child2;
+    // grandchild under class=1 with no direct metadata.
+    let grandchild = q.get_or_create_child("param", child, Some(1.into())).unwrap();
+
+    let resolved = q.resolve_all_metadata(grandchild);
+    assert!(
+        resolved.get("color").map(|v| v.contains_string("red")).unwrap_or(false),
+        "grandchild must inherit color=red from root"
+    );
+    assert!(
+        resolved.get("size").map(|v| v.contains_integer(10)).unwrap_or(false),
+        "grandchild must inherit size=10 from class=1"
+    );
+}
+
+// ===========================================================================
+//  30. Leaf-level provenance: lumi / mn5 merge keeps per-leaf sources distinct
+// ===========================================================================
+
+/// Merging two Qubes where one carries `location=lumi` (consolidated to its root)
+/// and the other carries `location=mn5` must produce a tree where:
+///
+/// - Leaves whose param values exist **only** in the lumi Qube resolve to exactly
+///   `location=[lumi]`.
+/// - Leaves whose param values exist **only** in the mn5 Qube resolve to exactly
+///   `location=[mn5]`.
+/// - Leaves whose param values appear in **both** Qubes resolve to
+///   `location=[lumi, mn5]`.
+///
+/// This is the core correctness property for per-leaf provenance attribution.
+#[test]
+fn leaf_provenance_lumi_mn5_merge() {
+    // ---- Build lumi Qube ----
+    // root → class=1 → param=100 (lumi-only)
+    //                → param=200 (shared with mn5)
+    let mut qa = Qube::new();
+    let root_a = qa.root();
+    let c1_a = qa.get_or_create_child("class", root_a, Some(1.into())).unwrap();
+    let p100 = qa.get_or_create_child("param", c1_a, Some(100.into())).unwrap();
+    let p200_a = qa.get_or_create_child("param", c1_a, Some(200.into())).unwrap();
+    // Set location on each leaf; after both are set, location=lumi consolidates
+    // from param leaves → class=1 → root_a (single-child chain throughout).
+    qa.set_metadata(p100, "location", MetadataValues::single_string("lumi")).unwrap();
+    qa.set_metadata(p200_a, "location", MetadataValues::single_string("lumi")).unwrap();
+
+    // ---- Build mn5 Qube ----
+    // root → class=1 → param=200 (shared with lumi)
+    //                → param=300 (mn5-only)
+    let mut qb = Qube::new();
+    let root_b = qb.root();
+    let c1_b = qb.get_or_create_child("class", root_b, Some(1.into())).unwrap();
+    let p200_b = qb.get_or_create_child("param", c1_b, Some(200.into())).unwrap();
+    let p300 = qb.get_or_create_child("param", c1_b, Some(300.into())).unwrap();
+    qb.set_metadata(p200_b, "location", MetadataValues::single_string("mn5")).unwrap();
+    qb.set_metadata(p300, "location", MetadataValues::single_string("mn5")).unwrap();
+
+    // ---- Merge ----
+    qa.append(&mut qb);
+
+    // Expected result:
+    //   root
+    //   └── class=1
+    //       ├── param=100   (lumi only  → location=[lumi])
+    //       ├── param=200   (shared     → location=[lumi, mn5])
+    //       └── param=300   (mn5 only   → location=[mn5])
+
+    let class_node = find_child(&qa, qa.root(), "class", "1");
+    let param100 = find_child(&qa, class_node, "param", "100");
+    let param200 = find_child(&qa, class_node, "param", "200");
+    let param300 = find_child(&qa, class_node, "param", "300");
+
+    // resolve_all_metadata walks up the ancestor chain so metadata consolidated
+    // to an ancestor is correctly attributed to every leaf beneath it.
+    let loc100 = qa
+        .resolve_all_metadata(param100)
+        .get("location")
+        .cloned()
+        .expect("param=100 must have a resolved location");
+
+    let loc200 = qa
+        .resolve_all_metadata(param200)
+        .get("location")
+        .cloned()
+        .expect("param=200 must have a resolved location");
+
+    let loc300 = qa
+        .resolve_all_metadata(param300)
+        .get("location")
+        .cloned()
+        .expect("param=300 must have a resolved location");
+
+    // param=100 — lumi only
+    assert!(loc100.contains_string("lumi"), "param=100 must include lumi; got {:?}", loc100);
+    assert!(!loc100.contains_string("mn5"), "param=100 must NOT include mn5; got {:?}", loc100);
+    assert_eq!(loc100.len(), 1, "param=100 must have exactly 1 location; got {:?}", loc100);
+
+    // param=300 — mn5 only
+    assert!(loc300.contains_string("mn5"), "param=300 must include mn5; got {:?}", loc300);
+    assert!(!loc300.contains_string("lumi"), "param=300 must NOT include lumi; got {:?}", loc300);
+    assert_eq!(loc300.len(), 1, "param=300 must have exactly 1 location; got {:?}", loc300);
+
+    // param=200 — both
+    assert!(loc200.contains_string("lumi"), "param=200 must include lumi; got {:?}", loc200);
+    assert!(loc200.contains_string("mn5"), "param=200 must include mn5; got {:?}", loc200);
+    assert_eq!(loc200.len(), 2, "param=200 must have exactly 2 locations; got {:?}", loc200);
 }

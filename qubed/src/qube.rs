@@ -76,6 +76,10 @@ impl Node {
         &self.parent
     }
 
+    pub(crate) fn parent_mut(&mut self) -> &mut Option<NodeIdx> {
+        &mut self.parent
+    }
+
     pub(crate) fn metadata(&self) -> &Metadata {
         &self.metadata
     }
@@ -924,6 +928,69 @@ impl Qube {
     /// the subtree is copied during `append` / `append_many`.
     ///
     /// No-op if the node has no metadata or has no children (i.e. is a leaf).
+    /// Recursively collects all leaf descendants of `node_id` into `leaves`.
+    /// If `node_id` itself is a leaf (no children), it is added to `leaves`.
+    fn collect_leaf_descendants(&self, node_id: NodeIdx, leaves: &mut Vec<NodeIdx>) {
+        let children: Vec<NodeIdx> = self
+            .nodes
+            .get(node_id)
+            .map(|n| n.children.values().flatten().copied().collect())
+            .unwrap_or_default();
+
+        if children.is_empty() {
+            leaves.push(node_id);
+        } else {
+            for child_id in children {
+                self.collect_leaf_descendants(child_id, leaves);
+            }
+        }
+    }
+
+    /// Pushes all metadata from `node_id` down to every leaf descendant, merging
+    /// with any metadata already on each leaf, then clears the node's own metadata.
+    ///
+    /// This is the deep variant of `push_metadata_to_children`: while that method
+    /// only pushes one level, this one walks all the way to the leaves.  It is a
+    /// no-op if the node has no metadata or if the node is itself a leaf (metadata
+    /// stays on the leaf in that case).
+    ///
+    /// Used before compress so that every leaf carries its full provenance metadata,
+    /// allowing the leaf-level compress grouping (by `(dim, metadata)`) to correctly
+    /// distinguish leaves from different sources.
+    pub(crate) fn push_metadata_to_leaves(&mut self, node_id: NodeIdx) {
+        let node_metadata = match self.node_ref(node_id) {
+            Some(n) if !n.metadata().is_empty() => n.metadata().clone(),
+            _ => return,
+        };
+
+        let children: Vec<NodeIdx> = match self.node_ref(node_id) {
+            Some(n) => n.children().values().flat_map(|v| v.iter().copied()).collect(),
+            None => return,
+        };
+
+        if children.is_empty() {
+            return; // node_id is a leaf; metadata stays on it
+        }
+
+        // Collect all leaf descendants
+        let mut leaves = Vec::new();
+        for &child_id in &children {
+            self.collect_leaf_descendants(child_id, &mut leaves);
+        }
+
+        // Merge node_metadata into every leaf descendant
+        for leaf_id in leaves {
+            let existing = self.node_ref(leaf_id).unwrap().metadata().clone();
+            let new_meta = existing.merge_with(&node_metadata);
+            *self.node_mut(leaf_id).unwrap().metadata_mut() = new_meta;
+        }
+
+        // Clear this node's metadata (it has been distributed to all leaves)
+        if let Some(node) = self.node_mut(node_id) {
+            *node.metadata_mut() = Metadata::new();
+        }
+    }
+
     pub(crate) fn push_metadata_to_children(&mut self, node_id: NodeIdx) {
         let node_metadata = match self.node_ref(node_id) {
             Some(n) if !n.metadata().is_empty() => n.metadata().clone(),
@@ -974,6 +1041,98 @@ impl Qube {
         for key in child_keys {
             self.try_consolidate_metadata(node_id, &key);
         }
+    }
+
+    /// Remove redundant metadata copies in a top-down pass.
+    ///
+    /// A metadata entry on a node is redundant when it has exactly the same value as
+    /// the nearest ancestor that already carries that key.  After this pass, every
+    /// node's direct metadata contains only entries that differ from the inherited
+    /// (ancestor) value, keeping the tree compact without losing any information.
+    ///
+    /// After deduplication, `resolve_all_metadata` (or the Python `get_node_metadata`
+    /// binding) still returns the correct effective value for every node by walking up
+    /// ancestors.
+    pub fn deduplicate_metadata(&mut self) {
+        let root = self.root_id;
+        self.dedup_recursive(root, &Metadata::new());
+    }
+
+    fn dedup_recursive(&mut self, node_id: NodeIdx, ancestor_effective: &Metadata) {
+        // Collect the current node's direct metadata keys so we can check them while
+        // holding no borrow on self.
+        let direct_keys: Vec<String> = self
+            .nodes
+            .get(node_id)
+            .map(|n| n.metadata.keys().cloned().collect())
+            .unwrap_or_default();
+
+        // Remove any key whose value exactly matches the inherited ancestor value.
+        for key in &direct_keys {
+            let node_val = self.nodes.get(node_id).and_then(|n| n.metadata.get(key)).cloned();
+            let ancestor_val = ancestor_effective.get(key);
+            if let (Some(nv), Some(av)) = (node_val, ancestor_val) {
+                if nv == *av {
+                    if let Some(n) = self.nodes.get_mut(node_id) {
+                        n.metadata.remove(key);
+                    }
+                }
+            }
+        }
+
+        // Build the effective metadata that children will inherit: start from
+        // ancestor_effective and override with whatever this node still holds explicitly.
+        let mut child_effective = ancestor_effective.clone();
+        if let Some(n) = self.nodes.get(node_id) {
+            for (k, v) in n.metadata.iter() {
+                child_effective.values.insert(k.clone(), v.clone());
+            }
+        }
+
+        // Recurse into all children.
+        let children: Vec<NodeIdx> = self
+            .nodes
+            .get(node_id)
+            .map(|n| n.children.values().flatten().copied().collect())
+            .unwrap_or_default();
+
+        for child in children {
+            self.dedup_recursive(child, &child_effective);
+        }
+    }
+
+    /// Compute the fully-resolved (inherited) metadata for `node_id`.
+    ///
+    /// Walks from the root down to `node_id`, accumulating metadata at each level.
+    /// When the same key appears at multiple levels, the most-specific (deepest /
+    /// child-closest) value wins.
+    ///
+    /// This is the same semantics as the Python `get_node_metadata` binding.
+    pub fn resolve_all_metadata(&self, node_id: NodeIdx) -> Metadata {
+        // Build chain from node_id up to root, then reverse so root is first.
+        let mut chain = vec![node_id];
+        let mut current = node_id;
+        loop {
+            match self.nodes.get(current).and_then(|n| n.parent) {
+                Some(parent_id) => {
+                    chain.push(parent_id);
+                    current = parent_id;
+                }
+                None => break,
+            }
+        }
+        chain.reverse(); // root → node
+
+        // Fold root→node: later (child) values override earlier (ancestor) values.
+        let mut effective = Metadata::new();
+        for id in chain {
+            if let Some(n) = self.nodes.get(id) {
+                for (k, v) in n.metadata.iter() {
+                    effective.values.insert(k.clone(), v.clone());
+                }
+            }
+        }
+        effective
     }
 }
 

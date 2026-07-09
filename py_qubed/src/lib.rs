@@ -590,6 +590,26 @@ impl PyQube {
         }
         Ok(result.into_any().unbind())
     }
+
+    /// Compute the fully-resolved (inherited) metadata for the node at `path`.
+    ///
+    /// Delegates to the Rust `resolve_all_metadata` implementation: walks from root
+    /// down to the node, with child values overriding ancestor values for the same key.
+    /// Returns a dict of `{key: [values]}`.
+    ///
+    /// This has the same semantics as `get_node_metadata` but the resolution is done
+    /// inside Rust rather than in the Python binding.
+    pub fn get_all_metadata(&self, py: Python<'_>, path: Bound<'_, PyDict>) -> PyResult<Py<PyAny>> {
+        let path_map = pydict_to_string_map(&path)?;
+        let node_id = find_node_by_path(&self.inner, &path_map).map_err(PyTypeError::new_err)?;
+        let effective = self.inner.resolve_all_metadata(node_id);
+        let result = PyDict::new(py);
+        for (k, v) in effective.iter() {
+            let lst = metadata_values_to_pylist(py, v)?;
+            result.set_item(k, lst)?;
+        }
+        Ok(result.into_any().unbind())
+    }
 }
 
 // -------------------------

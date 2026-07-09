@@ -264,7 +264,11 @@ impl Qube {
         let all_children_are_leaves = children.iter().all(|&id| self.is_leaf(id));
 
         if all_children_are_leaves {
-            // group by dimension
+            // Group by (dimension, metadata): only merge leaves that share both
+            // the same dimension AND identical direct metadata.  Leaves with
+            // different provenance metadata (e.g. location=lumi vs location=mn5)
+            // must NOT be merged together, as that would create spurious multi-
+            // valued provenance and lose per-leaf source information.
             let mut by_dim: HashMap<Dimension, Vec<NodeIdx>> = HashMap::new();
 
             for &child in &children {
@@ -272,9 +276,31 @@ impl Qube {
                 by_dim.entry(dim).or_default().push(child);
             }
 
-            for group in by_dim.values() {
-                if group.len() > 1 {
-                    self.merge_coords(group.to_vec());
+            for dim_group in by_dim.values() {
+                // Further partition by metadata equality.
+                // Metadata does not implement Hash so we use a linear scan.
+                // Groups are small (usually 1-10 nodes), so O(n²) is fine.
+                let mut meta_groups: Vec<(crate::metadata::Metadata, Vec<NodeIdx>)> = Vec::new();
+
+                for &child_id in dim_group {
+                    let meta = self.node_ref(child_id).unwrap().metadata().clone();
+                    let mut placed = false;
+                    for (group_meta, group_nodes) in &mut meta_groups {
+                        if *group_meta == meta {
+                            group_nodes.push(child_id);
+                            placed = true;
+                            break;
+                        }
+                    }
+                    if !placed {
+                        meta_groups.push((meta, vec![child_id]));
+                    }
+                }
+
+                for (_, group) in meta_groups {
+                    if group.len() > 1 {
+                        self.merge_coords(group);
+                    }
                 }
             }
 
@@ -326,11 +352,56 @@ impl Qube {
         // 3. Apply: agreed metadata on the node, disagreed metadata pushed to children.
         self.apply_node_metadata(group[0], meta_for_node, meta_for_children);
 
-        // 4. Empty the remaining nodes so they are pruned later.
-        //    Their metadata is no longer relevant (the information has been merged above).
+        // 4. Transfer children from each duplicate node to group[0], then empty the duplicate.
+        //
+        //    When two inner nodes are merged (same structural hash → same subtree structure)
+        //    their children must be combined in group[0] so that the subsequent
+        //    `dedup_recursively` pass can merge structurally-identical children and union
+        //    their metadata.  Without this transfer, children of the duplicate nodes are
+        //    orphaned when the duplicate's coords are set to Empty and the node is pruned,
+        //    and any metadata they carry (e.g. provenance src=B) is silently lost.
+        //
+        //    Example:
+        //      class=1 (→ param=1 {src:A}) and class=2 (→ param=1 {src:B}) are merged to
+        //      class=1/2.  We transfer param=1 {src:B} to class=1/2's children; dedup then
+        //      merges it with param=1 {src:A} → param=1 {src:[A,B]}.
         for &id in group.iter().skip(1) {
+            // Collect dim→kids from the duplicate node before we clear it.
+            let dup_children: Vec<(Dimension, Vec<NodeIdx>)> = self
+                .node_ref(id)
+                .map(|n| {
+                    n.children()
+                        .iter()
+                        .map(|(&d, kids)| (d, kids.iter().copied().collect()))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            for (dim, kid_ids) in dup_children {
+                for &kid_id in &kid_ids {
+                    // Reparent the transferred child to group[0].
+                    if let Some(kid) = self.node_mut(kid_id) {
+                        *kid.parent_mut() = Some(group[0]);
+                    }
+                }
+                // Append the transferred kids to group[0]'s children list for this dim.
+                if let Some(kept) = self.node_mut(group[0]) {
+                    let entry = kept.children_mut().entry(dim).or_insert_with(TinyVec::new);
+                    for kid_id in kid_ids {
+                        entry.push(kid_id);
+                    }
+                }
+            }
+
+            // Clear the duplicate's children (already transferred) and empty its coords.
+            if let Some(dup) = self.node_mut(id) {
+                dup.children_mut().clear();
+            }
             let node = self.node_mut(id).unwrap();
             *node.coords_mut() = Coordinates::Empty;
         }
+
+        // Invalidate group[0]'s cached structural hash: its children list changed.
+        self.invalidate_structural_hash(group[0]);
     }
 }
