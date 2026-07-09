@@ -348,7 +348,8 @@ impl Qube {
 // -------- Metadata serialisation helpers --------
 
 /// Serialise a `MetadataValues` into a typed JSON object:
-/// `{"ints": [...]}` or `{"strings": [...]}`.  Returns `null` for `Empty`.
+/// `{"ints": [...]}` or `{"strings": [...]}` or `{"per_coord_strings": [...]}`.
+/// Returns `null` for `Empty`.
 fn serialize_metadata_values(values: &MetadataValues) -> Value {
     match values {
         MetadataValues::Empty => Value::Null,
@@ -363,6 +364,12 @@ fn serialize_metadata_values(values: &MetadataValues) -> Value {
             let arr: Vec<Value> = set.iter().map(|v| Value::String(v.to_string())).collect();
             let mut m = Map::new();
             m.insert("strings".to_string(), Value::Array(arr));
+            Value::Object(m)
+        }
+        MetadataValues::PerCoordStrings(vec) => {
+            let arr: Vec<Value> = vec.iter().map(|v| Value::String(v.clone())).collect();
+            let mut m = Map::new();
+            m.insert("per_coord_strings".to_string(), Value::Array(arr));
             Value::Object(m)
         }
     }
@@ -381,6 +388,12 @@ fn deserialize_metadata_values(val: &Value) -> Option<MetadataValues> {
             let arr = vm.get("strings")?.as_array()?;
             let string_refs: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
             Some(MetadataValues::from_strings(&string_refs))
+        }
+        Value::Object(vm) if vm.contains_key("per_coord_strings") => {
+            let arr = vm.get("per_coord_strings")?.as_array()?;
+            let strings: Vec<String> =
+                arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+            Some(MetadataValues::PerCoordStrings(strings))
         }
         _ => None,
     }

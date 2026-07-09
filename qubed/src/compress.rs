@@ -63,13 +63,21 @@ impl Qube {
 
     /// Given a group of node IDs, partition their metadata into two buckets:
     ///
-    /// - `meta_for_node`: keys where **every** node in the group carries the same,
-    ///   identical value.  The merged node may inherit these directly.
-    /// - `meta_for_children`: keys where nodes disagree (different values, or some
-    ///   nodes are missing the key).  The union of all values is stored here; the
-    ///   caller is responsible for distributing it to the children (or to the node
-    ///   itself when it has no children).
-    fn compute_merged_metadata(&self, group: &[NodeIdx]) -> (Metadata, Metadata) {
+    /// - `meta_for_node`: keys where all nodes agree (same value) **or** where every node
+    ///   has a single-valued `Strings` entry and we can map each coordinate to its source
+    ///   value as a `PerCoordStrings` vector.
+    /// - `meta_for_children`: keys where nodes disagree and the per-coord condition is not
+    ///   met.  The union of all values is stored here; the caller distributes it to the
+    ///   children (or to the node itself when it has no children).
+    ///
+    /// `original_coords[i]` must be the coordinates of `group[i]` **before** any merging.
+    /// `merged_coords` is the union of all original coordinates.
+    fn compute_merged_metadata(
+        &self,
+        group: &[NodeIdx],
+        original_coords: &[Coordinates],
+        merged_coords: &Coordinates,
+    ) -> (Metadata, Metadata) {
         let all_keys: std::collections::HashSet<String> = group
             .iter()
             .flat_map(|&id| self.node_ref(id).unwrap().metadata().keys().cloned())
@@ -77,6 +85,13 @@ impl Qube {
 
         let mut meta_for_node = Metadata::new();
         let mut meta_for_children = Metadata::new();
+
+        // Pre-compute per-coord enumerability once (not per-key).
+        let merged_strings = merged_coords.iter_sorted_strings();
+        let merged_enumerable =
+            !merged_strings.is_empty() && merged_strings.len() == merged_coords.len();
+        let orig_enumerable =
+            original_coords.iter().all(|c| c.len() > 0 && c.iter_sorted_strings().len() == c.len());
 
         for key in &all_keys {
             let values: Vec<Option<MetadataValues>> = group
@@ -93,7 +108,47 @@ impl Qube {
                     meta_for_node.set(key.clone(), v.clone());
                 }
             } else {
-                // Disagreement: compute union of all non-empty values.
+                // Values differ.  Try to produce a PerCoordStrings vector when:
+                //   1. Every group member has this key (no None),
+                //   2. Every value is a single-element Strings set (len==1),
+                //   3. Both the merged coords and every original coords set are
+                //      fully enumerable (no RangeSet / Mixed).
+                let can_use_per_coord = merged_enumerable
+                    && orig_enumerable
+                    && values.iter().all(|v| {
+                        v.as_ref().map_or(false, |mv| {
+                            mv.len() == 1 && matches!(mv, MetadataValues::Strings(_))
+                        })
+                    });
+
+                if can_use_per_coord {
+                    // Build per-coord string vector aligned with merged sorted order.
+                    // Each merged coord belongs to exactly one group member; look it up.
+                    let per_coord: Vec<String> = merged_strings
+                        .iter()
+                        .map(|coord_str| {
+                            original_coords
+                                .iter()
+                                .enumerate()
+                                .find(|(_, orig)| {
+                                    orig.iter_sorted_strings().iter().any(|s| s == coord_str)
+                                })
+                                .and_then(|(mi, _)| {
+                                    values.get(mi)?.as_ref().map(|mv| mv.as_string_vec()[0].clone())
+                                })
+                                .unwrap_or_default()
+                        })
+                        .collect();
+
+                    // Guard: every coord must have been resolved (no empty strings from
+                    // failed lookups — which would indicate overlapping coords in the group).
+                    if per_coord.iter().all(|s| !s.is_empty()) {
+                        meta_for_node.set(key.clone(), MetadataValues::PerCoordStrings(per_coord));
+                        continue; // skip the union / meta_for_children path
+                    }
+                }
+
+                // Fallback: compute union of all non-empty values → push to children.
                 let union_val = values
                     .iter()
                     .filter_map(|v| v.as_ref())
@@ -333,26 +388,31 @@ impl Qube {
     fn merge_coords(&mut self, group: Vec<NodeIdx>) {
         assert!(!group.is_empty());
 
-        // 1. Merge coordinates into group[0].
-        let mut merged: Coordinates = { self.node_ref(group[0]).unwrap().coords().clone() };
+        // 1. Snapshot each group member's original coordinates BEFORE any merging.
+        //    `compute_merged_metadata` needs these to build the per-coord mapping.
+        let original_coords: Vec<Coordinates> =
+            group.iter().map(|&id| self.node_ref(id).unwrap().coords().clone()).collect();
 
-        for &id in group.iter().skip(1) {
-            let coords = self.node_ref(id).unwrap().coords();
+        // 2. Build the merged coordinate set (union of all originals).
+        let mut merged: Coordinates = original_coords[0].clone();
+        for coords in &original_coords[1..] {
             merged.extend(coords);
         }
 
+        // 3. Write merged coords onto group[0].
         {
             let node = self.node_mut(group[0]).unwrap();
-            *node.coords_mut() = merged;
+            *node.coords_mut() = merged.clone();
         }
 
-        // 2. Compute the two-bucket metadata split for the whole group.
-        let (meta_for_node, meta_for_children) = self.compute_merged_metadata(&group);
+        // 4. Compute the two-bucket metadata split using the pre-merge snapshots.
+        let (meta_for_node, meta_for_children) =
+            self.compute_merged_metadata(&group, &original_coords, &merged);
 
-        // 3. Apply: agreed metadata on the node, disagreed metadata pushed to children.
+        // 5. Apply: agreed / per-coord metadata on the node, disagreed pushed to children.
         self.apply_node_metadata(group[0], meta_for_node, meta_for_children);
 
-        // 4. Transfer children from each duplicate node to group[0], then empty the duplicate.
+        // 6. Transfer children from each duplicate node to group[0], then empty the duplicate.
         //
         //    When two inner nodes are merged (same structural hash → same subtree structure)
         //    their children must be combined in group[0] so that the subsequent

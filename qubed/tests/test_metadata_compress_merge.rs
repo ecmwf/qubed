@@ -112,20 +112,28 @@ fn compress_identical_inner_nodes_different_metadata_pushed_to_children() {
 
     q.compress();
 
-    // The merged node covers expver=0001/0002 – it cannot claim a single src.
+    // The merged node covers expver=0001/0002.  Because both nodes carried a single-valued
+    // Strings entry for 'src' and the coordinates are fully enumerable, compress now stores
+    // a PerCoordStrings vector on the merged node (sorted: 0001→A, 0002→B).
     let merged_ev = find_child(&q, root, "expver", "0001");
+    let src_meta = q
+        .get_metadata(merged_ev, "src")
+        .expect("merged expver node must carry src as PerCoordStrings");
     assert!(
-        q.get_metadata(merged_ev, "src").is_none(),
-        "merged expver node must not carry src (values A vs B differ)"
+        src_meta.is_per_coord_strings(),
+        "merged expver src must be PerCoordStrings, got {:?}",
+        src_meta
     );
+    // The per-coord vector must have 2 entries (one per coordinate) and cover A and B.
+    assert_eq!(src_meta.len(), 2, "PerCoordStrings must have 2 entries for 2 coords");
+    assert!(src_meta.contains_string("A"), "PerCoordStrings must contain A");
+    assert!(src_meta.contains_string("B"), "PerCoordStrings must contain B");
 
-    // With Change 3 consolidation the union {A, B} is first pushed to param=1/2,
-    // then bubbles up through the single-child chain to root.
-    let root_meta =
-        q.get_metadata(root, "src").expect("src union should have consolidated to root");
-    assert_eq!(root_meta.len(), 2, "root should carry both src values");
-    assert!(root_meta.contains_string("A"));
-    assert!(root_meta.contains_string("B"));
+    // PerCoordStrings does NOT consolidate upward — root must be clean.
+    assert!(
+        q.get_metadata(root, "src").is_none(),
+        "root must NOT acquire src when merged node carries PerCoordStrings"
+    );
 }
 
 // ===========================================================================
@@ -235,17 +243,25 @@ fn compress_mixed_metadata_keys_handled_independently() {
         "tag=X should be on the merged expver node or consolidated to root"
     );
 
-    // src differs → no src on merged node.
+    // src=A/B on both nodes → PerCoordStrings stored on merged node.
+    // (Both ev1 and ev2 existed when set_metadata was called so consolidation
+    //  could not fire, leaving src on the expver nodes directly.)
+    let src_meta =
+        q.get_metadata(merged_ev, "src").expect("merged expver must carry src as PerCoordStrings");
     assert!(
-        q.get_metadata(merged_ev, "src").is_none(),
-        "src should not be on merged expver (values A vs B differ)"
+        src_meta.is_per_coord_strings(),
+        "merged expver src must be PerCoordStrings, got {:?}",
+        src_meta
     );
-
-    // src union {A, B} is pushed to param then consolidates all the way to root.
-    let src_meta = q.get_metadata(root, "src").expect("src union should have consolidated to root");
-    assert_eq!(src_meta.len(), 2);
+    assert_eq!(src_meta.len(), 2, "PerCoordStrings must have 2 entries (one per coord)");
     assert!(src_meta.contains_string("A"));
     assert!(src_meta.contains_string("B"));
+
+    // PerCoordStrings does NOT consolidate upward — root must have no src.
+    assert!(
+        q.get_metadata(root, "src").is_none(),
+        "root must NOT acquire src when merged node carries PerCoordStrings"
+    );
 }
 
 // ===========================================================================
@@ -830,36 +846,48 @@ fn metadata_moves_down_during_compress_then_survives_arena_roundtrip() {
 
     q.compress();
 
-    // After compress: expver=0001/0002 merged; src differs → pushed to param=1,
-    // then consolidates (Change 3) all the way to root.
+    // After compress: expver=0001/0002 merged.  Both ev1 and ev2 existed when
+    // set_metadata was called (no premature consolidation) → compress emits
+    // PerCoordStrings(["A","B"]) on the merged node; root carries no src.
     let merged_ev = find_child(&q, root, "expver", "0001");
+    let src_before = q
+        .get_metadata(merged_ev, "src")
+        .expect("merged expver must carry src as PerCoordStrings after compress");
     assert!(
-        q.get_metadata(merged_ev, "src").is_none(),
-        "merged expver should not carry src after compress (values differ)"
+        src_before.is_per_coord_strings(),
+        "merged expver src must be PerCoordStrings before roundtrip, got {:?}",
+        src_before
     );
-    let src_before =
-        q.get_metadata(root, "src").expect("src should be on root after compress + consolidation");
-    assert!(src_before.contains_string("A") && src_before.contains_string("B"));
+    assert_eq!(src_before.len(), 2, "PerCoordStrings must have 2 entries");
+    assert!(src_before.contains_string("A"));
+    assert!(src_before.contains_string("B"));
+    assert!(
+        q.get_metadata(root, "src").is_none(),
+        "root must NOT carry src when merged node holds PerCoordStrings"
+    );
 
-    // Arena JSON roundtrip.
+    // Arena JSON roundtrip: PerCoordStrings must survive serialisation.
     let arena = q.to_arena_json();
     let restored = Qube::from_arena_json(arena).expect("from_arena_json");
 
     let rroot = restored.root();
     let rmerged_ev = find_child(&restored, rroot, "expver", "0001");
 
-    // Merged node must still have no src.
-    assert!(
-        restored.get_metadata(rmerged_ev, "src").is_none(),
-        "merged expver should not carry src after arena roundtrip"
-    );
-
-    // src={A,B} must be on root after roundtrip.
     let src_after = restored
-        .get_metadata(rroot, "src")
-        .expect("src union should be on root after arena roundtrip");
-    assert!(src_after.contains_string("A"), "src should contain A");
-    assert!(src_after.contains_string("B"), "src should contain B");
+        .get_metadata(rmerged_ev, "src")
+        .expect("merged expver must carry src as PerCoordStrings after arena roundtrip");
+    assert!(
+        src_after.is_per_coord_strings(),
+        "merged expver src must be PerCoordStrings after roundtrip, got {:?}",
+        src_after
+    );
+    assert_eq!(src_after.len(), 2, "PerCoordStrings must have 2 entries after roundtrip");
+    assert!(src_after.contains_string("A"), "src should contain A after roundtrip");
+    assert!(src_after.contains_string("B"), "src should contain B after roundtrip");
+    assert!(
+        restored.get_metadata(rroot, "src").is_none(),
+        "root must NOT carry src after arena roundtrip"
+    );
 }
 
 // ===========================================================================
@@ -1114,7 +1142,7 @@ fn deduplicate_metadata_removes_redundant_child_copy() {
     let root_src = qa.get_metadata(root_a, "src").expect("root must carry src=A");
     assert!(root_src.contains_string("A"));
     // resolve_all_metadata at the merged class node must still return src=A via inheritance.
-    let resolved = qa.resolve_all_metadata(merged_class);
+    let resolved = qa.resolve_all_metadata(merged_class, &Default::default());
     assert!(
         resolved.get("src").map(|v| v.contains_string("A")).unwrap_or(false),
         "resolve_all_metadata must return inherited src=A for the merged class node"
@@ -1199,7 +1227,7 @@ fn resolve_all_metadata_at_root() {
     let root = q.root();
     q.set_metadata(root, "loc", MetadataValues::single_string("A")).unwrap();
 
-    let resolved = q.resolve_all_metadata(root);
+    let resolved = q.resolve_all_metadata(root, &Default::default());
     let loc = resolved.get("loc").expect("root's loc should be resolved");
     assert!(loc.contains_string("A"));
 }
@@ -1214,7 +1242,7 @@ fn resolve_all_metadata_inherits_from_ancestor() {
     // Now create a child; it has no direct metadata.
     let child = q.get_or_create_child("class", root, Some(1.into())).unwrap();
 
-    let resolved = q.resolve_all_metadata(child);
+    let resolved = q.resolve_all_metadata(child, &Default::default());
     let loc = resolved.get("loc").expect("child should inherit loc=A from root");
     assert!(loc.contains_string("A"));
 }
@@ -1233,7 +1261,7 @@ fn resolve_all_metadata_child_wins_over_ancestor() {
     q.set_metadata(child2, "loc", MetadataValues::single_string("C")).unwrap();
     // loc=B and loc=C differ → no consolidation to root; root retains loc=A.
 
-    let resolved = q.resolve_all_metadata(child1);
+    let resolved = q.resolve_all_metadata(child1, &Default::default());
     let loc = resolved.get("loc").expect("resolved loc must exist");
     assert!(loc.contains_string("B"), "child's loc=B must override root's loc=A in resolution");
     // root's loc=A must NOT appear in child1's resolved metadata.
@@ -1259,7 +1287,7 @@ fn resolve_all_metadata_merges_distinct_keys_from_ancestors() {
     // grandchild under class=1 with no direct metadata.
     let grandchild = q.get_or_create_child("param", child, Some(1.into())).unwrap();
 
-    let resolved = q.resolve_all_metadata(grandchild);
+    let resolved = q.resolve_all_metadata(grandchild, &Default::default());
     assert!(
         resolved.get("color").map(|v| v.contains_string("red")).unwrap_or(false),
         "grandchild must inherit color=red from root"
@@ -1329,19 +1357,19 @@ fn leaf_provenance_lumi_mn5_merge() {
     // resolve_all_metadata walks up the ancestor chain so metadata consolidated
     // to an ancestor is correctly attributed to every leaf beneath it.
     let loc100 = qa
-        .resolve_all_metadata(param100)
+        .resolve_all_metadata(param100, &Default::default())
         .get("location")
         .cloned()
         .expect("param=100 must have a resolved location");
 
     let loc200 = qa
-        .resolve_all_metadata(param200)
+        .resolve_all_metadata(param200, &Default::default())
         .get("location")
         .cloned()
         .expect("param=200 must have a resolved location");
 
     let loc300 = qa
-        .resolve_all_metadata(param300)
+        .resolve_all_metadata(param300, &Default::default())
         .get("location")
         .cloned()
         .expect("param=300 must have a resolved location");
@@ -1360,4 +1388,130 @@ fn leaf_provenance_lumi_mn5_merge() {
     assert!(loc200.contains_string("lumi"), "param=200 must include lumi; got {:?}", loc200);
     assert!(loc200.contains_string("mn5"), "param=200 must include mn5; got {:?}", loc200);
     assert_eq!(loc200.len(), 2, "param=200 must have exactly 2 locations; got {:?}", loc200);
+}
+
+// ===========================================================================
+//  partition_by_metadata
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+//  31. Uniform location: all leaves carry the same value → one bucket.
+// ---------------------------------------------------------------------------
+#[test]
+fn partition_by_metadata_single_location_one_bucket() {
+    let mut q = Qube::new();
+    let root = q.root();
+    let ev1 = q.get_or_create_child("expver", root, Some("0001".into())).unwrap();
+    q.get_or_create_child("param", ev1, Some(1.into())).unwrap();
+    let ev2 = q.get_or_create_child("expver", root, Some("0002".into())).unwrap();
+    q.get_or_create_child("param", ev2, Some(1.into())).unwrap();
+
+    // Same location on both nodes → consolidates to root.
+    q.set_metadata(ev1, "location", MetadataValues::single_string("lumi")).unwrap();
+    q.set_metadata(ev2, "location", MetadataValues::single_string("lumi")).unwrap();
+    q.compress();
+
+    let partitioned = q.partition_by_metadata("location");
+    assert_eq!(partitioned.len(), 1, "expected one bucket");
+    let lumi = partitioned.get("lumi").expect("lumi bucket must exist");
+    // All data is in the lumi bucket.
+    assert_eq!(lumi.leaf_node_ids_paths().len(), q.leaf_node_ids_paths().len());
+}
+
+// ---------------------------------------------------------------------------
+//  32. Two leaves with different single-valued locations → two buckets,
+//      each containing exactly the matching leaf paths.
+// ---------------------------------------------------------------------------
+#[test]
+fn partition_by_metadata_two_locations_split_correctly() {
+    let mut q = Qube::new();
+    let root = q.root();
+    let ev1 = q.get_or_create_child("expver", root, Some("0001".into())).unwrap();
+    q.get_or_create_child("param", ev1, Some(1.into())).unwrap();
+    let ev2 = q.get_or_create_child("expver", root, Some("0002".into())).unwrap();
+    q.get_or_create_child("param", ev2, Some(1.into())).unwrap();
+
+    // Different locations → cannot consolidate → stay on ev1/ev2.
+    q.set_metadata(ev1, "location", MetadataValues::single_string("lumi")).unwrap();
+    q.set_metadata(ev2, "location", MetadataValues::single_string("mn5")).unwrap();
+
+    // After compress the expver nodes merge into expver=0001/0002 and
+    // location becomes PerCoordStrings(["lumi","mn5"]) on that merged node.
+    q.compress();
+
+    let partitioned = q.partition_by_metadata("location");
+    assert_eq!(partitioned.len(), 2, "expected two buckets (lumi and mn5)");
+
+    let lumi = partitioned.get("lumi").expect("lumi bucket");
+    let mn5 = partitioned.get("mn5").expect("mn5 bucket");
+
+    // Each bucket has exactly one leaf path.
+    assert_eq!(lumi.leaf_node_ids_paths().len(), 1, "lumi must have 1 leaf path");
+    assert_eq!(mn5.leaf_node_ids_paths().len(), 1, "mn5 must have 1 leaf path");
+
+    // Verify the coordinate in each bucket.
+    let lumi_paths = lumi.leaf_node_ids_paths();
+    let lumi_dc = &lumi_paths[0];
+    let lumi_coords: Vec<String> = lumi_dc
+        .iter()
+        .filter_map(|&nid| lumi.node(nid).map(|n| n.coordinates().to_string()))
+        .collect();
+
+    let has_0001 = lumi_dc
+        .iter()
+        .any(|&nid| lumi.node(nid).map(|n| n.coordinates().to_string() == "0001").unwrap_or(false));
+    assert!(has_0001, "lumi bucket must contain expver=0001");
+
+    let mn5_paths = mn5.leaf_node_ids_paths();
+    let mn5_dc = &mn5_paths[0];
+    let has_0002 = mn5_dc
+        .iter()
+        .any(|&nid| mn5.node(nid).map(|n| n.coordinates().to_string() == "0002").unwrap_or(false));
+    assert!(has_0002, "mn5 bucket must contain expver=0002");
+}
+
+// ---------------------------------------------------------------------------
+//  33. Strings({"lumi","mn5"}) on a node with 2 coordinates behaves like
+//      PerCoordStrings: coordinate[0] → "lumi", coordinate[1] → "mn5".
+// ---------------------------------------------------------------------------
+#[test]
+fn partition_by_metadata_strings_split_like_per_coord_strings() {
+    // Build two expver nodes with the SAME location set {"lumi","mn5"} so they
+    // merge together after compress.  Then manually set Strings({"lumi","mn5"})
+    // on the merged node (simulating shared-location data).
+    let mut q = Qube::new();
+    let root = q.root();
+    let ev1 = q.get_or_create_child("expver", root, Some("0001".into())).unwrap();
+    q.get_or_create_child("param", ev1, Some(1.into())).unwrap();
+    let ev2 = q.get_or_create_child("expver", root, Some("0002".into())).unwrap();
+    q.get_or_create_child("param", ev2, Some(1.into())).unwrap();
+
+    // Set the same two-value Strings on both nodes; they consolidate but
+    // we force-set after compress so the merged node carries Strings({"lumi","mn5"}).
+    q.compress();
+    // After compress expver=0001/0002 is a single merged node.
+    let merged_ev = find_child(&q, root, "expver", "0001");
+    q.set_metadata(merged_ev, "location", MetadataValues::from_strings(&["lumi", "mn5"])).unwrap();
+
+    let partitioned = q.partition_by_metadata("location");
+    assert_eq!(partitioned.len(), 2, "expected lumi and mn5 buckets");
+
+    let lumi = partitioned.get("lumi").expect("lumi bucket");
+    let mn5 = partitioned.get("mn5").expect("mn5 bucket");
+
+    // Each bucket must contain exactly one expver value (the coord that
+    // corresponds to its location in sorted order).
+    assert_eq!(lumi.leaf_node_ids_paths().len(), 1, "lumi must have 1 leaf path");
+    assert_eq!(mn5.leaf_node_ids_paths().len(), 1, "mn5 must have 1 leaf path");
+
+    // "0001" is the first sorted coord → "lumi" (first sorted value).
+    // "0002" is the second sorted coord → "mn5" (second sorted value).
+    let lumi_has_0001 = lumi.leaf_node_ids_paths()[0]
+        .iter()
+        .any(|&nid| lumi.node(nid).map(|n| n.coordinates().to_string() == "0001").unwrap_or(false));
+    let mn5_has_0002 = mn5.leaf_node_ids_paths()[0]
+        .iter()
+        .any(|&nid| mn5.node(nid).map(|n| n.coordinates().to_string() == "0002").unwrap_or(false));
+    assert!(lumi_has_0001, "lumi bucket must contain expver=0001 (first sorted coord)");
+    assert!(mn5_has_0002, "mn5 bucket must contain expver=0002 (second sorted coord)");
 }

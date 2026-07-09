@@ -1,6 +1,6 @@
 use lasso::{MiniSpur, Rodeo};
 use slotmap::{SlotMap, new_key_type};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -896,6 +896,13 @@ impl Qube {
                 _ => return,
             };
 
+        // Never consolidate PerCoordStrings upward: the per-coord vector is aligned
+        // with the coordinates of the node it sits on.  Moving it to an ancestor would
+        // break that alignment.
+        if first_child_meta.is_per_coord_strings() {
+            return;
+        }
+
         for &child_id in &all_children[1..] {
             match self.nodes.get(child_id).and_then(|n| n.metadata.get(key)) {
                 Some(v) if !v.is_empty() && *v == first_child_meta => {}
@@ -1107,8 +1114,18 @@ impl Qube {
     /// When the same key appears at multiple levels, the most-specific (deepest /
     /// child-closest) value wins.
     ///
+    /// `path` maps dimension names to the specific coordinate value being queried
+    /// (e.g. `{"expver": "0001"}`).  When an ancestor node carries a `PerCoordStrings`
+    /// value for a key, the entry in `path` for that node's dimension is used to pick
+    /// the correct per-coord string.  Pass `&HashMap::new()` when no path is available
+    /// (any `PerCoordStrings` values will be silently omitted from the result).
+    ///
     /// This is the same semantics as the Python `get_node_metadata` binding.
-    pub fn resolve_all_metadata(&self, node_id: NodeIdx) -> Metadata {
+    pub fn resolve_all_metadata(
+        &self,
+        node_id: NodeIdx,
+        path: &HashMap<String, String>,
+    ) -> Metadata {
         // Build chain from node_id up to root, then reverse so root is first.
         let mut chain = vec![node_id];
         let mut current = node_id;
@@ -1128,7 +1145,26 @@ impl Qube {
         for id in chain {
             if let Some(n) = self.nodes.get(id) {
                 for (k, v) in n.metadata.iter() {
-                    effective.values.insert(k.clone(), v.clone());
+                    match v {
+                        MetadataValues::PerCoordStrings(vec) => {
+                            // Resolve by looking up this node's dimension in `path`.
+                            let dim_str = self.dimension_str(&n.dim).unwrap_or("");
+                            if let Some(coord_val) = path.get(dim_str) {
+                                if let Some(idx) = n.coords.coord_index_of(coord_val) {
+                                    if let Some(resolved) = vec.get(idx) {
+                                        effective.values.insert(
+                                            k.clone(),
+                                            MetadataValues::single_string(resolved),
+                                        );
+                                    }
+                                }
+                            }
+                            // If path doesn't contain this dim, omit the key.
+                        }
+                        _ => {
+                            effective.values.insert(k.clone(), v.clone());
+                        }
+                    }
                 }
             }
         }

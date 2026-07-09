@@ -602,11 +602,25 @@ impl PyQube {
     pub fn get_all_metadata(&self, py: Python<'_>, path: Bound<'_, PyDict>) -> PyResult<Py<PyAny>> {
         let path_map = pydict_to_string_map(&path)?;
         let node_id = find_node_by_path(&self.inner, &path_map).map_err(PyTypeError::new_err)?;
-        let effective = self.inner.resolve_all_metadata(node_id);
+        let effective = self.inner.resolve_all_metadata(node_id, &path_map);
         let result = PyDict::new(py);
         for (k, v) in effective.iter() {
             let lst = metadata_values_to_pylist(py, v)?;
             result.set_item(k, lst)?;
+        }
+        Ok(result.into_any().unbind())
+    }
+
+    /// Partition the Qube into sub-Qubes grouped by the resolved values of the
+    /// given metadata key.  Returns a `dict[str, Qube]` mapping each distinct
+    /// metadata value to a sub-Qube containing only the leaf paths labelled with
+    /// that value.  Leaves with no value for `key` are excluded.
+    pub fn partition_by_metadata(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
+        let partitioned = self.inner.partition_by_metadata(key);
+        let result = PyDict::new(py);
+        for (value, sub_qube) in partitioned {
+            let py_qube = Py::new(py, PyQube { inner: sub_qube })?;
+            result.set_item(value, py_qube)?;
         }
         Ok(result.into_any().unbind())
     }
@@ -758,6 +772,13 @@ fn metadata_values_to_pylist<'py>(
             let lst = PyList::empty(py);
             for s in set.iter() {
                 lst.append(&**s)?;
+            }
+            Ok(lst)
+        }
+        MetadataValues::PerCoordStrings(vec) => {
+            let lst = PyList::empty(py);
+            for s in vec.iter() {
+                lst.append(s.as_str())?;
             }
             Ok(lst)
         }

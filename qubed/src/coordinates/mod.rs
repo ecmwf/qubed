@@ -459,6 +459,68 @@ impl Coordinates {
         Coordinates::from_intersection(intersection_result)
     }
 
+    /// Return every individual coordinate value as a `String`, in sorted ascending order.
+    ///
+    /// For `Integers`, values are formatted as decimal strings.
+    /// For `Strings`, values are returned as-is.
+    /// `Empty` and `Mixed` return an empty `Vec` (Mixed is not supported for per-coord mapping).
+    pub fn iter_sorted_strings(&self) -> Vec<String> {
+        match self {
+            Coordinates::Empty => vec![],
+            Coordinates::Integers(ints) => match ints {
+                integers::IntegerCoordinates::Set(set) => {
+                    set.iter().map(|v| v.to_string()).collect()
+                }
+                integers::IntegerCoordinates::RangeSet(_) => vec![],
+            },
+            Coordinates::Strings(strings) => match strings {
+                strings::StringCoordinates::Set(set) => set.iter().map(|v| v.to_string()).collect(),
+            },
+            Coordinates::Floats(floats) => match floats {
+                floats::FloatCoordinates::List(list) => {
+                    list.iter().map(|v| v.to_string()).collect()
+                }
+            },
+            Coordinates::DateTimes(dts) => match dts {
+                datetime::DateTimeCoordinates::List(list) => {
+                    list.iter().map(|v| v.format("%Y%m%dT%H%M").to_string()).collect()
+                }
+            },
+            Coordinates::Mixed(_) => vec![],
+        }
+    }
+
+    /// Return the 0-based sorted position of the coordinate whose string representation
+    /// equals `value_str`, or `None` if not found.
+    pub fn coord_index_of(&self, value_str: &str) -> Option<usize> {
+        self.iter_sorted_strings().iter().position(|v| v == value_str)
+    }
+
+    /// Split this `Coordinates` into a `Vec` of single-value `Coordinates`, one per
+    /// element in sorted coordinate order.
+    ///
+    /// Only fully-enumerable variants are supported: `Integers(Set)`, `Strings(Set)`.
+    /// For `RangeSet`, `Mixed`, `DateTime`, `Floats`, and `Empty`, returns an empty `Vec`.
+    ///
+    /// Used by `partition_by_metadata` to align per-coordinate metadata values with
+    /// the individual coordinates of a merged node.
+    pub fn split_into_singles(&self) -> Vec<Coordinates> {
+        match self {
+            Coordinates::Strings(_) => self
+                .iter_sorted_strings()
+                .into_iter()
+                .map(|s| Coordinates::from(s.as_str()))
+                .collect(),
+            Coordinates::Integers(integers::IntegerCoordinates::Set(_)) => self
+                .iter_sorted_strings()
+                .into_iter()
+                .filter_map(|s| s.parse::<i32>().ok())
+                .map(Coordinates::from)
+                .collect(),
+            _ => vec![],
+        }
+    }
+
     /// Serialize coordinates into a serde_json::Value using native JSON types
     pub fn to_json_value(&self) -> serde_json::Value {
         use serde_json::{Number, Value};

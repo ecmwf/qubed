@@ -18,20 +18,34 @@ pub struct Metadata {
 /// The set contains the unique metadata values across all coordinates of the node.
 /// When the set has exactly one element, the metadata is "uniform" — all coordinates
 /// share the same value, making it eligible for consolidation to the parent.
+///
+/// `PerCoordStrings` is a special variant that records one string value *per coordinate*
+/// in the node's sorted coordinate order.  It is produced by `compress` when sibling nodes
+/// are merged and their metadata values differ per coordinate.  Queries that supply the
+/// specific coordinate value (via `resolve_all_metadata`) will have the correct single
+/// entry resolved from this list.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MetadataValues {
     Empty,
     Integers(TinyOrderedSet<i32, 6>),
     Strings(TinyOrderedSet<TinyString<4>, 2>),
+    /// One string value per coordinate, in the same sorted order as the node's
+    /// `Coordinates`.  `len()` equals the number of coordinates on the node.
+    PerCoordStrings(Vec<String>),
 }
 
 impl MetadataValues {
     /// Number of unique values in this metadata set.
+    ///
+    /// For `PerCoordStrings`, returns the length of the per-coord vector (one entry per
+    /// coordinate on the node).  This is NOT the number of *distinct* values; use
+    /// `is_per_coord_strings()` to distinguish the variant before interpreting the length.
     pub fn len(&self) -> usize {
         match self {
             MetadataValues::Empty => 0,
             MetadataValues::Integers(set) => set.len(),
             MetadataValues::Strings(set) => set.len(),
+            MetadataValues::PerCoordStrings(vec) => vec.len(),
         }
     }
 
@@ -41,8 +55,19 @@ impl MetadataValues {
     }
 
     /// Whether all coordinates share the same metadata value (set has exactly 1 element).
+    ///
+    /// `PerCoordStrings` always returns `false` because values differ per coordinate; the
+    /// per-coord vector must be resolved via `resolve_all_metadata` with a concrete path.
     pub fn is_uniform(&self) -> bool {
-        self.len() == 1
+        match self {
+            MetadataValues::PerCoordStrings(_) => false,
+            _ => self.len() == 1,
+        }
+    }
+
+    /// Returns `true` if this is the `PerCoordStrings` variant.
+    pub fn is_per_coord_strings(&self) -> bool {
+        matches!(self, MetadataValues::PerCoordStrings(_))
     }
 
     /// Merge two MetadataValues together, returning the union of their values.
@@ -50,10 +75,21 @@ impl MetadataValues {
     /// If one side is `Empty`, returns the other unchanged.
     /// If both have the same type, their value sets are unioned.
     /// If types differ, the left side's values are kept.
+    ///
+    /// `PerCoordStrings` is never unioned: if both sides are equal per-coord vectors the
+    /// same vector is returned; any other combination keeps the left side unchanged.
+    /// (In practice `merge_with` should not be called on `PerCoordStrings` in normal flow.)
     pub fn merge_with(&self, other: &MetadataValues) -> MetadataValues {
         match (self, other) {
             (MetadataValues::Empty, other) => other.clone(),
             (this, MetadataValues::Empty) => this.clone(),
+            // PerCoordStrings: keep if identical, otherwise keep self as fallback.
+            (MetadataValues::PerCoordStrings(a), MetadataValues::PerCoordStrings(b)) if a == b => {
+                MetadataValues::PerCoordStrings(a.clone())
+            }
+            (MetadataValues::PerCoordStrings(_), _) | (_, MetadataValues::PerCoordStrings(_)) => {
+                self.clone()
+            }
             (MetadataValues::Integers(set_a), MetadataValues::Integers(set_b)) => {
                 let mut merged = set_a.clone();
                 for &v in set_b.iter() {
@@ -125,6 +161,7 @@ impl MetadataValues {
     pub fn contains_string(&self, s: &str) -> bool {
         match self {
             MetadataValues::Strings(set) => set.contains(&TinyString::from(s)),
+            MetadataValues::PerCoordStrings(vec) => vec.iter().any(|v| v == s),
             _ => false,
         }
     }
@@ -132,12 +169,14 @@ impl MetadataValues {
     /// Return all values as a `Vec<String>`, regardless of the underlying type.
     ///
     /// Integers are formatted with `i32::to_string`. Strings are returned as-is.
-    /// An `Empty` set produces an empty Vec.
+    /// `PerCoordStrings` returns the underlying vector (all per-coord values, possibly with
+    /// duplicates, in coordinate order).  An `Empty` set produces an empty Vec.
     pub fn as_string_vec(&self) -> Vec<String> {
         match self {
             MetadataValues::Empty => vec![],
             MetadataValues::Integers(set) => set.iter().map(|v| v.to_string()).collect(),
             MetadataValues::Strings(set) => set.iter().map(|v| v.to_string()).collect(),
+            MetadataValues::PerCoordStrings(vec) => vec.clone(),
         }
     }
 }
