@@ -81,8 +81,21 @@ impl Coordinates {
             Coordinates::Floats(floats) => floats.to_string(),
             Coordinates::DateTimes(datetimes) => datetimes.to_string(),
             Coordinates::Strings(strings) => strings.to_string(),
-            Coordinates::Mixed(_) => {
-                todo!()
+            Coordinates::Mixed(mixed) => {
+                let mut parts: Vec<String> = Vec::new();
+                if mixed.integers.len() > 0 {
+                    parts.push(mixed.integers.to_string());
+                }
+                if mixed.floats.len() > 0 {
+                    parts.push(mixed.floats.to_string());
+                }
+                if mixed.strings.len() > 0 {
+                    parts.push(mixed.strings.to_string());
+                }
+                if mixed.datetimes.len() > 0 {
+                    parts.push(mixed.datetimes.to_string());
+                }
+                parts.join("/")
             }
         }
     }
@@ -157,27 +170,190 @@ impl Coordinates {
         self
     }
 
-    pub fn intersect(&self, _other: &Coordinates) -> IntersectionResult<Coordinates> {
-        match (self, _other) {
-            (Coordinates::Integers(ints_a), Coordinates::Integers(ints_b)) => {
-                let result = ints_a.intersect(ints_b);
+    pub fn intersect(&self, other: &Coordinates) -> IntersectionResult<Coordinates> {
+        match (self, other) {
+            // Empty
+            (Coordinates::Empty, _) => IntersectionResult {
+                intersection: Coordinates::Empty,
+                only_a: Coordinates::Empty,
+                only_b: other.clone(),
+            },
+            (_, Coordinates::Empty) => IntersectionResult {
+                intersection: Coordinates::Empty,
+                only_a: self.clone(),
+                only_b: Coordinates::Empty,
+            },
+            // Same-type
+            (Coordinates::Integers(a), Coordinates::Integers(b)) => {
+                let r = a.intersect(b);
                 IntersectionResult {
-                    intersection: Coordinates::Integers(result.intersection),
-                    only_a: Coordinates::Integers(result.only_a),
-                    only_b: Coordinates::Integers(result.only_b),
+                    intersection: Coordinates::Integers(r.intersection),
+                    only_a: Coordinates::Integers(r.only_a),
+                    only_b: Coordinates::Integers(r.only_b),
                 }
             }
-            (Coordinates::Strings(strs_a), Coordinates::Strings(strs_b)) => {
-                let result = strs_a.intersect(strs_b);
+            (Coordinates::Strings(a), Coordinates::Strings(b)) => {
+                let r = a.intersect(b);
                 IntersectionResult {
-                    intersection: Coordinates::Strings(result.intersection),
-                    only_a: Coordinates::Strings(result.only_a),
-                    only_b: Coordinates::Strings(result.only_b),
+                    intersection: Coordinates::Strings(r.intersection),
+                    only_a: Coordinates::Strings(r.only_a),
+                    only_b: Coordinates::Strings(r.only_b),
                 }
             }
-            _ => {
-                unimplemented!("Intersection not implemented for these coordinate types");
+            (Coordinates::Floats(a), Coordinates::Floats(b)) => {
+                let r = a.intersect(b);
+                IntersectionResult {
+                    intersection: Coordinates::Floats(r.intersection),
+                    only_a: Coordinates::Floats(r.only_a),
+                    only_b: Coordinates::Floats(r.only_b),
+                }
             }
+            (Coordinates::DateTimes(a), Coordinates::DateTimes(b)) => {
+                let r = a.intersect(b);
+                IntersectionResult {
+                    intersection: Coordinates::DateTimes(r.intersection),
+                    only_a: Coordinates::DateTimes(r.only_a),
+                    only_b: Coordinates::DateTimes(r.only_b),
+                }
+            }
+            // Mixed on the left
+            (Coordinates::Mixed(mixed), Coordinates::Strings(b)) => {
+                let r = mixed.strings.intersect(b);
+                IntersectionResult {
+                    intersection: Coordinates::Strings(r.intersection),
+                    only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: mixed.integers.clone(),
+                        floats: mixed.floats.clone(),
+                        strings: r.only_a,
+                        datetimes: mixed.datetimes.clone(),
+                    })),
+                    only_b: Coordinates::Strings(r.only_b),
+                }
+            }
+            (Coordinates::Mixed(mixed), Coordinates::Integers(b)) => {
+                let r = mixed.integers.intersect(b);
+                IntersectionResult {
+                    intersection: Coordinates::Integers(r.intersection),
+                    only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: r.only_a,
+                        floats: mixed.floats.clone(),
+                        strings: mixed.strings.clone(),
+                        datetimes: mixed.datetimes.clone(),
+                    })),
+                    only_b: Coordinates::Integers(r.only_b),
+                }
+            }
+            (Coordinates::Mixed(mixed), Coordinates::Floats(b)) => {
+                let r = mixed.floats.intersect(b);
+                IntersectionResult {
+                    intersection: Coordinates::Floats(r.intersection),
+                    only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: mixed.integers.clone(),
+                        floats: r.only_a,
+                        strings: mixed.strings.clone(),
+                        datetimes: mixed.datetimes.clone(),
+                    })),
+                    only_b: Coordinates::Floats(r.only_b),
+                }
+            }
+            (Coordinates::Mixed(mixed), Coordinates::DateTimes(b)) => {
+                let r = mixed.datetimes.intersect(b);
+                IntersectionResult {
+                    intersection: Coordinates::DateTimes(r.intersection),
+                    only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: mixed.integers.clone(),
+                        floats: mixed.floats.clone(),
+                        strings: mixed.strings.clone(),
+                        datetimes: r.only_a,
+                    })),
+                    only_b: Coordinates::DateTimes(r.only_b),
+                }
+            }
+            (Coordinates::Mixed(a), Coordinates::Mixed(b)) => {
+                let r_ints = a.integers.intersect(&b.integers);
+                let r_floats = a.floats.intersect(&b.floats);
+                let r_strs = a.strings.intersect(&b.strings);
+                let r_dts = a.datetimes.intersect(&b.datetimes);
+                IntersectionResult {
+                    intersection: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: r_ints.intersection,
+                        floats: r_floats.intersection,
+                        strings: r_strs.intersection,
+                        datetimes: r_dts.intersection,
+                    })),
+                    only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: r_ints.only_a,
+                        floats: r_floats.only_a,
+                        strings: r_strs.only_a,
+                        datetimes: r_dts.only_a,
+                    })),
+                    only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: r_ints.only_b,
+                        floats: r_floats.only_b,
+                        strings: r_strs.only_b,
+                        datetimes: r_dts.only_b,
+                    })),
+                }
+            }
+            // Mixed on the right
+            (Coordinates::Strings(a), Coordinates::Mixed(mixed)) => {
+                let r = a.intersect(&mixed.strings);
+                IntersectionResult {
+                    intersection: Coordinates::Strings(r.intersection),
+                    only_a: Coordinates::Strings(r.only_a),
+                    only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: mixed.integers.clone(),
+                        floats: mixed.floats.clone(),
+                        strings: r.only_b,
+                        datetimes: mixed.datetimes.clone(),
+                    })),
+                }
+            }
+            (Coordinates::Integers(a), Coordinates::Mixed(mixed)) => {
+                let r = a.intersect(&mixed.integers);
+                IntersectionResult {
+                    intersection: Coordinates::Integers(r.intersection),
+                    only_a: Coordinates::Integers(r.only_a),
+                    only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: r.only_b,
+                        floats: mixed.floats.clone(),
+                        strings: mixed.strings.clone(),
+                        datetimes: mixed.datetimes.clone(),
+                    })),
+                }
+            }
+            (Coordinates::Floats(a), Coordinates::Mixed(mixed)) => {
+                let r = a.intersect(&mixed.floats);
+                IntersectionResult {
+                    intersection: Coordinates::Floats(r.intersection),
+                    only_a: Coordinates::Floats(r.only_a),
+                    only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: mixed.integers.clone(),
+                        floats: r.only_b,
+                        strings: mixed.strings.clone(),
+                        datetimes: mixed.datetimes.clone(),
+                    })),
+                }
+            }
+            (Coordinates::DateTimes(a), Coordinates::Mixed(mixed)) => {
+                let r = a.intersect(&mixed.datetimes);
+                IntersectionResult {
+                    intersection: Coordinates::DateTimes(r.intersection),
+                    only_a: Coordinates::DateTimes(r.only_a),
+                    only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: mixed.integers.clone(),
+                        floats: mixed.floats.clone(),
+                        strings: mixed.strings.clone(),
+                        datetimes: r.only_b,
+                    })),
+                }
+            }
+            // Type mismatch: no overlap (e.g. Integers vs Strings)
+            _ => IntersectionResult {
+                intersection: Coordinates::Empty,
+                only_a: self.clone(),
+                only_b: other.clone(),
+            },
         }
     }
 
