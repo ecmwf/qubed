@@ -503,6 +503,21 @@ impl Qube {
         self.key_store.try_resolve(&dim.0)
     }
 
+    /// Intern a dimension name into this Qube's key store, returning its Dimension ID.
+    /// Used by the merge translation map to normalise dimension IDs across Qubes.
+    pub(crate) fn get_or_intern_dim(&mut self, name: &str) -> Dimension {
+        Dimension(self.key_store.get_or_intern(name))
+    }
+
+    /// Return all unique Dimension IDs used by nodes in this Qube.
+    pub(crate) fn all_dim_ids(&self) -> Vec<Dimension> {
+        let mut seen = std::collections::HashSet::new();
+        for (_id, node) in self.nodes.iter() {
+            seen.insert(node.dim);
+        }
+        seen.into_iter().collect()
+    }
+
     pub(crate) fn invalidate_ancestors(&self, id: NodeIdx) {
         if let Some(node) = self.nodes.get(id) {
             node.structural_hash.store(0, Ordering::Release);
@@ -866,17 +881,20 @@ impl Qube {
             return;
         }
 
-        // Check if ALL children have metadata for this key, all are uniform (size 1),
-        // and all share the same value
+        // Check if ALL children have metadata for this key and all share the same value.
+        // We allow multi-value (non-uniform) metadata to consolidate upward just like
+        // single-value metadata — this is required so that merged provenance sets like
+        // [lumi, mn5] bubble up to the highest ancestor whose entire subtree carries
+        // that combined provenance.
         let first_child_meta =
             match self.nodes.get(all_children[0]).and_then(|n| n.metadata.get(key)) {
-                Some(v) if v.is_uniform() => v.clone(),
+                Some(v) if !v.is_empty() => v.clone(),
                 _ => return,
             };
 
         for &child_id in &all_children[1..] {
             match self.nodes.get(child_id).and_then(|n| n.metadata.get(key)) {
-                Some(v) if v.is_uniform() && *v == first_child_meta => {}
+                Some(v) if !v.is_empty() && *v == first_child_meta => {}
                 _ => return,
             }
         }
@@ -1343,10 +1361,14 @@ mod tests {
 
         qube_a.append(&mut qube_b);
 
-        // The merged leaf must carry BOTH location values.
+        // After consolidation the merged {a,b} set may have been bubbled up to the root
+        // (since the leaf is the only descendant).  What matters is that the union is
+        // present *somewhere* in the tree — either on the leaf itself or on the root.
+        let root_a = qube_a.root();
         let loc = qube_a
             .get_metadata(leaf_a, "location")
-            .expect("location metadata must survive the merge");
+            .or_else(|| qube_a.get_metadata(root_a, "location"))
+            .expect("location metadata must survive the merge (on leaf or root)");
         assert!(
             loc.contains_string("a"),
             "location 'a' must be present after merge; got {:?}",

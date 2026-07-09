@@ -119,13 +119,13 @@ fn compress_identical_inner_nodes_different_metadata_pushed_to_children() {
         "merged expver node must not carry src (values A vs B differ)"
     );
 
-    // The metadata union {A, B} should have been pushed down to the child (param=1/2).
-    let param_node = find_child(&q, merged_ev, "param", "1");
-    let param_meta =
-        q.get_metadata(param_node, "src").expect("src should have been pushed to param");
-    assert_eq!(param_meta.len(), 2, "param should carry both src values");
-    assert!(param_meta.contains_string("A"));
-    assert!(param_meta.contains_string("B"));
+    // With Change 3 consolidation the union {A, B} is first pushed to param=1/2,
+    // then bubbles up through the single-child chain to root.
+    let root_meta =
+        q.get_metadata(root, "src").expect("src union should have consolidated to root");
+    assert_eq!(root_meta.len(), 2, "root should carry both src values");
+    assert!(root_meta.contains_string("A"));
+    assert!(root_meta.contains_string("B"));
 }
 
 // ===========================================================================
@@ -151,9 +151,9 @@ fn compress_sibling_leaves_different_metadata_union_kept_on_merged_leaf() {
     q.compress();
 
     // param=1 and param=2 are both leaves → merged into param=1/2.
-    // No children to push to, so the union {K, Pa} stays on the merged leaf.
-    let merged_param = find_child(&q, class, "param", "1");
-    let meta = q.get_metadata(merged_param, "units").expect("units should be on the merged leaf");
+    // With Change 3 consolidation the union {K, Pa} is first set on the merged leaf,
+    // then bubbles up through class → root (single-child chain at each level).
+    let meta = q.get_metadata(root, "units").expect("units union should have consolidated to root");
     assert_eq!(meta.len(), 2);
     assert!(meta.contains_string("K"));
     assert!(meta.contains_string("Pa"));
@@ -228,9 +228,8 @@ fn compress_mixed_metadata_keys_handled_independently() {
         "src should not be on merged expver (values A vs B differ)"
     );
 
-    // src union {A, B} should be on children.
-    let param_node = find_child(&q, merged_ev, "param", "1");
-    let src_meta = q.get_metadata(param_node, "src").expect("src union should be on param");
+    // src union {A, B} is pushed to param then consolidates all the way to root.
+    let src_meta = q.get_metadata(root, "src").expect("src union should have consolidated to root");
     assert_eq!(src_meta.len(), 2);
     assert!(src_meta.contains_string("A"));
     assert!(src_meta.contains_string("B"));
@@ -336,10 +335,10 @@ fn append_different_metadata_pushed_to_children() {
         "merged class node must not carry src (values A vs B differ)"
     );
 
-    // src union {A, B} should be pushed to the child param=1.
-    let param_node = find_child(&qa, merged_class, "param", "1");
-    let src_meta =
-        qa.get_metadata(param_node, "src").expect("src union should be on param after append");
+    // With Change 3 consolidation the union {A, B} bubbles all the way up to root.
+    let src_meta = qa
+        .get_metadata(root_a, "src")
+        .expect("src union should have consolidated to root after append");
     assert_eq!(src_meta.len(), 2);
     assert!(src_meta.contains_string("A"));
     assert!(src_meta.contains_string("B"));
@@ -468,8 +467,8 @@ fn compress_three_way_merge_two_agree_one_differs() {
         "merged expver should not carry src when values are not all equal"
     );
 
-    let param_node = find_child(&q, merged_ev, "param", "1");
-    let src_meta = q.get_metadata(param_node, "src").expect("src union should be on param");
+    // With Change 3 consolidation the union {A, B} bubbles all the way up to root.
+    let src_meta = q.get_metadata(root, "src").expect("src union should have consolidated to root");
     assert!(src_meta.contains_string("A"));
     assert!(src_meta.contains_string("B"));
 }
@@ -818,15 +817,15 @@ fn metadata_moves_down_during_compress_then_survives_arena_roundtrip() {
 
     q.compress();
 
-    // After compress: expver=0001/0002 merged; src differs → pushed to param=1.
+    // After compress: expver=0001/0002 merged; src differs → pushed to param=1,
+    // then consolidates (Change 3) all the way to root.
     let merged_ev = find_child(&q, root, "expver", "0001");
     assert!(
         q.get_metadata(merged_ev, "src").is_none(),
         "merged expver should not carry src after compress (values differ)"
     );
-    let param_node = find_child(&q, merged_ev, "param", "1");
     let src_before =
-        q.get_metadata(param_node, "src").expect("src should be on param after compress");
+        q.get_metadata(root, "src").expect("src should be on root after compress + consolidation");
     assert!(src_before.contains_string("A") && src_before.contains_string("B"));
 
     // Arena JSON roundtrip.
@@ -842,11 +841,10 @@ fn metadata_moves_down_during_compress_then_survives_arena_roundtrip() {
         "merged expver should not carry src after arena roundtrip"
     );
 
-    // src={A,B} must be on param=1.
-    let rparam = find_child(&restored, rmerged_ev, "param", "1");
+    // src={A,B} must be on root after roundtrip.
     let src_after = restored
-        .get_metadata(rparam, "src")
-        .expect("src union should be on param after arena roundtrip");
+        .get_metadata(rroot, "src")
+        .expect("src union should be on root after arena roundtrip");
     assert!(src_after.contains_string("A"), "src should contain A");
     assert!(src_after.contains_string("B"), "src should contain B");
 }
