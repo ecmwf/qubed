@@ -1233,4 +1233,129 @@ mod tests {
 
         Ok(())
     }
+
+    /// Regression test for the `only_other` clobber bug in `internal_set_operation`.
+    ///
+    /// Before the fix the `only_other` block would unconditionally call `copy_subtree`
+    /// and overwrite metadata even when the target node already existed (having been
+    /// correctly merged by the intersection path for a different self×other pair
+    /// earlier in the same iteration).  This manifested in the omnicat LUMI + MN5
+    /// merge as `climate-dt` (shared by both locations) losing its lumi subtree and
+    /// keeping only the mn5 subtree (last-write-wins).
+    ///
+    /// Setup:
+    ///   qube_a  has dataset=[C, A, B]; C first so the C×C intersection pair
+    ///           is processed before the A×C and B×C only_other pairs.
+    ///           Each dataset has a unique leaf child and location=lumi.
+    ///   qube_b  has dataset=[C] only, with its own distinct leaf child and location=mn5.
+    ///
+    /// Invariant after append:
+    ///   C's subtree must contain BOTH the lumi leaf AND the mn5 leaf.
+    ///   If copy_subtree runs for the A×C or B×C pair it overwrites C's merged
+    ///   subtree, erasing the lumi leaf — that is the regression we guard here.
+    #[test]
+    fn test_append_only_other_does_not_clobber_existing_intersection_node() {
+        let mut qube_a = Qube::new();
+        let root_a = qube_a.root();
+
+        // Insert C first so it is first in the TinyVec for the "dataset" dimension,
+        // ensuring the C×C intersection pair runs before the A×C / B×C only_other pairs.
+        let c_a = qube_a
+            .get_or_create_child("dataset", root_a, Some(Coordinates::from_string("C")))
+            .unwrap();
+        let a_a = qube_a
+            .get_or_create_child("dataset", root_a, Some(Coordinates::from_string("A")))
+            .unwrap();
+        let b_a = qube_a
+            .get_or_create_child("dataset", root_a, Some(Coordinates::from_string("B")))
+            .unwrap();
+
+        // Distinct leaf values per dataset so we can detect clobbering
+        qube_a
+            .get_or_create_child("leaf", c_a, Some(Coordinates::from_string("lumi_leaf")))
+            .unwrap();
+        qube_a.get_or_create_child("leaf", a_a, Some(Coordinates::from_string("a_leaf"))).unwrap();
+        qube_a.get_or_create_child("leaf", b_a, Some(Coordinates::from_string("b_leaf"))).unwrap();
+
+        qube_a.set_metadata(c_a, "location", MetadataValues::single_string("lumi")).unwrap();
+        qube_a.set_metadata(a_a, "location", MetadataValues::single_string("lumi")).unwrap();
+        qube_a.set_metadata(b_a, "location", MetadataValues::single_string("lumi")).unwrap();
+
+        let mut qube_b = Qube::new();
+        let root_b = qube_b.root();
+        let c_b = qube_b
+            .get_or_create_child("dataset", root_b, Some(Coordinates::from_string("C")))
+            .unwrap();
+        qube_b
+            .get_or_create_child("leaf", c_b, Some(Coordinates::from_string("mn5_leaf")))
+            .unwrap();
+        qube_b.set_metadata(c_b, "location", MetadataValues::single_string("mn5")).unwrap();
+
+        qube_a.append(&mut qube_b);
+
+        let ascii = qube_a.to_ascii();
+
+        // A and B are self-only datasets; their leaf children must survive intact.
+        assert!(ascii.contains("a_leaf"), "a_leaf must survive append; got:\n{}", ascii);
+        assert!(ascii.contains("b_leaf"), "b_leaf must survive append; got:\n{}", ascii);
+
+        // C is shared: both lumi_leaf (from qube_a) and mn5_leaf (from qube_b) must be
+        // present — the only_other copy_subtree must NOT erase the lumi contribution.
+        assert!(
+            ascii.contains("lumi_leaf"),
+            "lumi_leaf must survive in C's subtree after merge; got:\n{}",
+            ascii
+        );
+        assert!(
+            ascii.contains("mn5_leaf"),
+            "mn5_leaf must be present in C's subtree after merge; got:\n{}",
+            ascii
+        );
+    }
+
+    /// Regression test for the leaf-leaf metadata drop bug in `node_merge`.
+    ///
+    /// When two leaf nodes with *different* metadata are merged via `node_merge`, the
+    /// previous code called `push_metadata_to_children` (which is a no-op for leaves)
+    /// and then returned without ever incorporating `other_meta` into `self`.  As a
+    /// result `other_meta` was silently dropped, and shared data always ended up with
+    /// only the `self` side's metadata.
+    ///
+    /// After the fix the metadata from both sides must be unioned on the shared leaf.
+    #[test]
+    fn test_node_merge_leaf_metadata_is_unioned_not_dropped() {
+        // Build two single-path qubes that share the exact same leaf coordinate.
+        // qube_a: root → dim=X(location=a)
+        // qube_b: root → dim=X(location=b)
+        // After append the leaf must carry location={a,b}.
+
+        let mut qube_a = Qube::new();
+        let root_a = qube_a.root();
+        let leaf_a =
+            qube_a.get_or_create_child("dim", root_a, Some(Coordinates::from_string("X"))).unwrap();
+        qube_a.set_metadata(leaf_a, "location", MetadataValues::single_string("a")).unwrap();
+
+        let mut qube_b = Qube::new();
+        let root_b = qube_b.root();
+        let leaf_b =
+            qube_b.get_or_create_child("dim", root_b, Some(Coordinates::from_string("X"))).unwrap();
+        qube_b.set_metadata(leaf_b, "location", MetadataValues::single_string("b")).unwrap();
+
+        qube_a.append(&mut qube_b);
+
+        // The merged leaf must carry BOTH location values.
+        let loc = qube_a
+            .get_metadata(leaf_a, "location")
+            .expect("location metadata must survive the merge");
+        assert!(
+            loc.contains_string("a"),
+            "location 'a' must be present after merge; got {:?}",
+            loc
+        );
+        assert!(
+            loc.contains_string("b"),
+            "location 'b' (from other) must not be dropped; got {:?}",
+            loc
+        );
+    }
 }
