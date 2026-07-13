@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "qubed"
-version = "0.4.4"
+dynamic = ["version"]
 description = "Python bindings for the qubed Rust crate"
 requires-python = ">=3.8"
 classifiers = [

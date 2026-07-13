@@ -49,6 +49,12 @@ impl Qube {
         datacubes
     }
 
+    /// Build a Qube from a single Datacube.
+    ///
+    /// If `order` is provided, dimensions are nested in that order. Any dimensions
+    /// not listed in `order` are appended in sorted (alphabetical) order for
+    /// deterministic tree structure. When `order` is `None`, all dimensions are
+    /// sorted alphabetically.
     pub fn from_datacube(datacube: &Datacube, order: Option<&[String]>) -> Self {
         let mut qube = Qube::new();
         let mut parent = qube.root();
@@ -64,13 +70,15 @@ impl Qube {
             }
         }
 
-        // Create remaining dimensions
-        for (dim, coords) in datacube.coordinates.iter() {
-            if qube.dimension(&dim).is_some() {
-                continue;
-            }
+        // Create remaining dimensions in sorted order for deterministic tree structure
+        let mut remaining: Vec<&String> =
+            datacube.coordinates.keys().filter(|dim| qube.dimension(dim).is_none()).collect();
+        remaining.sort();
+
+        for dim in remaining {
+            let coords = &datacube.coordinates[dim];
             parent = qube
-                .get_or_create_child(&dim, parent, Some(coords.clone()))
+                .get_or_create_child(dim, parent, Some(coords.clone()))
                 .expect("Failed to create dimension");
         }
 
@@ -130,5 +138,72 @@ impl Qube {
         //         break; // No more dimensions to process
         //     }
         // }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Coordinates;
+
+    fn dc(pairs: &[(&str, &str)]) -> Datacube {
+        let mut d = Datacube::new();
+        for &(k, v) in pairs {
+            d.add_coordinate(k, Coordinates::from_string(v));
+        }
+        d
+    }
+
+    /// Helper to extract the dimension ordering from a Qube's ASCII output.
+    /// Returns the dimensions in the order they appear top-to-bottom (root→leaf).
+    fn dimension_order(qube: &Qube) -> Vec<String> {
+        let ascii = qube.to_ascii();
+        let mut dims = Vec::new();
+        for line in ascii.lines() {
+            if let Some(eq_pos) = line.find('=') {
+                // Walk backward from '=' to find the start of the dim name
+                let before_eq = &line[..eq_pos];
+                let dim_start = before_eq
+                    .rfind(|c: char| !c.is_alphanumeric() && c != '_')
+                    .map(|i| i + 1)
+                    .unwrap_or(0);
+                let dim = &before_eq[dim_start..];
+                if !dim.is_empty() && !dims.contains(&dim.to_string()) {
+                    dims.push(dim.to_string());
+                }
+            }
+        }
+        dims
+    }
+
+    #[test]
+    fn from_datacube_with_explicit_order() {
+        let datacube = dc(&[("step", "0/6"), ("class", "od"), ("time", "0000")]);
+        let order: Vec<String> =
+            vec!["class", "time", "step"].into_iter().map(String::from).collect();
+        let qube = Qube::from_datacube(&datacube, Some(&order));
+
+        let dims = dimension_order(&qube);
+        assert_eq!(dims, vec!["class", "time", "step"]);
+    }
+
+    #[test]
+    fn from_datacube_no_order_falls_back_to_alphabetical() {
+        let datacube = dc(&[("step", "0/6"), ("class", "od"), ("time", "0000")]);
+        let qube = Qube::from_datacube(&datacube, None);
+
+        let dims = dimension_order(&qube);
+        assert_eq!(dims, vec!["class", "step", "time"]);
+    }
+
+    #[test]
+    fn from_datacube_partial_order_appends_remaining_alphabetically() {
+        let datacube = dc(&[("step", "0/6"), ("class", "od"), ("time", "0000"), ("param", "t")]);
+        // Only specify first two dims; step and param should be appended alphabetically
+        let order: Vec<String> = vec!["time", "class"].into_iter().map(String::from).collect();
+        let qube = Qube::from_datacube(&datacube, Some(&order));
+
+        let dims = dimension_order(&qube);
+        assert_eq!(dims, vec!["time", "class", "param", "step"]);
     }
 }

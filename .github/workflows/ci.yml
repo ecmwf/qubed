@@ -26,6 +26,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check workspace versions match
+        run: |
+          python3 - <<'EOF'
+          import re, sys
+
+          def workspace_version(path):
+              in_section = False
+              for line in open(path):
+                  if line.strip() == "[workspace.package]":
+                      in_section = True
+                  elif line.strip().startswith("[") and in_section:
+                      break
+                  elif in_section:
+                      m = re.match(r'\s*version\s*=\s*"([^"]+)"', line)
+                      if m:
+                          return m.group(1)
+              raise ValueError(f"No version found in {path}")
+
+          v1 = workspace_version("Cargo.toml")
+          v2 = workspace_version("qubed_meteo/Cargo.toml")
+          if v1 != v2:
+              print(f"Version mismatch: Cargo.toml={v1!r}  qubed_meteo/Cargo.toml={v2!r}", file=sys.stderr)
+              sys.exit(1)
+          print(f"Workspace versions match: {v1}")
+          EOF
+
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 

@@ -194,15 +194,14 @@ impl Qube {
         Ok(node_id)
     }
 
-    pub fn all_unique_dim_coords(&mut self) -> BTreeMap<String, Coordinates> {
-        // TODO
+    pub fn all_unique_dim_coords(&self) -> BTreeMap<String, Coordinates> {
         let mut map: BTreeMap<String, Coordinates> = BTreeMap::new();
 
         for (_id, node) in self.nodes.iter() {
             if let Some(dim_str) = self.dimension_str(&node.dim) {
                 let coords = node.coords.clone();
                 if coords.is_empty() {
-                    continue; // Skip empty coordinates
+                    continue; // Skip empty coordinates (incl. the virtual root node)
                 }
                 // if there is no entry in map for this dimension, just fill it in with coords, otherwise extend the current entry with coords
                 map.entry(dim_str.to_string())
@@ -211,6 +210,135 @@ impl Qube {
             }
         }
         map
+    }
+
+    /// Returns the set of all dimension names present anywhere in the Qube.
+    ///
+    /// This is the set of keys from [`all_unique_dim_coords`].
+    ///
+    /// # Examples
+    /// ```
+    /// use qubed::Qube;
+    /// let q = Qube::from_ascii("root\n└── class=od\n    └── param=1/2").unwrap();
+    /// let dims = q.dimensions();
+    /// assert!(dims.contains("class"));
+    /// assert!(dims.contains("param"));
+    /// assert!(!dims.contains("root"));
+    /// ```
+    pub fn dimensions(&self) -> HashSet<String> {
+        self.all_unique_dim_coords().into_keys().collect()
+    }
+
+    /// Returns the set of dimension names present in **every** leaf path (datacube).
+    ///
+    /// For a Qube with uniform depth this equals [`dimensions`].  For an
+    /// irregular Qube some branches may be missing a dimension; only those
+    /// that appear in *all* branches are returned.
+    ///
+    /// # Examples
+    /// ```
+    /// use qubed::Qube;
+    /// use qubed::Datacube;
+    /// use qubed::Coordinates;
+    ///
+    /// // Both datacubes share "param"; only one has "time".
+    /// let mut dc1 = Datacube::new();
+    /// dc1.add_coordinate("param", Coordinates::from_string("2t/tp"));
+    /// dc1.add_coordinate("time",  Coordinates::from_string("0/1/2"));
+    /// let mut qube = Qube::from_datacube(&dc1, Some(&["param".to_string(), "time".to_string()]));
+    ///
+    /// let mut dc2 = Datacube::new();
+    /// dc2.add_coordinate("param", Coordinates::from_string("msl"));
+    /// let mut other = Qube::from_datacube(&dc2, None);
+    ///
+    /// qube.append(&mut other);
+    ///
+    /// let common = qube.common_dimensions();
+    /// assert!(common.contains("param"));
+    /// assert!(!common.contains("time"));
+    /// ```
+    pub fn common_dimensions(&self) -> HashSet<String> {
+        let datacubes = self.to_datacubes();
+        if datacubes.is_empty() {
+            return HashSet::new();
+        }
+
+        let mut iter = datacubes.iter().map(|dc| {
+            dc.coordinates()
+                .iter()
+                .filter(|(_, v)| !v.is_empty()) // exclude the virtual root node
+                .map(|(k, _)| k.clone())
+                .collect::<HashSet<String>>()
+        });
+
+        let first = match iter.next() {
+            Some(s) => s,
+            None => return HashSet::new(),
+        };
+
+        iter.fold(first, |acc, keys| acc.intersection(&keys).cloned().collect())
+    }
+
+    /// Wraps the entire existing Qube tree under a new outer dimension.
+    ///
+    /// All current children of the root are re-parented to a new node that
+    /// has the given `key` and `values` as its dimension and coordinates.
+    /// The result is that `key` becomes the outermost dimension of the Qube.
+    ///
+    /// Calling `expand` multiple times nests the dimensions from the inside
+    /// out: each call wraps the *current* tree, so the last call produces
+    /// the outermost dimension.
+    ///
+    /// # Examples
+    /// ```
+    /// use qubed::{Qube, Coordinates};
+    ///
+    /// let mut q = Qube::from_ascii("root\n└── param=2t/tp\n    └── time=0/1/2").unwrap();
+    /// q.expand("ensemble", Coordinates::from_string("ens1/ens2")).unwrap();
+    ///
+    /// let dims = q.dimensions();
+    /// assert!(dims.contains("ensemble"));
+    /// assert!(dims.contains("param"));
+    /// assert!(dims.contains("time"));
+    /// ```
+    pub fn expand(&mut self, key: &str, values: Coordinates) -> Result<(), String> {
+        let root_id = self.root_id;
+
+        // 1. Clone root's current children before any mutation.
+        let old_root_children: BTreeMap<Dimension, TinyVec<NodeIdx, 4>> = self
+            .nodes
+            .get(root_id)
+            .ok_or_else(|| "Root node not found".to_string())?
+            .children
+            .clone();
+
+        // 2. Clear root's children so get_or_create_child starts with a clean slate.
+        if let Some(root) = self.nodes.get_mut(root_id) {
+            root.children.clear();
+            root.structural_hash.store(0, Ordering::Release);
+        }
+
+        // 3. Create the new dimension node as the sole child of root.
+        let new_node_id = self.get_or_create_child(key, root_id, Some(values))?;
+
+        // 4. Move the saved children into the new node.
+        if let Some(new_node) = self.nodes.get_mut(new_node_id) {
+            new_node.children = old_root_children.clone();
+        }
+
+        // 5. Fix parent pointers for the moved subtree roots.
+        for child_ids in old_root_children.values() {
+            for &child_id in child_ids.iter() {
+                if let Some(child) = self.nodes.get_mut(child_id) {
+                    child.parent = Some(new_node_id);
+                }
+            }
+        }
+
+        // 6. Invalidate cached structural hashes up to (and including) root.
+        self.invalidate_ancestors(new_node_id);
+
+        Ok(())
     }
 
     pub fn remove_node(&mut self, id: NodeIdx) -> Result<(), String> {
@@ -797,6 +925,99 @@ mod tests {
 
         let class1_node = qube.node(class1).unwrap();
         assert!(class1_node.children(qube.dimension("expver").unwrap()).is_some());
+    }
+
+    #[test]
+    fn test_dimensions_returns_dim_names() {
+        let q = Qube::from_ascii(
+            "root\n└── class=od\n    ├── expver=0001\n    │   └── param=1\n    └── expver=0002\n        └── param=2",
+        )
+        .unwrap();
+        let dims = q.dimensions();
+        assert!(dims.contains("class"));
+        assert!(dims.contains("expver"));
+        assert!(dims.contains("param"));
+        assert!(!dims.contains("root"), "root should not appear as a dimension");
+    }
+
+    #[test]
+    fn test_common_dimensions_uniform_depth() {
+        let q = Qube::from_ascii("root\n└── class=od\n    └── param=1/2").unwrap();
+        let common = q.common_dimensions();
+        assert!(common.contains("class"));
+        assert!(common.contains("param"));
+    }
+
+    #[test]
+    fn test_common_dimensions_irregular_depth() {
+        use crate::Datacube;
+        // Branch 1: param + time
+        let mut dc1 = Datacube::new();
+        dc1.add_coordinate("param", Coordinates::from_string("2t/tp"));
+        dc1.add_coordinate("time", Coordinates::from_string("0/1/2"));
+        let mut qube = Qube::from_datacube(&dc1, Some(&["param".to_string(), "time".to_string()]));
+
+        // Branch 2: only param
+        let mut dc2 = Datacube::new();
+        dc2.add_coordinate("param", Coordinates::from_string("msl"));
+        let mut other = Qube::from_datacube(&dc2, None);
+
+        qube.append(&mut other);
+
+        let common = qube.common_dimensions();
+        assert!(common.contains("param"), "'param' should be common");
+        assert!(!common.contains("time"), "'time' is absent in one branch");
+    }
+
+    #[test]
+    fn test_expand_wraps_tree_under_new_outer_dimension() {
+        let mut q = Qube::from_ascii("root\n└── param=2t/tp\n    └── time=0/1/2").unwrap();
+        q.expand("ensemble", Coordinates::from_string("ens1/ens2")).unwrap();
+
+        let dims = q.dimensions();
+        assert!(dims.contains("ensemble"));
+        assert!(dims.contains("param"));
+        assert!(dims.contains("time"));
+
+        let ascii = q.to_ascii();
+        assert!(ascii.contains("ensemble=ens1/ens2"), "new dimension should appear in ascii");
+    }
+
+    #[test]
+    fn test_expand_on_empty_qube() {
+        let mut q = Qube::new();
+        q.expand("ensemble", Coordinates::from_string("ens1/ens2")).unwrap();
+
+        let dims = q.dimensions();
+        assert!(dims.contains("ensemble"));
+    }
+
+    #[test]
+    fn test_expand_twice_nests_outermost_last() {
+        let mut q = Qube::from_ascii("root\n└── param=2t").unwrap();
+        q.expand("ensemble", Coordinates::from_string("ens1")).unwrap();
+        q.expand("member", Coordinates::from_string("m1/m2")).unwrap();
+
+        let ascii = q.to_ascii();
+        // "member" was added last so it must appear higher (earlier) in the tree
+        let member_pos = ascii.find("member").expect("member not found");
+        let ensemble_pos = ascii.find("ensemble").expect("ensemble not found");
+        let param_pos = ascii.find("param").expect("param not found");
+        assert!(member_pos < ensemble_pos, "member should be outer of ensemble");
+        assert!(ensemble_pos < param_pos, "ensemble should be outer of param");
+    }
+
+    #[test]
+    fn test_expand_preserves_original_coords() {
+        let mut q = Qube::from_ascii("root\n└── param=2t/tp\n    └── time=0/1/2").unwrap();
+        q.expand("ensemble", Coordinates::from_string("ens1/ens2")).unwrap();
+
+        let all = q.all_unique_dim_coords();
+        // Original coords must still be present
+        let param_str = all.get("param").unwrap().to_string();
+        assert!(param_str.contains("2t") && param_str.contains("tp"));
+        let ens_str = all.get("ensemble").unwrap().to_string();
+        assert!(ens_str.contains("ens1") && ens_str.contains("ens2"));
     }
 
     #[test]

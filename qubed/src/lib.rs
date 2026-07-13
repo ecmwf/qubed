@@ -1,6 +1,7 @@
 mod compress;
 mod coordinates;
 pub mod datacube;
+mod difference;
 mod merge;
 mod qube;
 pub mod select;

@@ -1,4 +1,4 @@
-from qubed import PyQube
+from qubed import Qube
 import qubed_meteo
 
 
@@ -11,7 +11,7 @@ def test_from_mars_list_py_produces_parseable_ascii() -> None:
     ascii_tree = qubed_meteo.from_mars_list_py(MARS_LIST_SAMPLE)
 
     # Parsing the adapter output through PyQube verifies end-to-end contract compatibility.
-    parsed = PyQube.from_ascii(ascii_tree)
+    parsed = Qube.from_ascii(ascii_tree)
     datacubes = parsed.to_datacubes()
 
     assert ascii_tree.startswith("root")

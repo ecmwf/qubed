@@ -48,6 +48,10 @@ impl Qube {
         for kids in parent.children_mut().values_mut() {
             kids.retain(|id| keep.contains(id));
         }
+        // Remove dimension entries whose child list became empty after pruning.
+        // Without this, BTreeMap::is_empty() would return false even when no
+        // real children remain, causing Qube::is_empty() to mis-report.
+        parent.children_mut().retain(|_, kids| !kids.is_empty());
     }
 
     /// Invalidates the cached structural hash of a node.

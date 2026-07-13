@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "qubed-meteo"
-version = "0.4.4"
+dynamic = ["version"]
 description = "Python bindings for meteorological adapters built on qubed"
 requires-python = ">=3.8"
 classifiers = [
