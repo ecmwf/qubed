@@ -245,33 +245,48 @@ impl Qube {
 }
 
 /// Pair each individual coordinate value of `coords` with the corresponding
-/// metadata value from `values`, following the same sorted-order convention as
+/// metadata value(s) from `values`, following the sorted-order convention of
 /// `PerCoordStrings` and `Strings`.
 ///
-/// Returns a `Vec<(single_coordinate, value_string)>`:
+/// Returns a `Vec<(single_coordinate, value_string)>`, with one entry per
+/// (coordinate, value) combination:
 ///
-/// - **Single metadata value** → `[(full coords, value)]` — no splitting needed.
+/// - **`PerCoordStrings`** → one pair per (coordinate, inner_string); a coordinate
+///   with multiple inner strings produces multiple pairs.
+/// - **Single metadata value** → `[(full coords, value)]`.
 /// - **N values == N enumerable coordinates** → one pair per coordinate.
-/// - **Mismatch or non-enumerable** → `(full coords, value)` for every value
-///   (conservative fallback: the whole coordinate range goes to every bucket).
+/// - **Mismatch / non-enumerable** → `(full coords, value)` for every value.
 fn pair_coords_with_metadata(
     coords: &crate::Coordinates,
     values: &crate::metadata::MetadataValues,
 ) -> Vec<(crate::Coordinates, String)> {
+    // PerCoordStrings: each coord slot has its own set of strings.
+    if let crate::metadata::MetadataValues::PerCoordStrings(per_coord) = values {
+        let singles = coords.split_into_singles();
+        if singles.len() == per_coord.len() {
+            let mut result = Vec::new();
+            for (coord, inner) in singles.into_iter().zip(per_coord.iter()) {
+                for val in inner {
+                    result.push((coord.clone(), val.clone()));
+                }
+            }
+            return result;
+        }
+        // Length mismatch fallback: all unique values paired with full coords.
+        let all_vals = values.as_string_vec();
+        return all_vals.into_iter().map(|v| (coords.clone(), v)).collect();
+    }
+
     let value_strings = values.as_string_vec();
 
     if value_strings.len() == 1 {
-        // Uniform: whole coordinate range belongs to one bucket.
         return vec![(coords.clone(), value_strings.into_iter().next().unwrap())];
     }
 
-    // Multiple values: attempt coordinate-level splitting.
     let singles = coords.split_into_singles();
     if singles.len() == value_strings.len() {
-        // Perfect 1-to-1 pairing in sorted order.
         singles.into_iter().zip(value_strings.into_iter()).collect()
     } else {
-        // Mismatch (e.g. non-enumerable RangeSet): add full coords to every bucket.
         value_strings.into_iter().map(|v| (coords.clone(), v)).collect()
     }
 }

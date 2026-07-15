@@ -1151,11 +1151,12 @@ impl Qube {
                             let dim_str = self.dimension_str(&n.dim).unwrap_or("");
                             if let Some(coord_val) = path.get(dim_str) {
                                 if let Some(idx) = n.coords.coord_index_of(coord_val) {
-                                    if let Some(resolved) = vec.get(idx) {
-                                        effective.values.insert(
-                                            k.clone(),
-                                            MetadataValues::single_string(resolved),
-                                        );
+                                    if let Some(inner) = vec.get(idx) {
+                                        let refs: Vec<&str> =
+                                            inner.iter().map(|s| s.as_str()).collect();
+                                        effective
+                                            .values
+                                            .insert(k.clone(), MetadataValues::from_strings(&refs));
                                     }
                                 }
                             }

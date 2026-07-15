@@ -110,21 +110,20 @@ impl Qube {
             } else {
                 // Values differ.  Try to produce a PerCoordStrings vector when:
                 //   1. Every group member has this key (no None),
-                //   2. Every value is a single-element Strings set (len==1),
+                //   2. Every value is a `Strings` set (any number of values),
                 //   3. Both the merged coords and every original coords set are
                 //      fully enumerable (no RangeSet / Mixed).
                 let can_use_per_coord = merged_enumerable
                     && orig_enumerable
                     && values.iter().all(|v| {
-                        v.as_ref().map_or(false, |mv| {
-                            mv.len() == 1 && matches!(mv, MetadataValues::Strings(_))
-                        })
+                        v.as_ref().map_or(false, |mv| matches!(mv, MetadataValues::Strings(_)))
                     });
 
                 if can_use_per_coord {
-                    // Build per-coord string vector aligned with merged sorted order.
-                    // Each merged coord belongs to exactly one group member; look it up.
-                    let per_coord: Vec<String> = merged_strings
+                    // Build per-coord string-set vector aligned with merged sorted order.
+                    // Each merged coord belongs to exactly one group member; look up that
+                    // member's full Strings set and store it as the inner Vec.
+                    let per_coord: Vec<Vec<String>> = merged_strings
                         .iter()
                         .map(|coord_str| {
                             original_coords
@@ -134,15 +133,18 @@ impl Qube {
                                     orig.iter_sorted_strings().iter().any(|s| s == coord_str)
                                 })
                                 .and_then(|(mi, _)| {
-                                    values.get(mi)?.as_ref().map(|mv| mv.as_string_vec()[0].clone())
+                                    values.get(mi)?.as_ref().map(|mv| {
+                                        let mut v = mv.as_string_vec();
+                                        v.sort();
+                                        v
+                                    })
                                 })
                                 .unwrap_or_default()
                         })
                         .collect();
 
-                    // Guard: every coord must have been resolved (no empty strings from
-                    // failed lookups — which would indicate overlapping coords in the group).
-                    if per_coord.iter().all(|s| !s.is_empty()) {
+                    // Guard: every coord must have resolved to a non-empty inner set.
+                    if per_coord.iter().all(|inner| !inner.is_empty()) {
                         meta_for_node.set(key.clone(), MetadataValues::PerCoordStrings(per_coord));
                         continue; // skip the union / meta_for_children path
                     }

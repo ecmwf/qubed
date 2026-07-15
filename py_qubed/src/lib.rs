@@ -776,11 +776,15 @@ fn metadata_values_to_pylist<'py>(
             Ok(lst)
         }
         MetadataValues::PerCoordStrings(vec) => {
-            let lst = PyList::empty(py);
-            for s in vec.iter() {
-                lst.append(s.as_str())?;
+            let outer = PyList::empty(py);
+            for inner in vec.iter() {
+                let inner_lst = PyList::empty(py);
+                for s in inner.iter() {
+                    inner_lst.append(s.as_str())?;
+                }
+                outer.append(inner_lst)?;
             }
-            Ok(lst)
+            Ok(outer)
         }
     }
 }

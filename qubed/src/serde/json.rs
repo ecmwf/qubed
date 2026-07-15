@@ -367,7 +367,10 @@ fn serialize_metadata_values(values: &MetadataValues) -> Value {
             Value::Object(m)
         }
         MetadataValues::PerCoordStrings(vec) => {
-            let arr: Vec<Value> = vec.iter().map(|v| Value::String(v.clone())).collect();
+            let arr: Vec<Value> = vec
+                .iter()
+                .map(|inner| Value::Array(inner.iter().map(|s| Value::String(s.clone())).collect()))
+                .collect();
             let mut m = Map::new();
             m.insert("per_coord_strings".to_string(), Value::Array(arr));
             Value::Object(m)
@@ -391,8 +394,17 @@ fn deserialize_metadata_values(val: &Value) -> Option<MetadataValues> {
         }
         Value::Object(vm) if vm.contains_key("per_coord_strings") => {
             let arr = vm.get("per_coord_strings")?.as_array()?;
-            let strings: Vec<String> =
-                arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+            let strings: Vec<Vec<String>> = arr
+                .iter()
+                .map(|entry| {
+                    entry
+                        .as_array()
+                        .map(|inner| {
+                            inner.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect()
+                        })
+                        .unwrap_or_default()
+                })
+                .collect();
             Some(MetadataValues::PerCoordStrings(strings))
         }
         _ => None,
