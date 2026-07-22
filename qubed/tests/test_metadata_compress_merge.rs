@@ -356,21 +356,29 @@ fn append_different_metadata_pushed_to_children() {
 
     qa.append(&mut qb);
 
-    // class=1 and class=2 are structurally merged into class=1/2; src differs →
-    // no src on merged node.
+    // class=1 and class=2 are structurally merged into class=[1,2].
+    // Because the two nodes carry different src values (A vs B), compress
+    // produces PerCoordStrings([["A"], ["B"]]) on the merged node rather than
+    // a flat Strings union.  Root must NOT carry any src metadata — the
+    // per-coordinate distinction is retained at the class level.
     let merged_class = find_child(&qa, root_a, "class", "1");
+    let src_on_merged = qa.get_metadata(merged_class, "src");
     assert!(
-        qa.get_metadata(merged_class, "src").is_none(),
-        "merged class node must not carry src (values A vs B differ)"
+        src_on_merged.is_some(),
+        "merged class node must carry PerCoordStrings for src (A vs B per coordinate)"
+    );
+    let src_meta = src_on_merged.unwrap();
+    assert!(
+        src_meta.is_per_coord_strings(),
+        "merged class node must carry PerCoordStrings, not a flat union; got {:?}",
+        src_meta
     );
 
-    // With Change 3 consolidation the union {A, B} bubbles all the way up to root.
-    let src_meta = qa
-        .get_metadata(root_a, "src")
-        .expect("src union should have consolidated to root after append");
-    assert_eq!(src_meta.len(), 2);
-    assert!(src_meta.contains_string("A"));
-    assert!(src_meta.contains_string("B"));
+    // Root must NOT carry src — the per-coord metadata stays at the class level.
+    assert!(
+        qa.get_metadata(root_a, "src").is_none(),
+        "root must not carry src after per-coord merge; per-coord info must stay on class node"
+    );
 }
 
 // ===========================================================================

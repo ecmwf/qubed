@@ -41,26 +41,24 @@ impl Qube {
             let self_is_leaf = self.node_ref(self_id).map_or(true, |n| n.children().is_empty());
 
             if self_is_leaf {
-                // Leaf node: push_metadata_to_leaves would be a no-op and the
-                // children loop below never runs, so other_meta would be silently
-                // dropped.  Union it directly onto self instead.
+                // Leaf node: merge_with handles it directly since there are no
+                // children to push into.
                 let merged = self_meta.merge_with(&other_meta);
                 *self.node_mut(self_id).unwrap().metadata_mut() = merged;
             } else {
-                self.push_metadata_to_leaves(self_id);
-                other.push_metadata_to_leaves(other_id);
-                // After pushing down, write the union back onto the intersection node
-                // ONLY when self originally carried some metadata.  If self was empty,
-                // the push above was a no-op for self and other's metadata has already
-                // been distributed to other's leaves; it will travel with those leaves
-                // when they are copied into self.  Writing the union onto an otherwise-empty
-                // self node creates a spurious ancestor entry that dedup would later treat
-                // as the canonical value, causing it to strip the correctly-placed metadata
-                // from the leaves (see `append_only_other_node_gets_other_metadata`).
-                if !self_meta.is_empty() {
-                    let merged = self_meta.merge_with(&other_meta);
-                    *self.node_mut(self_id).unwrap().metadata_mut() = merged;
-                }
+                // Non-leaf: push metadata ONE level down to direct children only.
+                // This lets the recursive node_merge calls propagate metadata
+                // further down as needed, and lets compress() create
+                // PerCoordStrings at the exact divergence level rather than
+                // collapsing all location values into a flat union at root.
+                // push_metadata_to_children clears the node's own metadata.
+                self.push_metadata_to_children(self_id);
+                other.push_metadata_to_children(other_id);
+                // Do NOT write the merged union back onto self_id here.
+                // Doing so causes every subsequent append to spread the
+                // accumulated union to all leaves via push_metadata_to_children,
+                // destroying per-coordinate provenance (e.g. extremes-dt
+                // appearing as both 'lumi' and 'mn5').
             }
         }
 
