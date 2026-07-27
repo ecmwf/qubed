@@ -36,6 +36,13 @@ _LUMI_JSON      = _REPO_ROOT / "lumi-location.json"
 _MN5_JSON       = _REPO_ROOT / "mn5-location.json"
 _LEONARDO_JSON  = _REPO_ROOT / "leonardo-location.json"
 
+_REQUIRED_FILES = [_LUMI_JSON, _MN5_JSON, _LEONARDO_JSON]
+if not all(p.exists() for p in _REQUIRED_FILES):
+    pytest.skip(
+        "example JSON files not present (lumi/mn5/leonardo-location.json) — skipping",
+        allow_module_level=True,
+    )
+
 
 @pytest.fixture(scope="module")
 def merged() -> Qube:
