@@ -54,14 +54,18 @@ impl Coordinates {
         let mut coords = Coordinates::Empty;
         let split: Vec<&str> = s.split('/').collect();
 
-        for part in split {
-            // Check for leading zeros to preserve formatting (e.g., "0001")
-            let has_leading_zero = part.len() > 1
-                && part.starts_with('0')
-                && part.chars().nth(1).map_or(false, |c| c.is_ascii_digit());
+        // When multiple values are present, ensure consistent typing:
+        // if all parse as integers but some have leading zeros, keep all as strings.
+        let all_int = split.iter().all(|p| p.parse::<i32>().is_ok());
+        let any_leading_zero = split.iter().any(|p| {
+            p.len() > 1
+                && p.starts_with('0')
+                && p.chars().nth(1).map_or(false, |c| c.is_ascii_digit())
+        });
+        let force_strings = all_int && any_leading_zero;
 
-            if has_leading_zero {
-                // Preserve as string to keep formatting
+        for part in split {
+            if force_strings {
                 coords.append(part.to_string());
             } else if let Ok(int_val) = part.parse::<i32>() {
                 coords.append(int_val);
@@ -83,17 +87,21 @@ impl Coordinates {
             Coordinates::Strings(strings) => strings.to_string(),
             Coordinates::Mixed(mixed) => {
                 let mut parts: Vec<String> = Vec::new();
-                if mixed.integers.len() > 0 {
-                    parts.push(mixed.integers.to_string());
+                let ints_str = mixed.integers.to_string();
+                if !ints_str.is_empty() {
+                    parts.push(ints_str);
                 }
-                if mixed.floats.len() > 0 {
-                    parts.push(mixed.floats.to_string());
+                let floats_str = mixed.floats.to_string();
+                if !floats_str.is_empty() {
+                    parts.push(floats_str);
                 }
-                if mixed.strings.len() > 0 {
-                    parts.push(mixed.strings.to_string());
+                let strings_str = mixed.strings.to_string();
+                if !strings_str.is_empty() {
+                    parts.push(strings_str);
                 }
-                if mixed.datetimes.len() > 0 {
-                    parts.push(mixed.datetimes.to_string());
+                let datetimes_str = mixed.datetimes.to_string();
+                if !datetimes_str.is_empty() {
+                    parts.push(datetimes_str);
                 }
                 parts.join("/")
             }
@@ -170,6 +178,17 @@ impl Coordinates {
         self
     }
 
+    fn type_name(&self) -> &'static str {
+        match self {
+            Coordinates::Empty => "Empty",
+            Coordinates::Integers(_) => "Integers",
+            Coordinates::Floats(_) => "Floats",
+            Coordinates::Strings(_) => "Strings",
+            Coordinates::DateTimes(_) => "DateTimes",
+            Coordinates::Mixed(_) => "Mixed",
+        }
+    }
+
     pub fn intersect(&self, other: &Coordinates) -> IntersectionResult<Coordinates> {
         match (self, other) {
             // Empty
@@ -187,86 +206,86 @@ impl Coordinates {
             (Coordinates::Integers(a), Coordinates::Integers(b)) => {
                 let r = a.intersect(b);
                 IntersectionResult {
-                    intersection: Coordinates::Integers(r.intersection),
-                    only_a: Coordinates::Integers(r.only_a),
-                    only_b: Coordinates::Integers(r.only_b),
-                }
-            }
-            (Coordinates::Strings(a), Coordinates::Strings(b)) => {
-                let r = a.intersect(b);
-                IntersectionResult {
-                    intersection: Coordinates::Strings(r.intersection),
-                    only_a: Coordinates::Strings(r.only_a),
-                    only_b: Coordinates::Strings(r.only_b),
+                    intersection: wrap_ints(r.intersection),
+                    only_a: wrap_ints(r.only_a),
+                    only_b: wrap_ints(r.only_b),
                 }
             }
             (Coordinates::Floats(a), Coordinates::Floats(b)) => {
                 let r = a.intersect(b);
                 IntersectionResult {
-                    intersection: Coordinates::Floats(r.intersection),
-                    only_a: Coordinates::Floats(r.only_a),
-                    only_b: Coordinates::Floats(r.only_b),
+                    intersection: wrap_floats(r.intersection),
+                    only_a: wrap_floats(r.only_a),
+                    only_b: wrap_floats(r.only_b),
                 }
             }
             (Coordinates::DateTimes(a), Coordinates::DateTimes(b)) => {
                 let r = a.intersect(b);
                 IntersectionResult {
-                    intersection: Coordinates::DateTimes(r.intersection),
-                    only_a: Coordinates::DateTimes(r.only_a),
-                    only_b: Coordinates::DateTimes(r.only_b),
+                    intersection: wrap_dts(r.intersection),
+                    only_a: wrap_dts(r.only_a),
+                    only_b: wrap_dts(r.only_b),
+                }
+            }
+            (Coordinates::Strings(a), Coordinates::Strings(b)) => {
+                let r = a.intersect(b);
+                IntersectionResult {
+                    intersection: wrap_strs(r.intersection),
+                    only_a: wrap_strs(r.only_a),
+                    only_b: wrap_strs(r.only_b),
                 }
             }
             // Mixed on the left
             (Coordinates::Mixed(mixed), Coordinates::Strings(b)) => {
                 let r = mixed.strings.intersect(b);
                 IntersectionResult {
-                    intersection: Coordinates::Strings(r.intersection),
+                    intersection: wrap_strs(r.intersection),
                     only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
                         integers: mixed.integers.clone(),
                         floats: mixed.floats.clone(),
                         strings: r.only_a,
                         datetimes: mixed.datetimes.clone(),
                     })),
-                    only_b: Coordinates::Strings(r.only_b),
+                    only_b: wrap_strs(r.only_b),
                 }
             }
             (Coordinates::Mixed(mixed), Coordinates::Integers(b)) => {
                 let r = mixed.integers.intersect(b);
                 IntersectionResult {
-                    intersection: Coordinates::Integers(r.intersection),
+                    intersection: wrap_ints(r.intersection),
                     only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
                         integers: r.only_a,
                         floats: mixed.floats.clone(),
                         strings: mixed.strings.clone(),
                         datetimes: mixed.datetimes.clone(),
                     })),
-                    only_b: Coordinates::Integers(r.only_b),
+                    only_b: wrap_ints(r.only_b),
                 }
             }
             (Coordinates::Mixed(mixed), Coordinates::Floats(b)) => {
                 let r = mixed.floats.intersect(b);
                 IntersectionResult {
-                    intersection: Coordinates::Floats(r.intersection),
+                    intersection: wrap_floats(r.intersection),
                     only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
                         integers: mixed.integers.clone(),
                         floats: r.only_a,
                         strings: mixed.strings.clone(),
                         datetimes: mixed.datetimes.clone(),
                     })),
-                    only_b: Coordinates::Floats(r.only_b),
+                    only_b: wrap_floats(r.only_b),
                 }
             }
             (Coordinates::Mixed(mixed), Coordinates::DateTimes(b)) => {
                 let r = mixed.datetimes.intersect(b);
                 IntersectionResult {
-                    intersection: Coordinates::DateTimes(r.intersection),
+                    intersection: wrap_dts(r.intersection),
                     only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
                         integers: mixed.integers.clone(),
                         floats: mixed.floats.clone(),
                         strings: mixed.strings.clone(),
                         datetimes: r.only_a,
                     })),
-                    only_b: Coordinates::DateTimes(r.only_b),
+                    only_b: wrap_dts(r.only_b),
                 }
             }
             (Coordinates::Mixed(a), Coordinates::Mixed(b)) => {
@@ -299,8 +318,8 @@ impl Coordinates {
             (Coordinates::Strings(a), Coordinates::Mixed(mixed)) => {
                 let r = a.intersect(&mixed.strings);
                 IntersectionResult {
-                    intersection: Coordinates::Strings(r.intersection),
-                    only_a: Coordinates::Strings(r.only_a),
+                    intersection: wrap_strs(r.intersection),
+                    only_a: wrap_strs(r.only_a),
                     only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
                         integers: mixed.integers.clone(),
                         floats: mixed.floats.clone(),
@@ -312,8 +331,8 @@ impl Coordinates {
             (Coordinates::Integers(a), Coordinates::Mixed(mixed)) => {
                 let r = a.intersect(&mixed.integers);
                 IntersectionResult {
-                    intersection: Coordinates::Integers(r.intersection),
-                    only_a: Coordinates::Integers(r.only_a),
+                    intersection: wrap_ints(r.intersection),
+                    only_a: wrap_ints(r.only_a),
                     only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
                         integers: r.only_b,
                         floats: mixed.floats.clone(),
@@ -325,8 +344,8 @@ impl Coordinates {
             (Coordinates::Floats(a), Coordinates::Mixed(mixed)) => {
                 let r = a.intersect(&mixed.floats);
                 IntersectionResult {
-                    intersection: Coordinates::Floats(r.intersection),
-                    only_a: Coordinates::Floats(r.only_a),
+                    intersection: wrap_floats(r.intersection),
+                    only_a: wrap_floats(r.only_a),
                     only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
                         integers: mixed.integers.clone(),
                         floats: r.only_b,
@@ -338,8 +357,8 @@ impl Coordinates {
             (Coordinates::DateTimes(a), Coordinates::Mixed(mixed)) => {
                 let r = a.intersect(&mixed.datetimes);
                 IntersectionResult {
-                    intersection: Coordinates::DateTimes(r.intersection),
-                    only_a: Coordinates::DateTimes(r.only_a),
+                    intersection: wrap_dts(r.intersection),
+                    only_a: wrap_dts(r.only_a),
                     only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
                         integers: mixed.integers.clone(),
                         floats: mixed.floats.clone(),
@@ -393,6 +412,22 @@ impl Default for Coordinates {
 }
 
 // ------------- Intersection ------------------
+
+fn wrap_ints(c: integers::IntegerCoordinates) -> Coordinates {
+    if c.len() == 0 { Coordinates::Empty } else { Coordinates::Integers(c) }
+}
+
+fn wrap_strs(c: strings::StringCoordinates) -> Coordinates {
+    if c.len() == 0 { Coordinates::Empty } else { Coordinates::Strings(c) }
+}
+
+fn wrap_dts(c: datetime::DateTimeCoordinates) -> Coordinates {
+    if c.len() == 0 { Coordinates::Empty } else { Coordinates::DateTimes(c) }
+}
+
+fn wrap_floats(c: floats::FloatCoordinates) -> Coordinates {
+    if c.len() == 0 { Coordinates::Empty } else { Coordinates::Floats(c) }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct IntersectionResult<T> {
@@ -745,5 +780,124 @@ impl Coordinates {
             Value::String(s) => Ok(Coordinates::from_string(s)),
             _ => Err("Unsupported coords JSON value".to_string()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ints(vals: &[i32]) -> Coordinates {
+        let mut c = Coordinates::Empty;
+        for &v in vals {
+            c.append(v);
+        }
+        c
+    }
+
+    fn strs(vals: &[&str]) -> Coordinates {
+        let mut c = Coordinates::Empty;
+        for &v in vals {
+            c.append(v.to_string());
+        }
+        c
+    }
+
+    // ---- Integers ∩ Integers ------------------------------------------------
+
+    #[test]
+    fn intersect_integers_overlapping() {
+        let result = ints(&[1, 2, 3]).intersect(&ints(&[2, 3, 4]));
+        assert_eq!(result.intersection, ints(&[2, 3]));
+        assert_eq!(result.only_a, ints(&[1]));
+        assert_eq!(result.only_b, ints(&[4]));
+    }
+
+    #[test]
+    fn intersect_integers_disjoint() {
+        let result = ints(&[1, 2]).intersect(&ints(&[3, 4]));
+        assert_eq!(result.intersection, Coordinates::Empty);
+        assert_eq!(result.only_a, ints(&[1, 2]));
+        assert_eq!(result.only_b, ints(&[3, 4]));
+    }
+
+    #[test]
+    fn intersect_integers_identical() {
+        let result = ints(&[5, 10]).intersect(&ints(&[5, 10]));
+        assert_eq!(result.intersection, ints(&[5, 10]));
+        assert_eq!(result.only_a, Coordinates::Empty);
+        assert_eq!(result.only_b, Coordinates::Empty);
+    }
+
+    // ---- Strings ∩ Strings --------------------------------------------------
+
+    #[test]
+    fn intersect_strings_overlapping() {
+        let result = strs(&["a", "b", "c"]).intersect(&strs(&["b", "c", "d"]));
+        assert_eq!(result.intersection, strs(&["b", "c"]));
+        assert_eq!(result.only_a, strs(&["a"]));
+        assert_eq!(result.only_b, strs(&["d"]));
+    }
+
+    #[test]
+    fn intersect_strings_disjoint() {
+        let result = strs(&["pf"]).intersect(&strs(&["fc"]));
+        assert_eq!(result.intersection, Coordinates::Empty);
+        assert_eq!(result.only_a, strs(&["pf"]));
+        assert_eq!(result.only_b, strs(&["fc"]));
+    }
+
+    #[test]
+    fn intersect_strings_identical() {
+        let result = strs(&["od"]).intersect(&strs(&["od"]));
+        assert_eq!(result.intersection, strs(&["od"]));
+        assert_eq!(result.only_a, Coordinates::Empty);
+        assert_eq!(result.only_b, Coordinates::Empty);
+    }
+
+    // ---- Empty cases --------------------------------------------------------
+
+    #[test]
+    fn intersect_empty_with_integers() {
+        let result = Coordinates::Empty.intersect(&ints(&[1, 2, 3]));
+        assert_eq!(result.intersection, Coordinates::Empty);
+        assert_eq!(result.only_a, Coordinates::Empty);
+        assert_eq!(result.only_b, ints(&[1, 2, 3]));
+    }
+
+    #[test]
+    fn intersect_integers_with_empty() {
+        let result = ints(&[1, 2, 3]).intersect(&Coordinates::Empty);
+        assert_eq!(result.intersection, Coordinates::Empty);
+        assert_eq!(result.only_a, ints(&[1, 2, 3]));
+        assert_eq!(result.only_b, Coordinates::Empty);
+    }
+
+    #[test]
+    fn intersect_empty_with_strings() {
+        let result = Coordinates::Empty.intersect(&strs(&["pf"]));
+        assert_eq!(result.intersection, Coordinates::Empty);
+        assert_eq!(result.only_a, Coordinates::Empty);
+        assert_eq!(result.only_b, strs(&["pf"]));
+    }
+
+    #[test]
+    fn intersect_empty_with_empty() {
+        let result = Coordinates::Empty.intersect(&Coordinates::Empty);
+        assert_eq!(result.intersection, Coordinates::Empty);
+        assert_eq!(result.only_a, Coordinates::Empty);
+        assert_eq!(result.only_b, Coordinates::Empty);
+    }
+
+    #[test]
+    fn from_string_splits_on_slash() {
+        let c = Coordinates::from_string("1/2/3");
+        assert_eq!(c, ints(&[1, 2, 3]));
+
+        let c = Coordinates::from_string("od/rd");
+        assert_eq!(c, strs(&["od", "rd"]));
+
+        let c = Coordinates::from_string("single");
+        assert_eq!(c, strs(&["single"]));
     }
 }
