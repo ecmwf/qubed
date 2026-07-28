@@ -298,7 +298,6 @@ fn pair_coords_with_metadata(
         value_strings.into_iter().map(|v| (coords.clone(), v)).collect()
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -363,5 +362,98 @@ mod tests {
 
         let dims = dimension_order(&qube);
         assert_eq!(dims, vec!["time", "class", "param", "step"]);
+    }
+
+    #[test]
+    fn union_preserves_time_split_when_subtrees_differ() {
+        // Simulates the ifs-ens case: two datacubes with time=0000/1200 vs time=0600/1800
+        // with DIFFERENT step ranges underneath. They must not merge because the subtrees
+        // are structurally different.
+        let order: Vec<String> = vec!["domain", "time", "type", "stream", "step", "param"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+
+        let dc_a = dc(&[
+            ("domain", "g"),
+            ("time", "0000/1200"),
+            ("type", "fc"),
+            ("stream", "oper"),
+            ("step", "0/6/12/150/156"),
+            ("param", "t/u"),
+        ]);
+        let dc_b = dc(&[
+            ("domain", "g"),
+            ("time", "0600/1800"),
+            ("type", "fc"),
+            ("stream", "oper"),
+            ("step", "0/6/12"),
+            ("param", "t/u"),
+        ]);
+
+        let mut qube_a = Qube::from_datacube(&dc_a, Some(&order));
+        let mut qube_b = Qube::from_datacube(&dc_b, Some(&order));
+        qube_a.append(&mut qube_b);
+
+        let ascii = qube_a.to_ascii();
+        // time=0000/1200 and time=0600/1800 should be separate branches because
+        // the step ranges below them differ
+        assert!(ascii.contains("time=0000/1200"), "time=0000/1200 branch missing:\n{ascii}");
+        assert!(ascii.contains("time=0600/1800"), "time=0600/1800 branch missing:\n{ascii}");
+    }
+
+    #[test]
+    fn union_merges_time_when_subtrees_identical() {
+        // When subtrees below different time values are structurally identical,
+        // compress correctly merges them into a single node.
+        let order: Vec<String> =
+            vec!["domain", "time", "type", "step", "param"].into_iter().map(String::from).collect();
+
+        let dc_a = dc(&[
+            ("domain", "g"),
+            ("time", "0000/1200"),
+            ("type", "fc"),
+            ("step", "0/6/12"),
+            ("param", "t/u"),
+        ]);
+        let dc_b = dc(&[
+            ("domain", "g"),
+            ("time", "0600/1800"),
+            ("type", "fc"),
+            ("step", "0/6/12"),
+            ("param", "t/u"),
+        ]);
+
+        let mut qube_a = Qube::from_datacube(&dc_a, Some(&order));
+        let mut qube_b = Qube::from_datacube(&dc_b, Some(&order));
+        qube_a.append(&mut qube_b);
+
+        let ascii = qube_a.to_ascii();
+        // All four times should be merged since subtrees are identical
+        assert!(
+            ascii.contains("time=0000/0600/1200/1800"),
+            "times should be merged when subtrees match:\n{ascii}"
+        );
+    }
+
+    #[test]
+    fn from_datacube_string_coords_not_parsed_as_integers() {
+        // "1200" as a string should stay as Strings, not become Integer(1200)
+        let mut datacube = Datacube::new();
+        let mut coords = Coordinates::new();
+        coords.append("1200".to_string());
+        datacube.add_coordinate("time", coords);
+
+        let mut coords2 = Coordinates::new();
+        coords2.append("0000".to_string());
+        coords2.append("1200".to_string());
+
+        // Extending with the same type (Strings) should work without creating Mixed
+        coords2.extend(&datacube.coordinates()["time"]);
+        assert!(
+            !matches!(coords2, Coordinates::Mixed(_)),
+            "extending Strings with Strings should not produce Mixed: {:?}",
+            coords2
+        );
     }
 }

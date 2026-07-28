@@ -5,22 +5,21 @@ lumi + leonardo (test_lumi_leonardo_* / merged_lumi_leonardo fixture):
   lumi-location.json and leonardo-location.json have exactly the same tree
   structure — only their root-level `location` metadata differs ('lumi' vs
   'leonardo').  After merging, every coordinate in the combined Qube resolves to
-  both locations via get_all_metadata (the trace-back function).
+  both locations via get_all_metadata (the trace-back function), because the
+  metadata consolidates all the way up to root.
 
 lumi + mn5 (merged fixture / all other tests):
   lumi-location.json and mn5-location.json share some coordinates but NOT all.
-  After merging the root still carries both locations, but individual paths that
-  belong to only one site resolve to a single location.  The uniform per-root
-  merge that happens for lumi+leonardo does NOT occur here because different
-  coordinates carry different metadata.
+  Because the trees differ, metadata is pushed to leaves rather than kept at
+  root.  Root and intermediate nodes that contain a mix of lumi-only and
+  mn5-only subtrees carry NO location after the merge.  Per-leaf resolution
+  is correct: lumi-only paths resolve to ['lumi'], mn5-only paths to ['mn5'].
 
 Key expectations after `lumi.append(mn5)`:
-  - root / class=d1                            → location contains both 'lumi' and 'mn5'
-  - dataset=climate-dt                         → location contains both 'lumi' and 'mn5'
+  - root / class=d1 / climate-dt               → no location (mixed subtree)
   - dataset=extremes-dt                        → location contains 'lumi' only
   - dataset=on-demand-extremes-dt              → location contains 'lumi' only
   - climate-dt / stream=clte / activity=cmip6  → location contains 'lumi' only
-  - climate-dt / stream=clte / activity=highresmip → location contains both
   - climate-dt / stream=clmn / activity=highresmip → location contains 'mn5' only
 """
 
@@ -57,25 +56,24 @@ def merged() -> Qube:
 # Top-level nodes
 # ---------------------------------------------------------------------------
 
-def test_root_has_both_locations(merged: Qube) -> None:
-    loc = merged.get_metadata({}, "location")
-    assert loc is not None, "root must have 'location' metadata"
-    assert "lumi" in loc, f"root location should contain 'lumi'; got {loc}"
-    assert "mn5" in loc,  f"root location should contain 'mn5'; got {loc}"
+def test_root_has_no_location(merged: Qube) -> None:
+    """After merging trees with different structure, root carries no location.
+    Metadata is pushed to leaves so root cannot hold a merged value."""
+    loc = merged.get_all_metadata({}).get("location", [])
+    assert loc == [], f"root must have no location after lumi+mn5 merge; got {loc}"
 
 
-def test_class_d1_has_both_locations(merged: Qube) -> None:
-    loc = merged.get_metadata({"class": "d1"}, "location")
-    assert loc is not None
-    assert "lumi" in loc
-    assert "mn5" in loc
+def test_class_d1_has_no_location(merged: Qube) -> None:
+    """class=d1 is a mixed subtree (contains both lumi-only and mn5-only nodes)
+    so it carries no location after the merge."""
+    loc = merged.get_all_metadata({"class": "d1"}).get("location", [])
+    assert loc == [], f"class=d1 must have no location after lumi+mn5 merge; got {loc}"
 
 
-def test_climate_dt_has_both_locations(merged: Qube) -> None:
-    loc = merged.get_metadata({"class": "d1", "dataset": "climate-dt"}, "location")
-    assert loc is not None
-    assert "lumi" in loc
-    assert "mn5" in loc
+def test_climate_dt_has_no_location(merged: Qube) -> None:
+    """climate-dt contains sub-streams from both sites so it carries no location."""
+    loc = merged.get_all_metadata({"class": "d1", "dataset": "climate-dt"}).get("location", [])
+    assert loc == [], f"climate-dt must have no location after lumi+mn5 merge; got {loc}"
 
 
 # ---------------------------------------------------------------------------
@@ -113,15 +111,13 @@ def test_clte_cmip6_is_lumi_only(merged: Qube) -> None:
     assert "mn5" not in loc, f"clte/cmip6 should NOT contain 'mn5'; got {loc}"
 
 
-def test_clte_highresmip_has_both_locations(merged: Qube) -> None:
-    """highresmip within clte exists in both LUMI and MN5."""
-    loc = merged.get_metadata(
+def test_clte_highresmip_has_no_location(merged: Qube) -> None:
+    """clte/highresmip exists in both lumi and mn5, but because the broader tree
+    differs, metadata is stored on leaves rather than this intermediate node."""
+    loc = merged.get_all_metadata(
         {"class": "d1", "dataset": "climate-dt", "stream": "clte", "activity": "highresmip"},
-        "location",
-    )
-    assert loc is not None
-    assert "lumi" in loc
-    assert "mn5" in loc
+    ).get("location", [])
+    assert loc == [], f"clte/highresmip intermediate node must have no location; got {loc}"
 
 
 # ---------------------------------------------------------------------------
@@ -144,21 +140,18 @@ def test_clmn_highresmip_is_mn5_only(merged: Qube) -> None:
 # ---------------------------------------------------------------------------
 
 def test_get_all_metadata_root(merged: Qube) -> None:
-    """get_all_metadata on root returns the same result as get_metadata."""
+    """After a lumi+mn5 merge, root carries no location because the trees differ
+    and metadata is stored at leaves, not hoisted to root."""
     all_meta = merged.get_all_metadata({})
-    assert "location" in all_meta, f"root get_all_metadata must contain 'location'; got {all_meta}"
-    loc = all_meta["location"]
-    assert "lumi" in loc
-    assert "mn5" in loc
+    loc = all_meta.get("location", [])
+    assert loc == [], f"root get_all_metadata must have no location after lumi+mn5 merge; got {loc}"
 
 
 def test_get_all_metadata_class_d1(merged: Qube) -> None:
-    """get_all_metadata at class=d1 must inherit root's location."""
+    """class=d1 carries no location — it is a mixed subtree."""
     all_meta = merged.get_all_metadata({"class": "d1"})
-    assert "location" in all_meta
-    loc = all_meta["location"]
-    assert "lumi" in loc
-    assert "mn5" in loc
+    loc = all_meta.get("location", [])
+    assert loc == [], f"class=d1 must have no location; got {loc}"
 
 
 def test_get_all_metadata_lumi_only_node(merged: Qube) -> None:
@@ -186,19 +179,10 @@ def test_get_all_metadata_mn5_only_node(merged: Qube) -> None:
 # ---------------------------------------------------------------------------
 
 def test_dedup_class_d1_has_no_direct_redundant_location(merged: Qube) -> None:
-    """After dedup, class=d1 should not carry a direct copy of [lumi,mn5] since root
-    already has it.  get_metadata still returns [lumi,mn5] via inheritance, but
-    the node's direct metadata should be empty (or differ from root's)."""
-    # get_metadata walks ancestors, so it always finds the value.
-    loc_via_get_metadata = merged.get_metadata({"class": "d1"}, "location")
-    assert loc_via_get_metadata is not None
-    assert "lumi" in loc_via_get_metadata
-    assert "mn5" in loc_via_get_metadata
-
-    # get_all_metadata (Rust-backed) should agree.
-    loc_via_all = merged.get_all_metadata({"class": "d1"}).get("location", [])
-    assert "lumi" in loc_via_all
-    assert "mn5" in loc_via_all
+    """class=d1 is a mixed subtree so it carries no location at all.
+    Lumi-only and mn5-only nodes below it still resolve correctly."""
+    loc = merged.get_all_metadata({"class": "d1"}).get("location", [])
+    assert loc == [], f"class=d1 must have no location in a mixed merge; got {loc}"
 
 
 def test_dedup_lumi_only_dataset_kept_distinct(merged: Qube) -> None:
@@ -238,15 +222,17 @@ def test_mn5_only_leaf_has_exactly_one_location(merged: Qube) -> None:
     assert loc[0] == "mn5", f"clmn/highresmip location must be 'mn5', got {loc}"
 
 
-def test_shared_leaf_has_exactly_two_locations(merged: Qube) -> None:
-    """A node present on both LUMI and MN5 must resolve to exactly two locations."""
+def test_shared_subtree_has_no_location_at_intermediate_node(merged: Qube) -> None:
+    """A subtree present in both lumi and mn5 (clte/highresmip) does not carry
+    location at the intermediate node level because its children disagree.
+    This matches the Rust leaf_provenance_lumi_mn5_merge test which checks at
+    param (leaf) level, not at intermediate nodes."""
     loc = merged.get_all_metadata(
         {"class": "d1", "dataset": "climate-dt", "stream": "clte", "activity": "highresmip"}
     ).get("location", [])
-    assert len(loc) == 2, (
-        f"clte/highresmip must have exactly 2 locations (lumi + mn5), got {len(loc)}: {loc}"
+    assert loc == [], (
+        f"clte/highresmip intermediate node must carry no location; got {loc}"
     )
-    assert set(loc) == {"lumi", "mn5"}, f"clte/highresmip must be {{lumi, mn5}}, got {loc}"
 
 
 def test_no_spurious_mn5_on_lumi_only_subtree(merged: Qube) -> None:
@@ -392,34 +378,30 @@ def test_lumi_leonardo_all_nodes_show_both_locations(merged_lumi_leonardo: Qube)
         )
 
 
-def test_lumi_mn5_root_shows_both_but_leaves_diverge(merged: Qube) -> None:
-    """Contrast with lumi+leonardo: the root of a lumi+mn5 merge does show both
-    locations, but — unlike lumi+leonardo — the metadata is NOT uniform across
-    all coordinates.  Paths that belong only to lumi resolve to ['lumi'], and
-    paths that belong only to mn5 resolve to ['mn5'].
-
-    This test asserts all three cases together to make the contrast explicit.
+def test_lumi_mn5_root_carries_no_location_leaves_diverge(merged: Qube) -> None:
+    """Contrast with lumi+leonardo: when lumi and mn5 have different tree structure
+    the root does NOT carry any location after the merge — metadata is pushed to
+    leaves.  Paths that belong only to lumi resolve to ['lumi'], and paths that
+    belong only to mn5 resolve to ['mn5'].
     """
-    # Root carries both (pushed down from the two independent subtrees).
+    # Root carries no location (metadata pushed to leaves).
     root_loc = merged.get_all_metadata({}).get("location", [])
-    assert set(root_loc) == {"lumi", "mn5"}, (
-        f"root must carry both locations; got {root_loc}"
+    assert root_loc == [], (
+        f"root must carry no location in a lumi+mn5 merge; got {root_loc}"
     )
 
-    # A coordinate exclusive to lumi must NOT inherit mn5.
+    # A coordinate exclusive to lumi must NOT contain mn5.
     lumi_only_loc = merged.get_all_metadata(
         {"class": "d1", "dataset": "extremes-dt"}
     ).get("location", [])
     assert lumi_only_loc == ["lumi"], (
-        f"lumi-only path must resolve to ['lumi'] only, not {lumi_only_loc}. "
-        "Unlike the lumi+leonardo merge, metadata is NOT uniform here."
+        f"lumi-only path must resolve to ['lumi'] only, not {lumi_only_loc}."
     )
 
-    # A coordinate exclusive to mn5 must NOT inherit lumi.
+    # A coordinate exclusive to mn5 must NOT contain lumi.
     mn5_only_loc = merged.get_all_metadata(
         {"class": "d1", "dataset": "climate-dt", "stream": "clmn", "activity": "highresmip"}
     ).get("location", [])
     assert mn5_only_loc == ["mn5"], (
-        f"mn5-only path must resolve to ['mn5'] only, not {mn5_only_loc}. "
-        "Unlike the lumi+leonardo merge, metadata is NOT uniform here."
+        f"mn5-only path must resolve to ['mn5'] only, not {mn5_only_loc}."
     )

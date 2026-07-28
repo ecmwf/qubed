@@ -2,7 +2,6 @@ use crate::metadata::Metadata;
 use crate::qube::Dimension;
 use crate::{NodeIdx, Qube};
 use std::collections::HashMap;
-use std::time::Instant;
 
 impl Qube {
     /// Build a mapping from `other`'s dimension IDs to `self`'s dimension IDs
@@ -303,5 +302,56 @@ impl Qube {
         // Final compression after all unions are complete
         self.compress();
         self.deduplicate_metadata();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Coordinates;
+    use crate::datacube::Datacube;
+
+    fn dc(pairs: &[(&str, &str)]) -> Datacube {
+        let mut d = Datacube::new();
+        for &(k, v) in pairs {
+            d.add_coordinate(k, Coordinates::from_string(v));
+        }
+        d
+    }
+
+    /// Appending two Qubes whose dimensions were interned in a different order
+    /// must not cross-intersect coordinates from different dimension names.
+    /// Before the fix, the shared integer dimension ID caused e.g. `number` coords
+    /// to be intersected against `time` coords, producing a panic.
+    #[test]
+    fn append_qubes_with_different_dimension_interning_order() {
+        // First Qube: dimensions added in order a, b, c
+        let mut q1 = Qube::from_datacube(&dc(&[("a", "1"), ("b", "x"), ("c", "10")]), None);
+
+        // Second Qube: dimensions added in order c, b, a — interner assigns IDs in the opposite
+        // order, so `a` in q2 gets the same integer ID as `c` in q1.
+        let mut q2 = Qube::from_datacube(&dc(&[("c", "20"), ("b", "y"), ("a", "2")]), None);
+
+        // Must not panic.
+        q1.append(&mut q2);
+
+        let ascii = q1.to_ascii();
+        assert!(ascii.contains("a=1") || ascii.contains("a=2"), "a values lost: {ascii}");
+        assert!(ascii.contains("b=x") || ascii.contains("b=y"), "b values lost: {ascii}");
+        assert!(ascii.contains("c=10") || ascii.contains("c=20"), "c values lost: {ascii}");
+    }
+
+    #[test]
+    fn append_qubes_all_shared_dimensions_merged() {
+        let mut q1 = Qube::from_datacube(&dc(&[("class", "od"), ("step", "0/6/12")]), None);
+        let mut q2 = Qube::from_datacube(&dc(&[("class", "od"), ("step", "18/24")]), None);
+
+        q1.append(&mut q2);
+
+        let coords = q1.all_unique_dim_coords();
+        let steps: std::collections::BTreeSet<String> =
+            coords["step"].to_string().split('/').map(|s| s.to_owned()).collect();
+
+        assert_eq!(steps, ["0", "12", "18", "24", "6"].iter().map(|s| s.to_string()).collect());
     }
 }
