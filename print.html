@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-79503dd7.js";
+            window.path_to_searchindex_js = "searchindex-5f0c7d41.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-78e66672.js"></script>
@@ -1210,8 +1210,8 @@ else
 </code></pre>
 <p>This ensures values like <code>"0001"</code> or <code>"0042"</code> round-trip correctly through serialization, while plain numbers like <code>"1"</code> or <code>"42"</code> are stored as integers.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="py_qubed--python-bindings"><a class="header" href="#py_qubed--python-bindings">py_qubed — Python Bindings</a></h1>
-<p>The <code>py_qubed</code> package exposes the core <code>qubed</code> Rust library to Python via PyO3. It provides the <code>Qube</code> class (importable as <code>qubed.Qube</code>) for building, manipulating, and serializing Qubes from Python.</p>
+<h1 id="py_qubed--python-bindings"><a class="header" href="#py_qubed--python-bindings">py_qubed – Python Bindings</a></h1>
+<p>The <code>py_qubed</code> package exposes the core <code>qubed</code> Rust library to Python via PyO3. It provides the <code>Qube</code> class (importable as <code>qubed.Qube</code>) for building, manipulating, and serialising Qubes from Python.</p>
 <h2 id="installation"><a class="header" href="#installation">Installation</a></h2>
 <pre><code class="language-bash">cd py_qubed
 maturin develop --release
@@ -1226,6 +1226,11 @@ maturin develop --release
 <p>Create an empty Qube.</p>
 <pre><code class="language-python">q = Qube()
 </code></pre>
+<h4 id="qubeempty---qube"><a class="header" href="#qubeempty---qube"><code>Qube.empty() -&gt; Qube</code></a></h4>
+<p>Alias for <code>Qube()</code> – creates an empty Qube.</p>
+<pre><code class="language-python">q = Qube.empty()
+assert q.is_empty()
+</code></pre>
 <h4 id="qubefrom_asciitext-str---qube"><a class="header" href="#qubefrom_asciitext-str---qube"><code>Qube.from_ascii(text: str) -&gt; Qube</code></a></h4>
 <p>Parse an ASCII tree representation:</p>
 <pre><code class="language-python">q = Qube.from_ascii("""root
@@ -1235,9 +1240,9 @@ maturin develop --release
     ├── expver=0001, param=1/2/3
     └── expver=0002, param=1/2""")
 </code></pre>
-<h4 id="qubefrom_datacubedatacube-dictstr-str-order-liststr--none--none---qube"><a class="header" href="#qubefrom_datacubedatacube-dictstr-str-order-liststr--none--none---qube"><code>Qube.from_datacube(datacube: dict[str, str], order: list[str] | None = None) -&gt; Qube</code></a></h4>
-<p>Build a Qube from a flat datacube dictionary. Each key is a dimension name and each value is a coordinate string (use <code>/</code> to specify multiple values for a dimension, e.g. <code>"1/2/3"</code>).</p>
-<p>The optional <code>order</code> list controls the nesting order of dimensions in the resulting tree — dimensions listed first become shallower levels. Any dimensions not in <code>order</code> are appended at deeper levels in an unspecified order. When <code>order</code> is <code>None</code>, all dimension ordering is unspecified.</p>
+<h4 id="qubefrom_datacubedatacube-dict-order-liststr--none--none---qube"><a class="header" href="#qubefrom_datacubedatacube-dict-order-liststr--none--none---qube"><code>Qube.from_datacube(datacube: dict, order: list[str] | None = None) -&gt; Qube</code></a></h4>
+<p>Build a Qube from a flat datacube dictionary. Each key is a dimension name and each value is a coordinate string (use <code>/</code> to specify multiple values for a dimension, e.g. <code>"1/2/3"</code>), an integer, a float, or a list of values.</p>
+<p>The optional <code>order</code> list controls the nesting order of dimensions in the resulting tree – dimensions listed first become shallower levels. Any dimensions not in <code>order</code> are appended at deeper levels in sorted order. When <code>order</code> is <code>None</code>, all dimensions are sorted alphabetically.</p>
 <p>This is the inverse of <code>to_datacubes()</code>: a single dict from that list can be passed back here to reconstruct a single-branch Qube.</p>
 <pre><code class="language-python"># Single identifier
 q = Qube.from_datacube({"class": "od", "expver": "0001", "param": "1"}, ["class", "expver", "param"])
@@ -1250,22 +1255,32 @@ print(q)
 # Multiple values on a dimension
 q = Qube.from_datacube({"class": "od", "param": "1/2/3"}, ["class", "param"])
 print(q.all_unique_dim_coords())
-# {'class': ['od'], 'param': ['1', '2', '3']}
+# {'class': ['od'], 'param': [1, 2, 3]}
 
 # Roundtrip from to_datacubes
 original = Qube.from_ascii("root\n└── class=od, expver=0001, param=1")
 for dc in original.to_datacubes():
     rebuilt = Qube.from_datacube(dc, ["class", "expver", "param"])
 </code></pre>
-<h4 id="qubefrom_arena_jsonjson_str-str---qube"><a class="header" href="#qubefrom_arena_jsonjson_str-str---qube"><code>Qube.from_arena_json(json_str: str) -&gt; Qube</code></a></h4>
-<p>Reconstruct a Qube from arena JSON (a flat BFS array produced by <code>to_arena_json</code>):</p>
+<h4 id="qubefrom_arena_jsonjson_str-str--dict---qube"><a class="header" href="#qubefrom_arena_jsonjson_str-str--dict---qube"><code>Qube.from_arena_json(json_str: str | dict) -&gt; Qube</code></a></h4>
+<p>Reconstruct a Qube from arena JSON (a flat BFS array produced by <code>to_arena_json</code>). Accepts either a JSON string or a Python dict/list.</p>
 <pre><code class="language-python">import json
 
 arena_str = q.to_arena_json()
 restored = Qube.from_arena_json(arena_str)
 </code></pre>
+<h4 id="qubefrom_jsoninput-str--dict---qube"><a class="header" href="#qubefrom_jsoninput-str--dict---qube"><code>Qube.from_json(input: str | dict) -&gt; Qube</code></a></h4>
+<p>Reconstruct a Qube from nested JSON (produced by <code>to_json</code>). Accepts either a JSON string or a Python dict.</p>
+<pre><code class="language-python">json_str = q.to_json()
+restored = Qube.from_json(json_str)
+</code></pre>
+<h4 id="qubefrom_tree_jsoninput-str--dict---qube"><a class="header" href="#qubefrom_tree_jsoninput-str--dict---qube"><code>Qube.from_tree_json(input: str | dict) -&gt; Qube</code></a></h4>
+<p>Reconstruct a Qube from tree JSON (produced by <code>to_tree_json</code>). Each node has <code>key</code>, <code>values</code>, <code>metadata</code>, and <code>children</code> fields.</p>
+<pre><code class="language-python">tree_str = q.to_tree_json()
+restored = Qube.from_tree_json(tree_str)
+</code></pre>
 <hr>
-<h3 id="serialization-2"><a class="header" href="#serialization-2">Serialization</a></h3>
+<h3 id="serialisation"><a class="header" href="#serialisation">Serialisation</a></h3>
 <h4 id="to_ascii---str"><a class="header" href="#to_ascii---str"><code>to_ascii() -&gt; str</code></a></h4>
 <p>Return the human-readable ASCII tree representation:</p>
 <pre><code class="language-python">print(q.to_ascii())
@@ -1285,12 +1300,24 @@ for node in arena:
     print(node["dim"], node["coords"])
 </code></pre>
 <p>Each record: <code>{ "dim": "class", "coords": "od/rd", "parent": 0, "children": [1, 2] }</code></p>
+<h4 id="to_json---str"><a class="header" href="#to_json---str"><code>to_json() -&gt; str</code></a></h4>
+<p>Return a nested JSON string where each node is a key-value pair using <code>"dim=coords"</code> keys:</p>
+<pre><code class="language-python">import json
+print(json.loads(q.to_json()))
+# {"class=od": {"expver=0001/0002": {"param=1/2": {}}}, ...}
+</code></pre>
+<h4 id="to_tree_json---str"><a class="header" href="#to_tree_json---str"><code>to_tree_json() -&gt; str</code></a></h4>
+<p>Return a tree-structured JSON string where each node has <code>key</code>, <code>values</code>, <code>metadata</code>, and <code>children</code> fields:</p>
+<pre><code class="language-python">import json
+tree = json.loads(q.to_tree_json())
+# {"key": "root", "values": {...}, "metadata": {}, "children": [...]}
+</code></pre>
 <h4 id="to_datacubes---listdict"><a class="header" href="#to_datacubes---listdict"><code>to_datacubes() -&gt; list[dict]</code></a></h4>
-<p>Decompose into a list of datacube dictionaries. Each dict maps dimension names to coordinate strings:</p>
+<p>Decompose into a list of datacube dictionaries. Each dict maps dimension names to coordinate values. Single-value coordinates are returned as scalars; multi-value coordinates as lists:</p>
 <pre><code class="language-python">for dc in q.to_datacubes():
     print(dc)
-# {'class': 'od', 'expver': '0001/0002', 'param': '1/2'}
-# {'class': 'rd', 'expver': '0001', 'param': '1/2/3'}
+# {'class': 'od', 'expver': '0001', 'param': 1}
+# {'class': 'rd', 'expver': '0001', 'param': 1}
 # ...
 </code></pre>
 <hr>
@@ -1308,7 +1335,7 @@ print(a)
 qubes = [Qube.from_ascii(f"root\n└── class=c{i}, param=1") for i in range(100)]
 base.append_many(qubes)
 </code></pre>
-<h4 id="append_datacubedatacube-dictstr-str-order-liststr--none--none-accept_existing_order-bool--false---none"><a class="header" href="#append_datacubedatacube-dictstr-str-order-liststr--none--none-accept_existing_order-bool--false---none"><code>append_datacube(datacube: dict[str, str], order: list[str] | None = None, accept_existing_order: bool = False) -&gt; None</code></a></h4>
+<h4 id="append_datacubedatacube-dict-order-liststr--none--none-accept_existing_order-bool--false---none"><a class="header" href="#append_datacubedatacube-dict-order-liststr--none--none-accept_existing_order-bool--false---none"><code>append_datacube(datacube: dict, order: list[str] | None = None, accept_existing_order: bool = False) -&gt; None</code></a></h4>
 <p>Merge a single flat datacube dictionary into this Qube in-place. This is a convenience wrapper around <code>from_datacube</code> + <code>append</code>: it constructs a temporary single-branch Qube from <code>datacube</code> and merges it, then compresses the result.</p>
 <p><code>order</code> controls the dimension nesting order of the new branch (see <code>from_datacube</code>). <code>accept_existing_order</code> is reserved for future use.</p>
 <pre><code class="language-python">q = Qube.from_ascii("""root
@@ -1318,16 +1345,17 @@ base.append_many(qubes)
 
 q.append_datacube({"class": "od", "expver": "0002", "param": "1"}, ["class", "expver", "param"])
 print(q.all_unique_dim_coords())
-# {'class': ['od'], 'expver': ['0001', '0002'], 'param': ['1']}
+# {'class': ['od'], 'expver': ['0001', '0002'], 'param': [1]}
 
 # Build a Qube incrementally from a list of datacube dicts
 q = Qube()
 for dc in [{"class": "od", "param": "1"}, {"class": "rd", "param": "2"}]:
     q.append_datacube(dc, ["class", "param"])
 print(q)
-# root
-# └── class=od/rd
-#     └── param=1/2  (structure may vary)
+</code></pre>
+<h4 id="__or__-pipe-operator"><a class="header" href="#__or__-pipe-operator"><code>__or__</code> (pipe operator)</a></h4>
+<p>Return a new merged Qube without mutating either operand:</p>
+<pre><code class="language-python">merged = qube_a | qube_b
 </code></pre>
 <hr>
 <h3 id="set-operations-2"><a class="header" href="#set-operations-2">Set Operations</a></h3>
@@ -1366,8 +1394,8 @@ result = a - b - c        # chaining removes identifiers from b and c
 <p>Compress the Qube in-place. Merges structurally identical sibling nodes, removes empty nodes, and deduplicates. Called automatically by <code>append</code> and <code>append_many</code>.</p>
 <pre><code class="language-python">q.compress()
 </code></pre>
-<h4 id="dropdims-liststr---none"><a class="header" href="#dropdims-liststr---none"><code>drop(dims: list[str]) -&gt; None</code></a></h4>
-<p>Remove one or more dimensions from the tree. Children of removed nodes are re-parented to the grandparent, preserving the rest of the structure. The result is automatically compressed.</p>
+<h4 id="dropdims-liststr---qube"><a class="header" href="#dropdims-liststr---qube"><code>drop(dims: list[str]) -&gt; Qube</code></a></h4>
+<p>Return a new Qube with one or more dimensions removed. Children of removed nodes are re-parented to the grandparent, preserving the rest of the structure. The result is automatically compressed. The original Qube is not modified.</p>
 <pre><code class="language-python">q = Qube.from_ascii("""root
 └── class=1
     ├── expver=0001
@@ -1375,14 +1403,14 @@ result = a - b - c        # chaining removes identifiers from b and c
     └── expver=0002
         └── param=1/2""")
 
-q.drop(["expver"])
-print(q)
+q2 = q.drop(["expver"])
+print(q2)
 # root
 # └── class=1
 #     └── param=1/2
 </code></pre>
-<h4 id="squeeze---none"><a class="header" href="#squeeze---none"><code>squeeze() -&gt; None</code></a></h4>
-<p>Drop all dimensions that have only a single coordinate value. Equivalent to calling <code>drop</code> on every dimension whose union of values has length 1.</p>
+<h4 id="squeeze---qube"><a class="header" href="#squeeze---qube"><code>squeeze() -&gt; Qube</code></a></h4>
+<p>Return a new Qube with all single-value dimensions removed. Equivalent to calling <code>drop</code> on every dimension whose union of values has length 1. The original Qube is not modified.</p>
 <pre><code class="language-python">q = Qube.from_ascii("""root
 └── class=1
     ├── expver=0001
@@ -1390,8 +1418,8 @@ print(q)
     └── expver=0002
         └── param=1/2""")
 
-q.squeeze()
-print(q)
+q2 = q.squeeze()
+print(q2)
 # root
 # └── expver=0001/0002
 #     └── param=1/2
@@ -1501,18 +1529,43 @@ subset = Qube.from_datacube({"param": "2t", "time": "0"}, ["param", "time"])
 assert q.contains(subset)                           # True
 </code></pre>
 <hr>
-<p>Return a dictionary mapping each dimension name to a list of all coordinate values that appear anywhere in the Qube.</p>
+<h4 id="is_empty---bool"><a class="header" href="#is_empty---bool"><code>is_empty() -&gt; bool</code></a></h4>
+<p>Return whether the Qube has no children (only a root node).</p>
+<pre><code class="language-python">q = Qube()
+assert q.is_empty()
+</code></pre>
+<h4 id="all_unique_dim_coords---dictstr-list"><a class="header" href="#all_unique_dim_coords---dictstr-list"><code>all_unique_dim_coords() -&gt; dict[str, list]</code></a></h4>
+<p>Return a dictionary mapping each dimension name to a list of all coordinate values that appear anywhere in the Qube. Values are always returned as lists, with native types preserved (integers, floats, strings).</p>
 <pre><code class="language-python">coords = q.all_unique_dim_coords()
-# {'class': ['1'], 'expver': ['0001', '0002'], 'param': ['1', '2']}
+# {'class': [1], 'expver': ['0001', '0002'], 'param': [1, 2]}
+</code></pre>
+<h4 id="axes---dictstr-list"><a class="header" href="#axes---dictstr-list"><code>axes() -&gt; dict[str, list]</code></a></h4>
+<p>Alias for <code>all_unique_dim_coords()</code>.</p>
+<pre><code class="language-python">coords = q.axes()
+</code></pre>
+<h4 id="dimensions---setstr-1"><a class="header" href="#dimensions---setstr-1"><code>dimensions() -&gt; set[str]</code></a></h4>
+<p>Return the set of dimension names present in the tree.</p>
+<pre><code class="language-python">dims = q.dimensions()
+# {'class', 'expver', 'param'}
 </code></pre>
 <h4 id="selectrequest-dict-mode-str--none-consume-bool--none---qube"><a class="header" href="#selectrequest-dict-mode-str--none-consume-bool--none---qube"><code>select(request: dict, mode: str | None, consume: bool | None) -&gt; Qube</code></a></h4>
 <p>Return a new Qube containing only the identifiers that satisfy the request. Each key in <code>request</code> is a dimension name; values may be a single string/int or a list.</p>
 <p><code>mode</code> controls behaviour for dimensions absent in a branch:</p>
 <ul>
-<li><code>None</code> / any other string — default: keep branches that have at least one matching value.</li>
-<li><code>"prune"</code> — additionally remove branches that are missing any requested dimension entirely.</li>
+<li><code>None</code> / any other string – default: keep branches that have at least one matching value.</li>
+<li><code>"prune"</code> – additionally remove branches that are missing any requested dimension entirely.</li>
 </ul>
 <pre><code class="language-python">selected = q.select({"class": [1], "param": [1, 2]}, None, None)
+</code></pre>
+<hr>
+<h3 id="copying"><a class="header" href="#copying">Copying</a></h3>
+<h4 id="clone_qube---qube"><a class="header" href="#clone_qube---qube"><code>clone_qube() -&gt; Qube</code></a></h4>
+<p>Return a deep copy of this Qube.</p>
+<h4 id="__copy__--__deepcopy__memo"><a class="header" href="#__copy__--__deepcopy__memo"><code>__copy__()</code> / <code>__deepcopy__(memo)</code></a></h4>
+<p>Support for <code>copy.copy(q)</code> and <code>copy.deepcopy(q)</code>. Both produce independent clones since the Qube is pure Rust data with no Python object references.</p>
+<pre><code class="language-python">import copy
+q2 = copy.copy(q)
+q3 = copy.deepcopy(q)
 </code></pre>
 <hr>
 <h3 id="special-methods"><a class="header" href="#special-methods">Special Methods</a></h3>
@@ -1523,8 +1576,11 @@ assert q.contains(subset)                           # True
 </thead>
 <tbody>
 <tr><td><code>__str__()</code></td><td>Same as <code>to_ascii()</code></td></tr>
-<tr><td><code>__repr__()</code></td><td>Returns <code>Qube(root_id=...)</code></td></tr>
+<tr><td><code>__repr__()</code></td><td>Same as <code>to_ascii()</code></td></tr>
 <tr><td><code>__len__()</code></td><td>Returns <code>datacube_count()</code> — the number of leaf identifiers</td></tr>
+<tr><td><code>__copy__()</code></td><td>Returns a clone (for <code>copy.copy</code>)</td></tr>
+<tr><td><code>__deepcopy__(memo)</code></td><td>Returns a clone (for <code>copy.deepcopy</code>)</td></tr>
+<tr><td><code>__or__(other)</code></td><td>Returns a new merged Qube (`a</td></tr>
 <tr><td><code>__sub__(other)</code></td><td>Same as <code>subtract(other)</code> — enables <code>a - b</code> syntax</td></tr>
 </tbody>
 </table>
@@ -1548,6 +1604,7 @@ q = Qube.from_ascii("""root
 # Inspect
 print(f"Identifiers: {len(q)}")
 print(q)
+print(q.dimensions())  # {'class', 'expver', 'param'}
 
 # Decompose to datacubes
 for dc in q.to_datacubes():
@@ -1558,10 +1615,18 @@ arena = q.to_arena_json()
 restored = Qube.from_arena_json(arena)
 assert str(q) == str(restored)
 
+# Roundtrip through nested JSON
+json_str = q.to_json()
+restored = Qube.from_json(json_str)
+assert str(q) == str(restored)
+
 # Merge two qubes
 other = Qube.from_ascii("root\n└── class=xd, expver=0001, param=99")
 q.append(other)
 print(q)
+
+# Or use the | operator for non-mutating merge
+merged = q | other
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="py_qubed_meteo--python-adapters"><a class="header" href="#py_qubed_meteo--python-adapters">py_qubed_meteo — Python Adapters</a></h1>
