@@ -445,14 +445,29 @@ impl Qube {
     /// Serialize the Qube into a recursive tree JSON layout where each node has:
     /// `{ "key": <dim>, "values": { "type": "enum", "dtype": <type>, "values": [...] }, "metadata": {}, "children": [...] }`
     pub fn to_tree_json(&self) -> Value {
-        serialize_tree_node(self, self.root())
+        let mut envelope = Map::new();
+        envelope.insert("version".to_string(), Value::String("1".to_string()));
+        envelope.insert("tree".to_string(), serialize_tree_node(self, self.root()));
+        Value::Object(envelope)
     }
 
     /// Reconstruct a Qube from a tree JSON layout created by `to_tree_json`.
     pub fn from_tree_json(value: Value) -> Result<Qube, String> {
+        let obj = value.as_object().ok_or("Expected JSON object for tree envelope")?;
+
+        let version = obj
+            .get("version")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing 'version' field in tree JSON")?;
+        if version != "1" {
+            return Err(format!("Unsupported tree JSON version: {version:?}"));
+        }
+
+        let root_value = obj.get("tree").ok_or("Missing 'tree' field in tree JSON")?;
+
         let mut qube = Qube::new();
         let root = qube.root();
-        parse_tree_node(&mut qube, root, &value)?;
+        parse_tree_node(&mut qube, root, root_value)?;
         Ok(qube)
     }
 }
@@ -659,5 +674,88 @@ mod json_tests {
         // Reconstruct and verify structure equality via to_json()
         let reconstructed = Qube::from_arena_json(arena).expect("from_arena_json");
         assert_eq!(qube.to_json(), reconstructed.to_json());
+    }
+
+    // ---------------- Tree JSON tests ----------------
+
+    fn simple_qube() -> Qube {
+        Qube::from_json(json!({
+            "class=od": {
+                "expver=0001/0002": {
+                    "param=1/2": {}
+                }
+            },
+            "class=rd": {
+                "expver=0001": { "param=1/2/3": {} }
+            }
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn test_tree_json_envelope_has_version_and_tree_keys() {
+        let qube = simple_qube();
+        let out = qube.to_tree_json();
+        assert!(out.is_object(), "output should be a JSON object");
+        assert_eq!(
+            out.get("version").and_then(|v| v.as_str()),
+            Some("1"),
+            "envelope must have version = '1'"
+        );
+        assert!(out.get("tree").is_some(), "envelope must have a 'tree' key");
+    }
+
+    #[test]
+    fn test_tree_json_root_node_shape() {
+        let qube = simple_qube();
+        let out = qube.to_tree_json();
+        let root = out.get("tree").unwrap();
+        assert_eq!(root.get("key").and_then(|v| v.as_str()), Some("root"));
+        assert!(root.get("values").is_some());
+        assert!(root.get("metadata").is_some());
+        let children = root.get("children").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(children.len(), 2, "root should have two children (od, rd)");
+    }
+
+    #[test]
+    fn test_tree_json_child_node_has_dtype() {
+        let qube = simple_qube();
+        let out = qube.to_tree_json();
+        let first_child = &out["tree"]["children"][0];
+        let values_obj = first_child.get("values").and_then(|v| v.as_object()).unwrap();
+        assert!(values_obj.contains_key("dtype"), "child values must include dtype");
+        assert_eq!(values_obj.get("type").and_then(|v| v.as_str()), Some("enum"));
+    }
+
+    #[test]
+    fn test_tree_json_roundtrip() {
+        let qube = simple_qube();
+        let encoded = qube.to_tree_json();
+        let decoded = Qube::from_tree_json(encoded).expect("from_tree_json");
+        assert_eq!(qube.to_json(), decoded.to_json());
+    }
+
+    #[test]
+    fn test_tree_json_rejects_unknown_version() {
+        let bad = json!({"version": "99", "tree": {}});
+        let result = Qube::from_tree_json(bad);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported tree JSON version"));
+    }
+
+    #[test]
+    fn test_tree_json_rejects_missing_version() {
+        let bad = json!({"tree": {}});
+        let result = Qube::from_tree_json(bad);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Missing 'version'"));
+    }
+
+    #[test]
+    fn test_tree_json_rejects_missing_tree_key() {
+        let bad = json!({"version": "1"});
+        let result = Qube::from_tree_json(bad);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Missing 'tree'"));
     }
 }
