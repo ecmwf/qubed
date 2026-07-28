@@ -1,3 +1,4 @@
+use crate::metadata::Metadata;
 use crate::qube::Dimension;
 use crate::{NodeIdx, Qube};
 use std::collections::HashMap;
@@ -5,7 +6,9 @@ use std::collections::HashMap;
 impl Qube {
     /// Build a mapping from `other`'s dimension IDs to `self`'s dimension IDs
     /// by interning all of `other`'s dimension names into `self`'s key_store.
-    /// This allows us to compare dimensions by ID rather than string in the merge loop.
+    /// This allows dimensions to be compared by ID rather than string during the
+    /// recursive merge, even when two Qubes have interned the same name in a
+    /// different order.
     fn build_dim_translation(&mut self, other: &Qube) -> HashMap<Dimension, Dimension> {
         let mut map = HashMap::new();
         for other_dim in other.all_dim_ids() {
@@ -25,9 +28,42 @@ impl Qube {
         other_id: NodeIdx,
         dim_map: &HashMap<Dimension, Dimension>,
     ) -> NodeIdx {
-        // Group children by dimension, using self's dimension IDs (via the translation map)
-        // so that same-named dimensions from both qubes are matched correctly regardless of
-        // interner ordering.
+        // Before descending into children, check whether the two nodes carry different
+        // metadata for the same key.  This can happen when the same metadata was
+        // consolidated to different levels in the two trees (e.g. class=1 in tree A has
+        // src=X consolidated from its only child, while tree B still has src=X sitting
+        // on that child).  Pushing down here normalises both trees to the same level
+        // before the structural merge so metadata is never silently lost or misattributed.
+        let self_meta = self.get_node_metadata(self_id).cloned().unwrap_or_default();
+        let other_meta = other.get_node_metadata(other_id).cloned().unwrap_or_default();
+        if self_meta != other_meta {
+            let self_is_leaf = self.node_ref(self_id).map_or(true, |n| n.children().is_empty());
+
+            if self_is_leaf {
+                // Leaf node: merge_with handles it directly since there are no
+                // children to push into.
+                let merged = self_meta.merge_with(&other_meta);
+                *self.node_mut(self_id).unwrap().metadata_mut() = merged;
+            } else {
+                // Non-leaf: push metadata ONE level down to direct children only.
+                // This lets the recursive node_merge calls propagate metadata
+                // further down as needed, and lets compress() create
+                // PerCoordStrings at the exact divergence level rather than
+                // collapsing all location values into a flat union at root.
+                // push_metadata_to_children clears the node's own metadata.
+                self.push_metadata_to_children(self_id);
+                other.push_metadata_to_children(other_id);
+                // Do NOT write the merged union back onto self_id here.
+                // Doing so causes every subsequent append to spread the
+                // accumulated union to all leaves via push_metadata_to_children,
+                // destroying per-coordinate provenance (e.g. extremes-dt
+                // appearing as both 'lumi' and 'mn5').
+            }
+        }
+
+        // Group the children of both nodes by dimension, translating other's dimension
+        // IDs into self's namespace so that same-named dimensions always end up in the
+        // same bucket regardless of interner ordering.
         let self_children = {
             let node = self.node_ref(self_id).unwrap();
             node.children().clone()
@@ -44,7 +80,7 @@ impl Qube {
             dim_child_map.entry(dim).or_default().0.extend(self_kids);
         }
         for (dim, other_kids) in other_children {
-            // Translate other's dimension ID to self's namespace
+            // Translate other's dimension ID to self's namespace.
             let self_dim = dim_map.get(&dim).copied().unwrap_or(dim);
             dim_child_map.entry(self_dim).or_default().1.extend(other_kids);
         }
@@ -145,6 +181,17 @@ impl Qube {
                         other.copy_branch(*other_node, new_node_b);
                     }
 
+                    // Seed the new intersection node in self with the metadata of the
+                    // node being split.  The recursive node_merge + compress that
+                    // follows will reconcile metadata from both sides.
+                    let self_meta: Metadata =
+                        self.get_node_metadata(*node).cloned().unwrap_or_default();
+                    *self.node_mut(new_node_a).unwrap().metadata_mut() = self_meta;
+
+                    let other_meta: Metadata =
+                        other.get_node_metadata(*other_node).cloned().unwrap_or_default();
+                    *other.node_mut(new_node_b).unwrap().metadata_mut() = other_meta;
+
                     let _nested_result = self.node_merge(other, new_node_a, new_node_b, dim_map);
                 }
 
@@ -154,13 +201,29 @@ impl Qube {
                     *actual_node.coords_mut() = only_self;
                 }
 
-                // If there are values only in other, create a new node for those values.
+                // If there are values only in other, create a new node for those values and
+                // copy the full subtree (including metadata) from other.
+                // Guard: only copy and assign metadata if the target node is genuinely new.
+                // If it already exists (because it was created by the intersection path of a
+                // different self×other pair earlier in this loop), copy_subtree + metadata
+                // assignment would clobber the already-merged subtree and metadata.
                 if only_other.len() != 0 {
+                    let is_new_b = self
+                        .check_if_new_child(&other_dim_str, parent_a, Some(only_other.clone()))
+                        .unwrap_or(true);
+
                     let new_node_only_b = self
                         .get_or_create_child(&other_dim_str, parent_a, Some(only_other.clone()))
                         .unwrap();
 
-                    self.copy_subtree(other, *other_node, new_node_only_b);
+                    if is_new_b {
+                        self.copy_subtree(other, *other_node, new_node_only_b);
+
+                        // Propagate the metadata from other's node to the new node.
+                        let other_meta: Metadata =
+                            other.get_node_metadata(*other_node).cloned().unwrap_or_default();
+                        *self.node_mut(new_node_only_b).unwrap().metadata_mut() = other_meta;
+                    }
 
                     let actual_other_node = other.node_mut(*other_node).unwrap();
                     *actual_other_node.coords_mut() = only_other;
@@ -180,14 +243,24 @@ impl Qube {
         // This method starts at the root of both Qubes and recursively merges their nodes.
         // After the union, the tree is compressed to remove duplicates and empty nodes.
 
-        // Fast-path: if self is empty, just take the content of other directly.
+        let self_root_id = self.root();
+        let other_root_id = other.root();
+
+        // Fast-path: if self is empty, copy_subtree is used instead of node_merge, so the
+        // per-level conflict detection in node_merge never fires.  Handle the root-level
+        // metadata mismatch here explicitly before the copy.
         if self.is_empty() {
-            let other_root = other.root();
-            let self_root = self.root();
-            self.copy_subtree(other, other_root, self_root);
+            let self_root_meta = self.get_node_metadata(self_root_id).cloned().unwrap_or_default();
+            let other_root_meta =
+                other.get_node_metadata(other_root_id).cloned().unwrap_or_default();
+            if self_root_meta != other_root_meta {
+                other.push_metadata_to_leaves(other_root_id);
+            }
+            self.copy_subtree(other, other_root_id, self_root_id);
             *other = Qube::new();
-            // Ensure append behavior is consistent: always compress after merging.
+            // Ensure append behavior is consistent: always compress and dedup after merging.
             self.compress();
+            self.deduplicate_metadata();
             return;
         }
 
@@ -195,10 +268,11 @@ impl Qube {
         // compare dimensions by ID rather than string throughout the recursive merge.
         let dim_map = self.build_dim_translation(other);
 
-        let self_root_id = self.root();
-        let other_root_id = other.root();
+        // General path: node_merge recurses through the tree and pushes metadata at every
+        // level where the two sides disagree, so no explicit push is needed here.
         self.node_merge(other, self_root_id, other_root_id, &dim_map);
         self.compress();
+        self.deduplicate_metadata();
         // Clear the other Qube
         *other = Qube::new();
     }
@@ -212,6 +286,9 @@ impl Qube {
 
             let self_root_id = self.root();
             let other_root_id = other.root();
+
+            // Build per-pair translation map so dimension IDs are correctly matched.
+            let dim_map = self.build_dim_translation(other);
 
             // Perform the union with the current Qube
             self.node_merge(other, self_root_id, other_root_id, &dim_map);
@@ -227,6 +304,7 @@ impl Qube {
         }
         // Final compression after all unions are complete
         self.compress();
+        self.deduplicate_metadata();
     }
 }
 

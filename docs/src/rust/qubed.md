@@ -66,6 +66,7 @@ let q = Qube::from_json(json!({
 | `append_datacube` | `fn append_datacube(&mut self, dc: Datacube, order: Option<&[String]>, accept_existing_order: bool)` | Append a single Datacube |
 | `drop` | `fn drop<I>(&mut self, to_drop: I) -> Result<(), String>` | Remove one or more dimensions, re-parenting their children, then compress |
 | `squeeze` | `fn squeeze(&mut self) -> Result<(), String>` | Drop every dimension whose union of values has length 1 |
+| `expand` | `fn expand(&mut self, key: &str, values: Coordinates) -> Result<(), String>` | Wrap the entire tree under a new outer dimension |
 
 **Example — building programmatically:**
 ```rust
@@ -114,6 +115,44 @@ let mut q = Qube::from_ascii(r#"root
 
 q.squeeze().unwrap();
 // class=1 is the only value for that dimension, so it is dropped
+```
+
+**Example — expand:**
+```rust
+use qubed::{Qube, Coordinates};
+
+let mut q = Qube::from_ascii("root\n└── param=2t/tp\n    └── time=0/1/2").unwrap();
+q.expand("ensemble", Coordinates::from_string("ens1/ens2")).unwrap();
+
+// Tree is now:
+// root
+// └── ensemble=ens1/ens2
+//     └── param=2t/tp
+//         └── time=0/1/2
+
+let dims = q.dimensions();
+assert!(dims.contains("ensemble"));
+assert!(dims.contains("param"));
+assert!(dims.contains("time"));
+```
+
+**Example — common_dimensions:**
+```rust
+use qubed::{Qube, Datacube, Coordinates};
+
+let mut dc1 = Datacube::new();
+dc1.add_coordinate("param", Coordinates::from_string("2t/tp"));
+dc1.add_coordinate("time",  Coordinates::from_string("0/1/2"));
+let mut q = Qube::from_datacube(&dc1, Some(&["param".to_string(), "time".to_string()]));
+
+let mut dc2 = Datacube::new();
+dc2.add_coordinate("param", Coordinates::from_string("msl"));
+let mut other = Qube::from_datacube(&dc2, None);
+q.append(&mut other);
+
+let common = q.common_dimensions();
+assert!(common.contains("param"));
+assert!(!common.contains("time")); // "time" absent in the second branch
 ```
 
 ### Compression
@@ -169,7 +208,9 @@ Remove branches that don't contain **all** of the specified dimensions.
 | `to_datacubes` | `fn to_datacubes(&self) -> Vec<Datacube>` | Decompose into leaf-path datacubes |
 | `datacube_count` | `fn datacube_count(&self) -> usize` | Count leaf identifiers without expansion |
 | `is_empty` | `fn is_empty(&self) -> bool` | True if root has no children and no coordinates |
-| `all_unique_dim_coords` | `fn all_unique_dim_coords(&mut self) -> BTreeMap<String, Coordinates>` | Union of all coordinates per dimension |
+| `all_unique_dim_coords` | `fn all_unique_dim_coords(&self) -> BTreeMap<String, Coordinates>` | Union of all coordinates per dimension |
+| `dimensions` | `fn dimensions(&self) -> HashSet<String>` | Set of all dimension names present in the Qube |
+| `common_dimensions` | `fn common_dimensions(&self) -> HashSet<String>` | Dimension names present in **every** leaf path |
 | `root` | `fn root(&self) -> NodeIdx` | Root node index |
 | `node` | `fn node(&self, id: NodeIdx) -> Option<NodeRef>` | Read-only reference to a node |
 | `dimension` | `fn dimension(&self, s: &str) -> Option<Dimension>` | Look up dimension by name |

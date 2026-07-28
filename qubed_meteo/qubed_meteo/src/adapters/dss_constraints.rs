@@ -13,16 +13,17 @@ impl FromDssConstraints for Qube {
         let order = vec![
             "origin".to_string(),
             "forecast_type".to_string(),
+            "product_type".to_string(),
             "hday".to_string(),
-            "day".to_string(),
             "hmonth".to_string(),
             "hyear".to_string(),
             "year".to_string(),
             "month".to_string(),
-            "time".to_string(),
             "leadtime_hour".to_string(),
             "level_type".to_string(),
+            "day".to_string(),
             "variable".to_string(),
+            "time".to_string(),
         ];
 
         // Parse the first datacube and initialize the main Qube

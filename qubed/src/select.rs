@@ -25,6 +25,16 @@ impl Qube {
         let root = self.root();
         let mut result = Qube::new();
 
+        // Propagate root-node metadata into the result root so that location
+        // metadata consolidated up to the source root is not silently dropped.
+        let root_meta = self.get_node_metadata(root).cloned().unwrap_or_default();
+        if !root_meta.is_empty() {
+            let result_root = result.root();
+            if let Some(node) = result.node_mut(result_root) {
+                *node.metadata_mut() = root_meta;
+            }
+        }
+
         let selection: HashMap<&str, Coordinates> =
             selection.iter().map(|(k, v)| (*k, v.clone().into())).collect();
 
@@ -95,6 +105,16 @@ impl Qube {
                         Some(intersection),
                     )?;
 
+                    // Propagate source-node metadata to the result node so that
+                    // location metadata (pushed down from root on append) is
+                    // preserved through the select.
+                    let child_meta = self.get_node_metadata(child_id).cloned().unwrap_or_default();
+                    if !child_meta.is_empty() {
+                        if let Some(node) = result.node_mut(new_child) {
+                            *node.metadata_mut() = child_meta;
+                        }
+                    }
+
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
                     self.select_recurse(selection, result, new_parents)?;
@@ -141,6 +161,14 @@ impl Qube {
                         parents.right,
                         Some(coordinates.clone()),
                     )?;
+
+                    // Propagate source-node metadata to the result node.
+                    let child_meta = self.get_node_metadata(child_id).cloned().unwrap_or_default();
+                    if !child_meta.is_empty() {
+                        if let Some(node) = result.node_mut(new_child) {
+                            *node.metadata_mut() = child_meta;
+                        }
+                    }
 
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
