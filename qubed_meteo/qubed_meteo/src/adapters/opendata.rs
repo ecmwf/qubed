@@ -36,9 +36,7 @@ fn should_exclude(record: &HashMap<String, String>) -> bool {
     }
     // rule 3: param in {z, sdor, slor} AND levtype = sfc
     if record.get("levtype").map_or(false, |l| l == "sfc")
-        && record
-            .get("param")
-            .map_or(false, |p| matches!(p.as_str(), "z" | "sdor" | "slor"))
+        && record.get("param").map_or(false, |p| matches!(p.as_str(), "z" | "sdor" | "slor"))
     {
         return true;
     }
@@ -155,8 +153,8 @@ fn process_index(
         if line.is_empty() {
             continue;
         }
-        let record: HashMap<String, serde_json::Value> =
-            serde_json::from_str(line).map_err(|e| format!("JSON parse error in {}: {}", url, e))?;
+        let record: HashMap<String, serde_json::Value> = serde_json::from_str(line)
+            .map_err(|e| format!("JSON parse error in {}: {}", url, e))?;
 
         // Flatten to string values; skip internal fields (starting with `_`).
         let flat: HashMap<String, String> = record
@@ -225,7 +223,8 @@ fn http_get(client: &reqwest::blocking::Client, url: &str) -> Result<String, Str
 fn extract_hrefs(body: &str, current_url: &str) -> Vec<String> {
     // Derive scheme://host from current_url.
     let origin = {
-        let without_scheme = current_url.trim_start_matches("https://").trim_start_matches("http://");
+        let without_scheme =
+            current_url.trim_start_matches("https://").trim_start_matches("http://");
         let host = without_scheme.split('/').next().unwrap_or("");
         if current_url.starts_with("https://") {
             format!("https://{}", host)
