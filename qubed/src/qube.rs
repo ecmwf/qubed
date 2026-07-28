@@ -1,12 +1,13 @@
 use lasso::{MiniSpur, Rodeo};
 use slotmap::{SlotMap, new_key_type};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
 use tiny_vec::TinyVec;
 
 use crate::coordinates::Coordinates;
+use crate::metadata::{Metadata, MetadataValues};
 
 new_key_type! {
     pub struct NodeIdx;
@@ -29,6 +30,7 @@ pub(crate) struct Node {
     coords: Coordinates,
     parent: Option<NodeIdx>,
     children: BTreeMap<Dimension, TinyVec<NodeIdx, 4>>,
+    metadata: Metadata,
 }
 
 #[derive(Debug)]
@@ -73,6 +75,18 @@ impl Node {
     pub(crate) fn parent(&self) -> &Option<NodeIdx> {
         &self.parent
     }
+
+    pub(crate) fn parent_mut(&mut self) -> &mut Option<NodeIdx> {
+        &mut self.parent
+    }
+
+    pub(crate) fn metadata(&self) -> &Metadata {
+        &self.metadata
+    }
+
+    pub(crate) fn metadata_mut(&mut self) -> &mut Metadata {
+        &mut self.metadata
+    }
 }
 
 impl Qube {
@@ -102,6 +116,7 @@ impl Qube {
             coords: Coordinates::Empty,
             parent: None,
             children: BTreeMap::new(),
+            metadata: Metadata::new(),
         });
 
         Qube { nodes, root_id, key_store }
@@ -180,6 +195,7 @@ impl Qube {
             coords,
             parent: Some(parent_id),
             children: BTreeMap::new(),
+            metadata: Metadata::new(),
         });
 
         // Add to parent's children
@@ -194,15 +210,14 @@ impl Qube {
         Ok(node_id)
     }
 
-    pub fn all_unique_dim_coords(&mut self) -> BTreeMap<String, Coordinates> {
-        // TODO
+    pub fn all_unique_dim_coords(&self) -> BTreeMap<String, Coordinates> {
         let mut map: BTreeMap<String, Coordinates> = BTreeMap::new();
 
         for (_id, node) in self.nodes.iter() {
             if let Some(dim_str) = self.dimension_str(&node.dim) {
                 let coords = node.coords.clone();
                 if coords.is_empty() {
-                    continue; // Skip empty coordinates
+                    continue; // Skip empty coordinates (incl. the virtual root node)
                 }
                 // if there is no entry in map for this dimension, just fill it in with coords, otherwise extend the current entry with coords
                 map.entry(dim_str.to_string())
@@ -211,6 +226,135 @@ impl Qube {
             }
         }
         map
+    }
+
+    /// Returns the set of all dimension names present anywhere in the Qube.
+    ///
+    /// This is the set of keys from [`all_unique_dim_coords`].
+    ///
+    /// # Examples
+    /// ```
+    /// use qubed::Qube;
+    /// let q = Qube::from_ascii("root\n└── class=od\n    └── param=1/2").unwrap();
+    /// let dims = q.dimensions();
+    /// assert!(dims.contains("class"));
+    /// assert!(dims.contains("param"));
+    /// assert!(!dims.contains("root"));
+    /// ```
+    pub fn dimensions(&self) -> HashSet<String> {
+        self.all_unique_dim_coords().into_keys().collect()
+    }
+
+    /// Returns the set of dimension names present in **every** leaf path (datacube).
+    ///
+    /// For a Qube with uniform depth this equals [`dimensions`].  For an
+    /// irregular Qube some branches may be missing a dimension; only those
+    /// that appear in *all* branches are returned.
+    ///
+    /// # Examples
+    /// ```
+    /// use qubed::Qube;
+    /// use qubed::Datacube;
+    /// use qubed::Coordinates;
+    ///
+    /// // Both datacubes share "param"; only one has "time".
+    /// let mut dc1 = Datacube::new();
+    /// dc1.add_coordinate("param", Coordinates::from_string("2t/tp"));
+    /// dc1.add_coordinate("time",  Coordinates::from_string("0/1/2"));
+    /// let mut qube = Qube::from_datacube(&dc1, Some(&["param".to_string(), "time".to_string()]));
+    ///
+    /// let mut dc2 = Datacube::new();
+    /// dc2.add_coordinate("param", Coordinates::from_string("msl"));
+    /// let mut other = Qube::from_datacube(&dc2, None);
+    ///
+    /// qube.append(&mut other);
+    ///
+    /// let common = qube.common_dimensions();
+    /// assert!(common.contains("param"));
+    /// assert!(!common.contains("time"));
+    /// ```
+    pub fn common_dimensions(&self) -> HashSet<String> {
+        let datacubes = self.to_datacubes();
+        if datacubes.is_empty() {
+            return HashSet::new();
+        }
+
+        let mut iter = datacubes.iter().map(|dc| {
+            dc.coordinates()
+                .iter()
+                .filter(|(_, v)| !v.is_empty()) // exclude the virtual root node
+                .map(|(k, _)| k.clone())
+                .collect::<HashSet<String>>()
+        });
+
+        let first = match iter.next() {
+            Some(s) => s,
+            None => return HashSet::new(),
+        };
+
+        iter.fold(first, |acc, keys| acc.intersection(&keys).cloned().collect())
+    }
+
+    /// Wraps the entire existing Qube tree under a new outer dimension.
+    ///
+    /// All current children of the root are re-parented to a new node that
+    /// has the given `key` and `values` as its dimension and coordinates.
+    /// The result is that `key` becomes the outermost dimension of the Qube.
+    ///
+    /// Calling `expand` multiple times nests the dimensions from the inside
+    /// out: each call wraps the *current* tree, so the last call produces
+    /// the outermost dimension.
+    ///
+    /// # Examples
+    /// ```
+    /// use qubed::{Qube, Coordinates};
+    ///
+    /// let mut q = Qube::from_ascii("root\n└── param=2t/tp\n    └── time=0/1/2").unwrap();
+    /// q.expand("ensemble", Coordinates::from_string("ens1/ens2")).unwrap();
+    ///
+    /// let dims = q.dimensions();
+    /// assert!(dims.contains("ensemble"));
+    /// assert!(dims.contains("param"));
+    /// assert!(dims.contains("time"));
+    /// ```
+    pub fn expand(&mut self, key: &str, values: Coordinates) -> Result<(), String> {
+        let root_id = self.root_id;
+
+        // 1. Clone root's current children before any mutation.
+        let old_root_children: BTreeMap<Dimension, TinyVec<NodeIdx, 4>> = self
+            .nodes
+            .get(root_id)
+            .ok_or_else(|| "Root node not found".to_string())?
+            .children
+            .clone();
+
+        // 2. Clear root's children so get_or_create_child starts with a clean slate.
+        if let Some(root) = self.nodes.get_mut(root_id) {
+            root.children.clear();
+            root.structural_hash.store(0, Ordering::Release);
+        }
+
+        // 3. Create the new dimension node as the sole child of root.
+        let new_node_id = self.get_or_create_child(key, root_id, Some(values))?;
+
+        // 4. Move the saved children into the new node.
+        if let Some(new_node) = self.nodes.get_mut(new_node_id) {
+            new_node.children = old_root_children.clone();
+        }
+
+        // 5. Fix parent pointers for the moved subtree roots.
+        for child_ids in old_root_children.values() {
+            for &child_id in child_ids.iter() {
+                if let Some(child) = self.nodes.get_mut(child_id) {
+                    child.parent = Some(new_node_id);
+                }
+            }
+        }
+
+        // 6. Invalidate cached structural hashes up to (and including) root.
+        self.invalidate_ancestors(new_node_id);
+
+        Ok(())
     }
 
     pub fn remove_node(&mut self, id: NodeIdx) -> Result<(), String> {
@@ -363,6 +507,21 @@ impl Qube {
         self.key_store.try_resolve(&dim.0)
     }
 
+    /// Intern a dimension name into this Qube's key store, returning its Dimension ID.
+    /// Used by the merge translation map to normalise dimension IDs across Qubes.
+    pub(crate) fn get_or_intern_dim(&mut self, name: &str) -> Dimension {
+        Dimension(self.key_store.get_or_intern(name))
+    }
+
+    /// Return all unique Dimension IDs used by nodes in this Qube.
+    pub(crate) fn all_dim_ids(&self) -> Vec<Dimension> {
+        let mut seen = std::collections::HashSet::new();
+        for (_id, node) in self.nodes.iter() {
+            seen.insert(node.dim);
+        }
+        seen.into_iter().collect()
+    }
+
     pub(crate) fn invalidate_ancestors(&self, id: NodeIdx) {
         if let Some(node) = self.nodes.get(id) {
             node.structural_hash.store(0, Ordering::Release);
@@ -437,7 +596,7 @@ impl Qube {
         hash
     }
 
-    pub(crate) fn leaf_node_ids_paths(&self) -> Vec<Vec<NodeIdx>> {
+    pub fn leaf_node_ids_paths(&self) -> Vec<Vec<NodeIdx>> {
         let mut paths = Vec::new();
 
         fn traverse(
@@ -487,21 +646,24 @@ impl Qube {
 }
 
 impl Qube {
-    /// Recursively copies the subtree from `other_node` in `other` to `new_node` in `self`.
+    /// Recursively copies the subtree from `other_node` in `other` to `new_node` in `self`,
+    /// including the metadata of every copied node.
     pub(crate) fn copy_subtree(&mut self, other: &Qube, other_node: NodeIdx, new_node: NodeIdx) {
         // Get the children of the `other_node`
         let other_children = other.node_ref(other_node).unwrap().children().clone();
 
         for (dim, child_ids) in other_children {
             for child_id in child_ids {
-                // Get the coordinates of the child node
+                // Clone both coordinates and metadata before any mutable borrow
                 let child_coords = other.node_ref(child_id).unwrap().coords().clone();
+                let child_metadata = other.node_ref(child_id).unwrap().metadata().clone();
 
-                // Create a new child node in `self` with the same dimension and coordinates
-                // let new_child = self.get_or_create_child(&self.dimension_str(&dim).unwrap(), new_node, Some(child_coords)).unwrap();
-                let dim_str = other.dimension_str(&dim).unwrap().to_owned(); // Immutable borrow ends here
+                let dim_str = other.dimension_str(&dim).unwrap().to_owned();
                 let new_child =
-                    self.get_or_create_child(&dim_str, new_node, Some(child_coords)).unwrap(); // Mutable borrow starts here
+                    self.get_or_create_child(&dim_str, new_node, Some(child_coords)).unwrap();
+
+                // Propagate metadata to the newly created child
+                *self.node_mut(new_child).unwrap().metadata_mut() = child_metadata;
 
                 // Recursively copy the subtree of the child
                 self.copy_subtree(other, child_id, new_child);
@@ -515,14 +677,18 @@ impl Qube {
 
         for (dim, child_ids) in source_children {
             for child_id in child_ids {
-                // Clone the coordinates of the child
+                // Clone coordinates and metadata before any mutable borrow
                 let child_coords = self.node_ref(child_id).unwrap().coords().clone();
+                let child_metadata = self.node_ref(child_id).unwrap().metadata().clone();
 
                 // Create a new child node in `target_node` with the same dimension and coordinates
                 let dim_str = self.dimension_str(&dim).unwrap().to_owned();
                 let new_child = self
                     .get_or_create_child(&dim_str, target_node, Some(child_coords))
                     .expect("Failed to create child node");
+
+                // Propagate metadata to the newly created child
+                *self.node_mut(new_child).unwrap().metadata_mut() = child_metadata;
 
                 // Recursively copy the subtree of the child
                 self.copy_branch(child_id, new_child);
@@ -640,6 +806,370 @@ impl<'a> NodeRef<'a> {
 
     pub fn coordinates_count(&self) -> usize {
         self.node.coords.len()
+    }
+
+    /// Get the metadata stored on this node.
+    pub fn metadata(&self) -> &Metadata {
+        &self.node.metadata
+    }
+
+    /// Get metadata values for a specific key on this node.
+    pub fn get_metadata(&self, key: &str) -> Option<&MetadataValues> {
+        self.node.metadata.get(key)
+    }
+}
+
+// -------------------------
+//  Metadata Operations
+// -------------------------
+
+impl Qube {
+    /// Set metadata on a node. The number of values must not exceed the node's coordinate count.
+    ///
+    /// After setting, attempts to consolidate the metadata upward: if all children of the
+    /// parent have a uniform (single-value) metadata set with the same value for this key,
+    /// the metadata is moved to the parent. This process repeats recursively.
+    pub fn set_metadata(
+        &mut self,
+        node_id: NodeIdx,
+        key: &str,
+        values: MetadataValues,
+    ) -> Result<(), String> {
+        let node =
+            self.nodes.get(node_id).ok_or_else(|| format!("Node {:?} not found", node_id))?;
+        let coord_count = node.coords.len();
+        let value_count = values.len();
+
+        if value_count > coord_count && coord_count > 0 {
+            return Err(format!(
+                "Metadata value count ({}) must not exceed coordinate count ({})",
+                value_count, coord_count
+            ));
+        }
+
+        let node = self.nodes.get_mut(node_id).unwrap();
+        node.metadata.set(key.to_string(), values);
+
+        // Attempt consolidation upward from this node's parent
+        if let Some(parent_id) = self.nodes.get(node_id).and_then(|n| n.parent) {
+            self.try_consolidate_metadata(parent_id, key);
+        }
+
+        Ok(())
+    }
+
+    /// Get metadata values for a specific key on a node.
+    pub fn get_metadata(&self, node_id: NodeIdx, key: &str) -> Option<&MetadataValues> {
+        self.nodes.get(node_id).and_then(|n| n.metadata.get(key))
+    }
+
+    /// Get the full metadata map for a node.
+    pub fn get_node_metadata(&self, node_id: NodeIdx) -> Option<&Metadata> {
+        self.nodes.get(node_id).map(|n| &n.metadata)
+    }
+
+    /// Try to consolidate metadata for a given key at `parent_id`.
+    ///
+    /// Checks all children of the parent: if every child has a uniform (size-1) metadata
+    /// set for `key` with the same value, removes it from all children and sets it on the parent.
+    /// Then recursively tries to consolidate from the parent's parent.
+    fn try_consolidate_metadata(&mut self, parent_id: NodeIdx, key: &str) {
+        // Collect all child node IDs under this parent
+        let all_children: Vec<NodeIdx> = match self.nodes.get(parent_id) {
+            Some(parent) => parent.children.values().flatten().copied().collect(),
+            None => return,
+        };
+
+        // Parent must have children to consolidate
+        if all_children.is_empty() {
+            return;
+        }
+
+        // Check if ALL children have metadata for this key and all share the same value.
+        // We allow multi-value (non-uniform) metadata to consolidate upward just like
+        // single-value metadata — this is required so that merged provenance sets like
+        // [lumi, mn5] bubble up to the highest ancestor whose entire subtree carries
+        // that combined provenance.
+        let first_child_meta =
+            match self.nodes.get(all_children[0]).and_then(|n| n.metadata.get(key)) {
+                Some(v) if !v.is_empty() => v.clone(),
+                _ => return,
+            };
+
+        // Never consolidate PerCoordStrings upward: the per-coord vector is aligned
+        // with the coordinates of the node it sits on.  Moving it to an ancestor would
+        // break that alignment.
+        if first_child_meta.is_per_coord_strings() {
+            return;
+        }
+
+        for &child_id in &all_children[1..] {
+            match self.nodes.get(child_id).and_then(|n| n.metadata.get(key)) {
+                Some(v) if !v.is_empty() && *v == first_child_meta => {}
+                _ => return,
+            }
+        }
+
+        // All children agree — consolidate: remove from all children, set on parent
+        for &child_id in &all_children {
+            if let Some(node) = self.nodes.get_mut(child_id) {
+                node.metadata.remove(key);
+            }
+        }
+
+        if let Some(parent) = self.nodes.get_mut(parent_id) {
+            parent.metadata.set(key.to_string(), first_child_meta);
+        }
+
+        // Recursively try to consolidate further up
+        if let Some(grandparent_id) = self.nodes.get(parent_id).and_then(|n| n.parent) {
+            self.try_consolidate_metadata(grandparent_id, key);
+        }
+    }
+
+    /// Pushes all metadata from `node_id` down to its direct children, merging with
+    /// any metadata already on each child, then clears the node's own metadata.
+    ///
+    /// This is the inverse of `try_consolidate_metadata`: it de-consolidates metadata
+    /// that has been bubbled up, ensuring the metadata travels with its subtree when
+    /// the subtree is copied during `append` / `append_many`.
+    ///
+    /// No-op if the node has no metadata or has no children (i.e. is a leaf).
+    /// Recursively collects all leaf descendants of `node_id` into `leaves`.
+    /// If `node_id` itself is a leaf (no children), it is added to `leaves`.
+    fn collect_leaf_descendants(&self, node_id: NodeIdx, leaves: &mut Vec<NodeIdx>) {
+        let children: Vec<NodeIdx> = self
+            .nodes
+            .get(node_id)
+            .map(|n| n.children.values().flatten().copied().collect())
+            .unwrap_or_default();
+
+        if children.is_empty() {
+            leaves.push(node_id);
+        } else {
+            for child_id in children {
+                self.collect_leaf_descendants(child_id, leaves);
+            }
+        }
+    }
+
+    /// Pushes all metadata from `node_id` down to every leaf descendant, merging
+    /// with any metadata already on each leaf, then clears the node's own metadata.
+    ///
+    /// This is the deep variant of `push_metadata_to_children`: while that method
+    /// only pushes one level, this one walks all the way to the leaves.  It is a
+    /// no-op if the node has no metadata or if the node is itself a leaf (metadata
+    /// stays on the leaf in that case).
+    ///
+    /// Used before compress so that every leaf carries its full provenance metadata,
+    /// allowing the leaf-level compress grouping (by `(dim, metadata)`) to correctly
+    /// distinguish leaves from different sources.
+    pub(crate) fn push_metadata_to_leaves(&mut self, node_id: NodeIdx) {
+        let node_metadata = match self.node_ref(node_id) {
+            Some(n) if !n.metadata().is_empty() => n.metadata().clone(),
+            _ => return,
+        };
+
+        let children: Vec<NodeIdx> = match self.node_ref(node_id) {
+            Some(n) => n.children().values().flat_map(|v| v.iter().copied()).collect(),
+            None => return,
+        };
+
+        if children.is_empty() {
+            return; // node_id is a leaf; metadata stays on it
+        }
+
+        // Collect all leaf descendants
+        let mut leaves = Vec::new();
+        for &child_id in &children {
+            self.collect_leaf_descendants(child_id, &mut leaves);
+        }
+
+        // Merge node_metadata into every leaf descendant
+        for leaf_id in leaves {
+            let existing = self.node_ref(leaf_id).unwrap().metadata().clone();
+            let new_meta = existing.merge_with(&node_metadata);
+            *self.node_mut(leaf_id).unwrap().metadata_mut() = new_meta;
+        }
+
+        // Clear this node's metadata (it has been distributed to all leaves)
+        if let Some(node) = self.node_mut(node_id) {
+            *node.metadata_mut() = Metadata::new();
+        }
+    }
+
+    pub(crate) fn push_metadata_to_children(&mut self, node_id: NodeIdx) {
+        let node_metadata = match self.node_ref(node_id) {
+            Some(n) if !n.metadata().is_empty() => n.metadata().clone(),
+            _ => return,
+        };
+
+        let children: Vec<NodeIdx> = match self.node_ref(node_id) {
+            Some(n) => n.children().values().flat_map(|v| v.iter().copied()).collect(),
+            None => return,
+        };
+
+        if children.is_empty() {
+            return;
+        }
+
+        for child_id in children {
+            let existing = self.node_ref(child_id).unwrap().metadata().clone();
+            let new_meta = existing.merge_with(&node_metadata);
+            *self.node_mut(child_id).unwrap().metadata_mut() = new_meta;
+        }
+
+        if let Some(node) = self.node_mut(node_id) {
+            *node.metadata_mut() = Metadata::new();
+        }
+    }
+
+    /// Run a full bottom-up metadata consolidation pass over the subtree rooted at `node_id`.
+    ///
+    /// Processes nodes deepest-first. At each node, for every metadata key present on
+    /// its children, attempts to consolidate that key upward if all children share the
+    /// same uniform value.
+    pub(crate) fn consolidate_all_metadata(&mut self, node_id: NodeIdx) {
+        let children: Vec<NodeIdx> = {
+            let node = self.node_ref(node_id).unwrap();
+            node.children().values().flat_map(|v| v.iter().copied()).collect()
+        };
+
+        for &child in &children {
+            self.consolidate_all_metadata(child);
+        }
+
+        // Collect all metadata keys present across children, then try to consolidate each
+        let child_keys: std::collections::HashSet<String> = children
+            .iter()
+            .flat_map(|&id| self.node_ref(id).unwrap().metadata().keys().cloned())
+            .collect();
+
+        for key in child_keys {
+            self.try_consolidate_metadata(node_id, &key);
+        }
+    }
+
+    /// Remove redundant metadata copies in a top-down pass.
+    ///
+    /// A metadata entry on a node is redundant when it has exactly the same value as
+    /// the nearest ancestor that already carries that key.  After this pass, every
+    /// node's direct metadata contains only entries that differ from the inherited
+    /// (ancestor) value, keeping the tree compact without losing any information.
+    ///
+    /// After deduplication, `resolve_all_metadata` (or the Python `get_node_metadata`
+    /// binding) still returns the correct effective value for every node by walking up
+    /// ancestors.
+    pub fn deduplicate_metadata(&mut self) {
+        let root = self.root_id;
+        self.dedup_recursive(root, &Metadata::new());
+    }
+
+    fn dedup_recursive(&mut self, node_id: NodeIdx, ancestor_effective: &Metadata) {
+        // Collect the current node's direct metadata keys so we can check them while
+        // holding no borrow on self.
+        let direct_keys: Vec<String> = self
+            .nodes
+            .get(node_id)
+            .map(|n| n.metadata.keys().cloned().collect())
+            .unwrap_or_default();
+
+        // Remove any key whose value exactly matches the inherited ancestor value.
+        for key in &direct_keys {
+            let node_val = self.nodes.get(node_id).and_then(|n| n.metadata.get(key)).cloned();
+            let ancestor_val = ancestor_effective.get(key);
+            if let (Some(nv), Some(av)) = (node_val, ancestor_val) {
+                if nv == *av {
+                    if let Some(n) = self.nodes.get_mut(node_id) {
+                        n.metadata.remove(key);
+                    }
+                }
+            }
+        }
+
+        // Build the effective metadata that children will inherit: start from
+        // ancestor_effective and override with whatever this node still holds explicitly.
+        let mut child_effective = ancestor_effective.clone();
+        if let Some(n) = self.nodes.get(node_id) {
+            for (k, v) in n.metadata.iter() {
+                child_effective.values.insert(k.clone(), v.clone());
+            }
+        }
+
+        // Recurse into all children.
+        let children: Vec<NodeIdx> = self
+            .nodes
+            .get(node_id)
+            .map(|n| n.children.values().flatten().copied().collect())
+            .unwrap_or_default();
+
+        for child in children {
+            self.dedup_recursive(child, &child_effective);
+        }
+    }
+
+    /// Compute the fully-resolved (inherited) metadata for `node_id`.
+    ///
+    /// Walks from the root down to `node_id`, accumulating metadata at each level.
+    /// When the same key appears at multiple levels, the most-specific (deepest /
+    /// child-closest) value wins.
+    ///
+    /// `path` maps dimension names to the specific coordinate value being queried
+    /// (e.g. `{"expver": "0001"}`).  When an ancestor node carries a `PerCoordStrings`
+    /// value for a key, the entry in `path` for that node's dimension is used to pick
+    /// the correct per-coord string.  Pass `&HashMap::new()` when no path is available
+    /// (any `PerCoordStrings` values will be silently omitted from the result).
+    ///
+    /// This is the same semantics as the Python `get_node_metadata` binding.
+    pub fn resolve_all_metadata(
+        &self,
+        node_id: NodeIdx,
+        path: &HashMap<String, String>,
+    ) -> Metadata {
+        // Build chain from node_id up to root, then reverse so root is first.
+        let mut chain = vec![node_id];
+        let mut current = node_id;
+        loop {
+            match self.nodes.get(current).and_then(|n| n.parent) {
+                Some(parent_id) => {
+                    chain.push(parent_id);
+                    current = parent_id;
+                }
+                None => break,
+            }
+        }
+        chain.reverse(); // root → node
+
+        // Fold root→node: later (child) values override earlier (ancestor) values.
+        let mut effective = Metadata::new();
+        for id in chain {
+            if let Some(n) = self.nodes.get(id) {
+                for (k, v) in n.metadata.iter() {
+                    match v {
+                        MetadataValues::PerCoordStrings(vec) => {
+                            // Resolve by looking up this node's dimension in `path`.
+                            let dim_str = self.dimension_str(&n.dim).unwrap_or("");
+                            if let Some(coord_val) = path.get(dim_str) {
+                                if let Some(idx) = n.coords.coord_index_of(coord_val) {
+                                    if let Some(inner) = vec.get(idx) {
+                                        let refs: Vec<&str> =
+                                            inner.iter().map(|s| s.as_str()).collect();
+                                        effective
+                                            .values
+                                            .insert(k.clone(), MetadataValues::from_strings(&refs));
+                                    }
+                                }
+                            }
+                            // If path doesn't contain this dim, omit the key.
+                        }
+                        _ => {
+                            effective.values.insert(k.clone(), v.clone());
+                        }
+                    }
+                }
+            }
+        }
+        effective
     }
 }
 
@@ -800,6 +1330,99 @@ mod tests {
     }
 
     #[test]
+    fn test_dimensions_returns_dim_names() {
+        let q = Qube::from_ascii(
+            "root\n└── class=od\n    ├── expver=0001\n    │   └── param=1\n    └── expver=0002\n        └── param=2",
+        )
+        .unwrap();
+        let dims = q.dimensions();
+        assert!(dims.contains("class"));
+        assert!(dims.contains("expver"));
+        assert!(dims.contains("param"));
+        assert!(!dims.contains("root"), "root should not appear as a dimension");
+    }
+
+    #[test]
+    fn test_common_dimensions_uniform_depth() {
+        let q = Qube::from_ascii("root\n└── class=od\n    └── param=1/2").unwrap();
+        let common = q.common_dimensions();
+        assert!(common.contains("class"));
+        assert!(common.contains("param"));
+    }
+
+    #[test]
+    fn test_common_dimensions_irregular_depth() {
+        use crate::Datacube;
+        // Branch 1: param + time
+        let mut dc1 = Datacube::new();
+        dc1.add_coordinate("param", Coordinates::from_string("2t/tp"));
+        dc1.add_coordinate("time", Coordinates::from_string("0/1/2"));
+        let mut qube = Qube::from_datacube(&dc1, Some(&["param".to_string(), "time".to_string()]));
+
+        // Branch 2: only param
+        let mut dc2 = Datacube::new();
+        dc2.add_coordinate("param", Coordinates::from_string("msl"));
+        let mut other = Qube::from_datacube(&dc2, None);
+
+        qube.append(&mut other);
+
+        let common = qube.common_dimensions();
+        assert!(common.contains("param"), "'param' should be common");
+        assert!(!common.contains("time"), "'time' is absent in one branch");
+    }
+
+    #[test]
+    fn test_expand_wraps_tree_under_new_outer_dimension() {
+        let mut q = Qube::from_ascii("root\n└── param=2t/tp\n    └── time=0/1/2").unwrap();
+        q.expand("ensemble", Coordinates::from_string("ens1/ens2")).unwrap();
+
+        let dims = q.dimensions();
+        assert!(dims.contains("ensemble"));
+        assert!(dims.contains("param"));
+        assert!(dims.contains("time"));
+
+        let ascii = q.to_ascii();
+        assert!(ascii.contains("ensemble=ens1/ens2"), "new dimension should appear in ascii");
+    }
+
+    #[test]
+    fn test_expand_on_empty_qube() {
+        let mut q = Qube::new();
+        q.expand("ensemble", Coordinates::from_string("ens1/ens2")).unwrap();
+
+        let dims = q.dimensions();
+        assert!(dims.contains("ensemble"));
+    }
+
+    #[test]
+    fn test_expand_twice_nests_outermost_last() {
+        let mut q = Qube::from_ascii("root\n└── param=2t").unwrap();
+        q.expand("ensemble", Coordinates::from_string("ens1")).unwrap();
+        q.expand("member", Coordinates::from_string("m1/m2")).unwrap();
+
+        let ascii = q.to_ascii();
+        // "member" was added last so it must appear higher (earlier) in the tree
+        let member_pos = ascii.find("member").expect("member not found");
+        let ensemble_pos = ascii.find("ensemble").expect("ensemble not found");
+        let param_pos = ascii.find("param").expect("param not found");
+        assert!(member_pos < ensemble_pos, "member should be outer of ensemble");
+        assert!(ensemble_pos < param_pos, "ensemble should be outer of param");
+    }
+
+    #[test]
+    fn test_expand_preserves_original_coords() {
+        let mut q = Qube::from_ascii("root\n└── param=2t/tp\n    └── time=0/1/2").unwrap();
+        q.expand("ensemble", Coordinates::from_string("ens1/ens2")).unwrap();
+
+        let all = q.all_unique_dim_coords();
+        // Original coords must still be present
+        let param_str = all.get("param").unwrap().to_string();
+        assert!(param_str.contains("2t") && param_str.contains("tp"));
+        let ens_str = all.get("ensemble").unwrap().to_string();
+        assert!(ens_str.contains("ens1") && ens_str.contains("ens2"));
+    }
+
+    #[test]
     fn test_squeeze() -> Result<(), String> {
         let input = r#"root
 └── class=1
@@ -823,5 +1446,134 @@ mod tests {
         assert!(ascii.contains("param"), "param should remain, got:\n{}", ascii);
 
         Ok(())
+    }
+
+    /// Regression test for the `only_other` clobber bug in `internal_set_operation`.
+    ///
+    /// Before the fix the `only_other` block would unconditionally call `copy_subtree`
+    /// and overwrite metadata even when the target node already existed (having been
+    /// correctly merged by the intersection path for a different self×other pair
+    /// earlier in the same iteration).  This manifested in the omnicat LUMI + MN5
+    /// merge as `climate-dt` (shared by both locations) losing its lumi subtree and
+    /// keeping only the mn5 subtree (last-write-wins).
+    ///
+    /// Setup:
+    ///   qube_a  has dataset=[C, A, B]; C first so the C×C intersection pair
+    ///           is processed before the A×C and B×C only_other pairs.
+    ///           Each dataset has a unique leaf child and location=lumi.
+    ///   qube_b  has dataset=[C] only, with its own distinct leaf child and location=mn5.
+    ///
+    /// Invariant after append:
+    ///   C's subtree must contain BOTH the lumi leaf AND the mn5 leaf.
+    ///   If copy_subtree runs for the A×C or B×C pair it overwrites C's merged
+    ///   subtree, erasing the lumi leaf — that is the regression we guard here.
+    #[test]
+    fn test_append_only_other_does_not_clobber_existing_intersection_node() {
+        let mut qube_a = Qube::new();
+        let root_a = qube_a.root();
+
+        // Insert C first so it is first in the TinyVec for the "dataset" dimension,
+        // ensuring the C×C intersection pair runs before the A×C / B×C only_other pairs.
+        let c_a = qube_a
+            .get_or_create_child("dataset", root_a, Some(Coordinates::from_string("C")))
+            .unwrap();
+        let a_a = qube_a
+            .get_or_create_child("dataset", root_a, Some(Coordinates::from_string("A")))
+            .unwrap();
+        let b_a = qube_a
+            .get_or_create_child("dataset", root_a, Some(Coordinates::from_string("B")))
+            .unwrap();
+
+        // Distinct leaf values per dataset so we can detect clobbering
+        qube_a
+            .get_or_create_child("leaf", c_a, Some(Coordinates::from_string("lumi_leaf")))
+            .unwrap();
+        qube_a.get_or_create_child("leaf", a_a, Some(Coordinates::from_string("a_leaf"))).unwrap();
+        qube_a.get_or_create_child("leaf", b_a, Some(Coordinates::from_string("b_leaf"))).unwrap();
+
+        qube_a.set_metadata(c_a, "location", MetadataValues::single_string("lumi")).unwrap();
+        qube_a.set_metadata(a_a, "location", MetadataValues::single_string("lumi")).unwrap();
+        qube_a.set_metadata(b_a, "location", MetadataValues::single_string("lumi")).unwrap();
+
+        let mut qube_b = Qube::new();
+        let root_b = qube_b.root();
+        let c_b = qube_b
+            .get_or_create_child("dataset", root_b, Some(Coordinates::from_string("C")))
+            .unwrap();
+        qube_b
+            .get_or_create_child("leaf", c_b, Some(Coordinates::from_string("mn5_leaf")))
+            .unwrap();
+        qube_b.set_metadata(c_b, "location", MetadataValues::single_string("mn5")).unwrap();
+
+        qube_a.append(&mut qube_b);
+
+        let ascii = qube_a.to_ascii();
+
+        // A and B are self-only datasets; their leaf children must survive intact.
+        assert!(ascii.contains("a_leaf"), "a_leaf must survive append; got:\n{}", ascii);
+        assert!(ascii.contains("b_leaf"), "b_leaf must survive append; got:\n{}", ascii);
+
+        // C is shared: both lumi_leaf (from qube_a) and mn5_leaf (from qube_b) must be
+        // present — the only_other copy_subtree must NOT erase the lumi contribution.
+        assert!(
+            ascii.contains("lumi_leaf"),
+            "lumi_leaf must survive in C's subtree after merge; got:\n{}",
+            ascii
+        );
+        assert!(
+            ascii.contains("mn5_leaf"),
+            "mn5_leaf must be present in C's subtree after merge; got:\n{}",
+            ascii
+        );
+    }
+
+    /// Regression test for the leaf-leaf metadata drop bug in `node_merge`.
+    ///
+    /// When two leaf nodes with *different* metadata are merged via `node_merge`, the
+    /// previous code called `push_metadata_to_children` (which is a no-op for leaves)
+    /// and then returned without ever incorporating `other_meta` into `self`.  As a
+    /// result `other_meta` was silently dropped, and shared data always ended up with
+    /// only the `self` side's metadata.
+    ///
+    /// After the fix the metadata from both sides must be unioned on the shared leaf.
+    #[test]
+    fn test_node_merge_leaf_metadata_is_unioned_not_dropped() {
+        // Build two single-path qubes that share the exact same leaf coordinate.
+        // qube_a: root → dim=X(location=a)
+        // qube_b: root → dim=X(location=b)
+        // After append the leaf must carry location={a,b}.
+
+        let mut qube_a = Qube::new();
+        let root_a = qube_a.root();
+        let leaf_a =
+            qube_a.get_or_create_child("dim", root_a, Some(Coordinates::from_string("X"))).unwrap();
+        qube_a.set_metadata(leaf_a, "location", MetadataValues::single_string("a")).unwrap();
+
+        let mut qube_b = Qube::new();
+        let root_b = qube_b.root();
+        let leaf_b =
+            qube_b.get_or_create_child("dim", root_b, Some(Coordinates::from_string("X"))).unwrap();
+        qube_b.set_metadata(leaf_b, "location", MetadataValues::single_string("b")).unwrap();
+
+        qube_a.append(&mut qube_b);
+
+        // After consolidation the merged {a,b} set may have been bubbled up to the root
+        // (since the leaf is the only descendant).  What matters is that the union is
+        // present *somewhere* in the tree — either on the leaf itself or on the root.
+        let root_a = qube_a.root();
+        let loc = qube_a
+            .get_metadata(leaf_a, "location")
+            .or_else(|| qube_a.get_metadata(root_a, "location"))
+            .expect("location metadata must survive the merge (on leaf or root)");
+        assert!(
+            loc.contains_string("a"),
+            "location 'a' must be present after merge; got {:?}",
+            loc
+        );
+        assert!(
+            loc.contains_string("b"),
+            "location 'b' (from other) must not be dropped; got {:?}",
+            loc
+        );
     }
 }

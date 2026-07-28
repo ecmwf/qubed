@@ -1,7 +1,9 @@
 mod compress;
 mod coordinates;
 pub mod datacube;
+mod difference;
 mod merge;
+pub mod metadata;
 mod qube;
 pub mod select;
 pub mod serde;
@@ -11,4 +13,5 @@ mod view;
 pub use coordinates::Coordinates;
 pub use coordinates::integers::IntegerCoordinates;
 pub use datacube::Datacube;
+pub use metadata::{Metadata, MetadataValues};
 pub use qube::{Dimension, NodeIdx, Qube};
