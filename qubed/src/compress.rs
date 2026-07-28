@@ -1,4 +1,5 @@
 use crate::coordinates::Coordinates;
+use crate::metadata::{Metadata, MetadataValues};
 use crate::qube::{Dimension, NodeIdx, Qube};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -60,7 +61,152 @@ impl Qube {
         node.structural_hash().store(0, Ordering::Release);
     }
 
+    /// Given a group of node IDs, partition their metadata into two buckets:
+    ///
+    /// - `meta_for_node`: keys where all nodes agree (same value) **or** where every node
+    ///   has a single-valued `Strings` entry and we can map each coordinate to its source
+    ///   value as a `PerCoordStrings` vector.
+    /// - `meta_for_children`: keys where nodes disagree and the per-coord condition is not
+    ///   met.  The union of all values is stored here; the caller distributes it to the
+    ///   children (or to the node itself when it has no children).
+    ///
+    /// `original_coords[i]` must be the coordinates of `group[i]` **before** any merging.
+    /// `merged_coords` is the union of all original coordinates.
+    fn compute_merged_metadata(
+        &self,
+        group: &[NodeIdx],
+        original_coords: &[Coordinates],
+        merged_coords: &Coordinates,
+    ) -> (Metadata, Metadata) {
+        let all_keys: std::collections::HashSet<String> = group
+            .iter()
+            .flat_map(|&id| self.node_ref(id).unwrap().metadata().keys().cloned())
+            .collect();
+
+        let mut meta_for_node = Metadata::new();
+        let mut meta_for_children = Metadata::new();
+
+        // Pre-compute per-coord enumerability once (not per-key).
+        let merged_strings = merged_coords.iter_sorted_strings();
+        let merged_enumerable =
+            !merged_strings.is_empty() && merged_strings.len() == merged_coords.len();
+        let orig_enumerable =
+            original_coords.iter().all(|c| c.len() > 0 && c.iter_sorted_strings().len() == c.len());
+
+        for key in &all_keys {
+            let values: Vec<Option<MetadataValues>> = group
+                .iter()
+                .map(|&id| self.node_ref(id).unwrap().metadata().get(key).cloned())
+                .collect();
+
+            let first = values[0].as_ref();
+            let all_same = values.iter().all(|v| v.as_ref() == first);
+
+            if all_same {
+                // All nodes carry the same value (including "no value") — promote to node.
+                if let Some(v) = first {
+                    meta_for_node.set(key.clone(), v.clone());
+                }
+            } else {
+                // Values differ.  Try to produce a PerCoordStrings vector when:
+                //   1. Every group member has this key (no None),
+                //   2. Every value is a `Strings` set (any number of values),
+                //   3. Both the merged coords and every original coords set are
+                //      fully enumerable (no RangeSet / Mixed).
+                let can_use_per_coord = merged_enumerable
+                    && orig_enumerable
+                    && values.iter().all(|v| {
+                        v.as_ref().map_or(false, |mv| matches!(mv, MetadataValues::Strings(_)))
+                    });
+
+                if can_use_per_coord {
+                    // Build per-coord string-set vector aligned with merged sorted order.
+                    // Each merged coord belongs to exactly one group member; look up that
+                    // member's full Strings set and store it as the inner Vec.
+                    let per_coord: Vec<Vec<String>> = merged_strings
+                        .iter()
+                        .map(|coord_str| {
+                            original_coords
+                                .iter()
+                                .enumerate()
+                                .find(|(_, orig)| {
+                                    orig.iter_sorted_strings().iter().any(|s| s == coord_str)
+                                })
+                                .and_then(|(mi, _)| {
+                                    values.get(mi)?.as_ref().map(|mv| {
+                                        let mut v = mv.as_string_vec();
+                                        v.sort();
+                                        v
+                                    })
+                                })
+                                .unwrap_or_default()
+                        })
+                        .collect();
+
+                    // Guard: every coord must have resolved to a non-empty inner set.
+                    if per_coord.iter().all(|inner| !inner.is_empty()) {
+                        meta_for_node.set(key.clone(), MetadataValues::PerCoordStrings(per_coord));
+                        continue; // skip the union / meta_for_children path
+                    }
+                }
+
+                // Fallback: compute union of all non-empty values → push to children.
+                let union_val = values
+                    .iter()
+                    .filter_map(|v| v.as_ref())
+                    .cloned()
+                    .reduce(|acc, v| acc.merge_with(&v))
+                    .unwrap_or(MetadataValues::Empty);
+
+                if !union_val.is_empty() {
+                    meta_for_children.set(key.clone(), union_val);
+                }
+            }
+        }
+
+        (meta_for_node, meta_for_children)
+    }
+
+    /// Apply the two-bucket metadata result to a node:
+    ///
+    /// - `meta_for_node` is written directly onto `node_id`.
+    /// - `meta_for_children` is merged into each direct child of `node_id`.
+    ///   If `node_id` is a leaf (no children), `meta_for_children` is merged
+    ///   onto `node_id` itself instead — there is nowhere lower to push it.
+    fn apply_node_metadata(
+        &mut self,
+        node_id: NodeIdx,
+        meta_for_node: Metadata,
+        meta_for_children: Metadata,
+    ) {
+        *self.node_mut(node_id).unwrap().metadata_mut() = meta_for_node;
+
+        if meta_for_children.is_empty() {
+            return;
+        }
+
+        let children: Vec<NodeIdx> = {
+            let node = self.node_ref(node_id).unwrap();
+            node.children().values().flat_map(|v| v.iter().copied()).collect()
+        };
+
+        if children.is_empty() {
+            // Leaf: merge the disagreed values onto the node itself.
+            let existing = self.node_ref(node_id).unwrap().metadata().clone();
+            *self.node_mut(node_id).unwrap().metadata_mut() =
+                existing.merge_with(&meta_for_children);
+        } else {
+            // Inner node: push the disagreed values down to every child.
+            for child_id in children {
+                let existing = self.node_ref(child_id).unwrap().metadata().clone();
+                let new_meta = existing.merge_with(&meta_for_children);
+                *self.node_mut(child_id).unwrap().metadata_mut() = new_meta;
+            }
+        }
+    }
+
     /// Deduplicates the children of a node by merging nodes with identical structural hashes.
+    /// Metadata from dropped duplicates is merged into the kept node's metadata.
     fn dedup_children_locally(&mut self, parent: NodeIdx) {
         let snapshot = {
             let node = self.node_ref(parent).unwrap();
@@ -73,8 +219,19 @@ impl Qube {
 
             for &child in &kids {
                 let h = self.compute_structural_hash(child);
+                // Copy the kept-node ID (NodeIdx: Copy) so we release the borrow on `seen`.
+                let existing = seen.get(&h).copied();
 
-                if seen.insert(h, child).is_none() {
+                if let Some(kept_id) = existing {
+                    // Merge this duplicate's metadata into the kept node.
+                    let dup_meta = self.node_ref(child).unwrap().metadata().clone();
+                    if !dup_meta.is_empty() {
+                        let kept_meta = self.node_ref(kept_id).unwrap().metadata().clone();
+                        let merged = kept_meta.merge_with(&dup_meta);
+                        *self.node_mut(kept_id).unwrap().metadata_mut() = merged;
+                    }
+                } else {
+                    seen.insert(h, child);
                     unique.push(child);
                 }
             }
@@ -139,16 +296,15 @@ impl Qube {
     }
 
     /// Compresses the tree by merging nodes, pruning empty nodes, and deduplicating nodes.
+    /// After all structural operations, runs a bottom-up metadata consolidation pass so
+    /// that uniform metadata is bubbled up to the highest node where it applies.
     pub fn compress(&mut self) {
-        // This method performs the following steps:
-        // 1. Compresses nodes recursively.
-        // 2. Prunes empty nodes from the tree.
-        // 3. Deduplicates nodes that may have become identical after compression.
-
         let root = self.root();
         self.compress_recursively(root);
         self.prune_empty_nodes_recursively(root);
         self.dedup_recursively(root);
+        // Bubble up consistent metadata after all structural merging is done.
+        self.consolidate_all_metadata(root);
     }
 
     /// Recursively compresses the tree, merging coordinates of child nodes where possible.
@@ -165,7 +321,11 @@ impl Qube {
         let all_children_are_leaves = children.iter().all(|&id| self.is_leaf(id));
 
         if all_children_are_leaves {
-            // group by dimension
+            // Group by (dimension, metadata): only merge leaves that share both
+            // the same dimension AND identical direct metadata.  Leaves with
+            // different provenance metadata (e.g. location=lumi vs location=mn5)
+            // must NOT be merged together, as that would create spurious multi-
+            // valued provenance and lose per-leaf source information.
             let mut by_dim: HashMap<Dimension, Vec<NodeIdx>> = HashMap::new();
 
             for &child in &children {
@@ -173,9 +333,31 @@ impl Qube {
                 by_dim.entry(dim).or_default().push(child);
             }
 
-            for group in by_dim.values() {
-                if group.len() > 1 {
-                    self.merge_coords(group.to_vec());
+            for dim_group in by_dim.values() {
+                // Further partition by metadata equality.
+                // Metadata does not implement Hash so we use a linear scan.
+                // Groups are small (usually 1-10 nodes), so O(n²) is fine.
+                let mut meta_groups: Vec<(crate::metadata::Metadata, Vec<NodeIdx>)> = Vec::new();
+
+                for &child_id in dim_group {
+                    let meta = self.node_ref(child_id).unwrap().metadata().clone();
+                    let mut placed = false;
+                    for (group_meta, group_nodes) in &mut meta_groups {
+                        if *group_meta == meta {
+                            group_nodes.push(child_id);
+                            placed = true;
+                            break;
+                        }
+                    }
+                    if !placed {
+                        meta_groups.push((meta, vec![child_id]));
+                    }
+                }
+
+                for (_, group) in meta_groups {
+                    if group.len() > 1 {
+                        self.merge_coords(group);
+                    }
                 }
             }
 
@@ -206,25 +388,82 @@ impl Qube {
 
     /// Merges the coordinates of a group of nodes into the first node in the group.
     fn merge_coords(&mut self, group: Vec<NodeIdx>) {
-        // The coordinates of all other nodes in the group are set to `Coordinates::Empty`.
-
         assert!(!group.is_empty());
 
-        let mut merged: Coordinates = { self.node_ref(group[0]).unwrap().coords().clone() };
+        // 1. Snapshot each group member's original coordinates BEFORE any merging.
+        //    `compute_merged_metadata` needs these to build the per-coord mapping.
+        let original_coords: Vec<Coordinates> =
+            group.iter().map(|&id| self.node_ref(id).unwrap().coords().clone()).collect();
 
-        for &id in group.iter().skip(1) {
-            let coords = self.node_ref(id).unwrap().coords();
+        // 2. Build the merged coordinate set (union of all originals).
+        let mut merged: Coordinates = original_coords[0].clone();
+        for coords in &original_coords[1..] {
             merged.extend(coords);
         }
 
+        // 3. Write merged coords onto group[0].
         {
             let node = self.node_mut(group[0]).unwrap();
-            *node.coords_mut() = merged;
+            *node.coords_mut() = merged.clone();
         }
 
+        // 4. Compute the two-bucket metadata split using the pre-merge snapshots.
+        let (meta_for_node, meta_for_children) =
+            self.compute_merged_metadata(&group, &original_coords, &merged);
+
+        // 5. Apply: agreed / per-coord metadata on the node, disagreed pushed to children.
+        self.apply_node_metadata(group[0], meta_for_node, meta_for_children);
+
+        // 6. Transfer children from each duplicate node to group[0], then empty the duplicate.
+        //
+        //    When two inner nodes are merged (same structural hash → same subtree structure)
+        //    their children must be combined in group[0] so that the subsequent
+        //    `dedup_recursively` pass can merge structurally-identical children and union
+        //    their metadata.  Without this transfer, children of the duplicate nodes are
+        //    orphaned when the duplicate's coords are set to Empty and the node is pruned,
+        //    and any metadata they carry (e.g. provenance src=B) is silently lost.
+        //
+        //    Example:
+        //      class=1 (→ param=1 {src:A}) and class=2 (→ param=1 {src:B}) are merged to
+        //      class=1/2.  We transfer param=1 {src:B} to class=1/2's children; dedup then
+        //      merges it with param=1 {src:A} → param=1 {src:[A,B]}.
         for &id in group.iter().skip(1) {
+            // Collect dim→kids from the duplicate node before we clear it.
+            let dup_children: Vec<(Dimension, Vec<NodeIdx>)> = self
+                .node_ref(id)
+                .map(|n| {
+                    n.children()
+                        .iter()
+                        .map(|(&d, kids)| (d, kids.iter().copied().collect()))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            for (dim, kid_ids) in dup_children {
+                for &kid_id in &kid_ids {
+                    // Reparent the transferred child to group[0].
+                    if let Some(kid) = self.node_mut(kid_id) {
+                        *kid.parent_mut() = Some(group[0]);
+                    }
+                }
+                // Append the transferred kids to group[0]'s children list for this dim.
+                if let Some(kept) = self.node_mut(group[0]) {
+                    let entry = kept.children_mut().entry(dim).or_insert_with(TinyVec::new);
+                    for kid_id in kid_ids {
+                        entry.push(kid_id);
+                    }
+                }
+            }
+
+            // Clear the duplicate's children (already transferred) and empty its coords.
+            if let Some(dup) = self.node_mut(id) {
+                dup.children_mut().clear();
+            }
             let node = self.node_mut(id).unwrap();
             *node.coords_mut() = Coordinates::Empty;
         }
+
+        // Invalidate group[0]'s cached structural hash: its children list changed.
+        self.invalidate_structural_hash(group[0]);
     }
 }

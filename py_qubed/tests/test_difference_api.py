@@ -83,8 +83,8 @@ def test_subtract_removes_subset_of_param_values() -> None:
     result = a.subtract(b)
     coords = result.all_unique_dim_coords()
     param_values = set(coords["param"])
-    assert "2" not in param_values
-    assert {"1", "3"}.issubset(param_values)
+    assert 2 not in param_values
+    assert {1, 3}.issubset(param_values)
 
 
 def test_subtract_all_params_removes_branch() -> None:

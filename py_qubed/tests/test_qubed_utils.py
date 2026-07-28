@@ -49,8 +49,8 @@ class TestAxes:
 
     def test_integer_time_values_as_strings(self):
         q = make_param_time_qube()
-        # Stored internally as integers; returned as strings by the binding.
-        assert set(q.axes()["time"]) == {"0", "1", "2"}
+        # Stored internally as integers; returned as typed values by the binding.
+        assert set(q.axes()["time"]) == {0, 1, 2}
 
     def test_leading_zeros_preserved(self):
         q = Qube.from_datacube({"expver": "0001/0002"}, None)
@@ -180,7 +180,7 @@ class TestExpand:
         q = make_param_time_qube()
         q.expand({"step": [1, 2, 3]})
         ax = q.axes()
-        assert set(ax["step"]) == {"1", "2", "3"}
+        assert set(ax["step"]) == {1, 2, 3}
 
     def test_expand_is_reflected_in_datacubes(self):
         q = make_param_time_qube()
