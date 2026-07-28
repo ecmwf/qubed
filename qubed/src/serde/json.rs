@@ -439,6 +439,110 @@ fn serialize_children_json(qube: &Qube, parent_id: NodeIdx, output: &mut Map<Str
     }
 }
 
+// ---------------- Tree JSON (key/values/metadata/children) ----------------
+
+impl Qube {
+    /// Serialize the Qube into a recursive tree JSON layout where each node has:
+    /// `{ "key": <dim>, "values": { "type": "enum", "dtype": <type>, "values": [...] }, "metadata": {}, "children": [...] }`
+    pub fn to_tree_json(&self) -> Value {
+        let mut envelope = Map::new();
+        envelope.insert("version".to_string(), Value::String("1".to_string()));
+        envelope.insert("tree".to_string(), serialize_tree_node(self, self.root()));
+        Value::Object(envelope)
+    }
+
+    /// Reconstruct a Qube from a tree JSON layout created by `to_tree_json`.
+    pub fn from_tree_json(value: Value) -> Result<Qube, String> {
+        let obj = value.as_object().ok_or("Expected JSON object for tree envelope")?;
+
+        let version = obj
+            .get("version")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing 'version' field in tree JSON")?;
+        if version != "1" {
+            return Err(format!("Unsupported tree JSON version: {version:?}"));
+        }
+
+        let root_value = obj.get("tree").ok_or("Missing 'tree' field in tree JSON")?;
+
+        let mut qube = Qube::new();
+        let root = qube.root();
+        parse_tree_node(&mut qube, root, root_value)?;
+        Ok(qube)
+    }
+}
+
+fn coords_dtype(coords: &Coordinates) -> &'static str {
+    match coords {
+        Coordinates::Empty => "str",
+        Coordinates::Integers(_) => "int64",
+        Coordinates::Floats(_) => "float64",
+        Coordinates::Strings(_) => "str",
+        Coordinates::DateTimes(_) => "datetime",
+        Coordinates::Mixed(_) => "mixed",
+    }
+}
+
+fn serialize_tree_node(qube: &Qube, node_id: NodeIdx) -> Value {
+    let node = qube.node(node_id).expect("valid node");
+    let key = node.dimension().unwrap_or("root").to_string();
+    let coords = node.coordinates();
+
+    let dtype = coords_dtype(coords);
+    let values_array = coords.to_json_value();
+
+    let mut values_obj = Map::new();
+    values_obj.insert("type".to_string(), Value::String("enum".to_string()));
+    values_obj.insert("dtype".to_string(), Value::String(dtype.to_string()));
+    // Ensure values is always an array
+    let values_arr = match values_array {
+        Value::Array(a) => Value::Array(a),
+        other => Value::Array(vec![other]),
+    };
+    values_obj.insert("values".to_string(), values_arr);
+
+    let children_ids: Vec<NodeIdx> = node.all_children().collect();
+    let children: Vec<Value> =
+        children_ids.iter().map(|&child_id| serialize_tree_node(qube, child_id)).collect();
+
+    let mut map = Map::new();
+    map.insert("key".to_string(), Value::String(key));
+    map.insert("values".to_string(), Value::Object(values_obj));
+    map.insert("metadata".to_string(), Value::Object(Map::new()));
+    map.insert("children".to_string(), Value::Array(children));
+
+    Value::Object(map)
+}
+
+fn parse_tree_node(qube: &mut Qube, parent: NodeIdx, value: &Value) -> Result<(), String> {
+    let obj = value.as_object().ok_or("Expected JSON object for tree node")?;
+
+    let children =
+        obj.get("children").and_then(|v| v.as_array()).ok_or("Missing 'children' array")?;
+
+    for child_value in children {
+        let child_obj = child_value.as_object().ok_or("Expected JSON object for child node")?;
+
+        let key =
+            child_obj.get("key").and_then(|v| v.as_str()).ok_or("Missing 'key' in child node")?;
+
+        let values_obj = child_obj
+            .get("values")
+            .and_then(|v| v.as_object())
+            .ok_or("Missing 'values' object in child node")?;
+
+        let values_array =
+            values_obj.get("values").ok_or("Missing 'values' array in values object")?;
+
+        let coords = Coordinates::from_json_value(values_array)?;
+
+        let child_node = qube.get_or_create_child(key, parent, Some(coords))?;
+        parse_tree_node(qube, child_node, child_value)?;
+    }
+
+    Ok(())
+}
+
 // ---------------- Tests ----------------
 
 // TODO: The JSON structure should probably be more detailed, possibly splitting values and children into separate fields, possibly containing type information for the values too.
@@ -570,5 +674,88 @@ mod json_tests {
         // Reconstruct and verify structure equality via to_json()
         let reconstructed = Qube::from_arena_json(arena).expect("from_arena_json");
         assert_eq!(qube.to_json(), reconstructed.to_json());
+    }
+
+    // ---------------- Tree JSON tests ----------------
+
+    fn simple_qube() -> Qube {
+        Qube::from_json(json!({
+            "class=od": {
+                "expver=0001/0002": {
+                    "param=1/2": {}
+                }
+            },
+            "class=rd": {
+                "expver=0001": { "param=1/2/3": {} }
+            }
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn test_tree_json_envelope_has_version_and_tree_keys() {
+        let qube = simple_qube();
+        let out = qube.to_tree_json();
+        assert!(out.is_object(), "output should be a JSON object");
+        assert_eq!(
+            out.get("version").and_then(|v| v.as_str()),
+            Some("1"),
+            "envelope must have version = '1'"
+        );
+        assert!(out.get("tree").is_some(), "envelope must have a 'tree' key");
+    }
+
+    #[test]
+    fn test_tree_json_root_node_shape() {
+        let qube = simple_qube();
+        let out = qube.to_tree_json();
+        let root = out.get("tree").unwrap();
+        assert_eq!(root.get("key").and_then(|v| v.as_str()), Some("root"));
+        assert!(root.get("values").is_some());
+        assert!(root.get("metadata").is_some());
+        let children = root.get("children").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(children.len(), 2, "root should have two children (od, rd)");
+    }
+
+    #[test]
+    fn test_tree_json_child_node_has_dtype() {
+        let qube = simple_qube();
+        let out = qube.to_tree_json();
+        let first_child = &out["tree"]["children"][0];
+        let values_obj = first_child.get("values").and_then(|v| v.as_object()).unwrap();
+        assert!(values_obj.contains_key("dtype"), "child values must include dtype");
+        assert_eq!(values_obj.get("type").and_then(|v| v.as_str()), Some("enum"));
+    }
+
+    #[test]
+    fn test_tree_json_roundtrip() {
+        let qube = simple_qube();
+        let encoded = qube.to_tree_json();
+        let decoded = Qube::from_tree_json(encoded).expect("from_tree_json");
+        assert_eq!(qube.to_json(), decoded.to_json());
+    }
+
+    #[test]
+    fn test_tree_json_rejects_unknown_version() {
+        let bad = json!({"version": "99", "tree": {}});
+        let result = Qube::from_tree_json(bad);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported tree JSON version"));
+    }
+
+    #[test]
+    fn test_tree_json_rejects_missing_version() {
+        let bad = json!({"tree": {}});
+        let result = Qube::from_tree_json(bad);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Missing 'version'"));
+    }
+
+    #[test]
+    fn test_tree_json_rejects_missing_tree_key() {
+        let bad = json!({"version": "1"});
+        let result = Qube::from_tree_json(bad);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Missing 'tree'"));
     }
 }
