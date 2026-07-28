@@ -281,9 +281,6 @@ impl Qube {
     pub fn append_many(&mut self, others: &mut Vec<Qube>) {
         let others_len = others.len();
         for (i, other) in others.iter_mut().enumerate() {
-            // Build translation map for each other qube
-            let dim_map = self.build_dim_translation(other);
-
             let self_root_id = self.root();
             let other_root_id = other.root();
 

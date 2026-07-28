@@ -247,10 +247,13 @@ def test_to_from_tree_json_roundtrip() -> None:
 
     parsed = json.loads(tree_json_str)
     assert isinstance(parsed, dict)
-    # The tree JSON format has key, values, metadata, children fields
-    assert "key" in parsed
-    assert "values" in parsed
-    assert "children" in parsed
+    # The tree JSON format is versioned: {"version": "1", "tree": {...}}
+    assert "version" in parsed
+    tree = parsed["tree"]
+    # The tree node has key, values, metadata, children fields
+    assert "key" in tree
+    assert "values" in tree
+    assert "children" in tree
 
     # Reconstruct and verify ascii equality
     reconstructed = Qube.from_tree_json(tree_json_str)
@@ -277,9 +280,10 @@ def test_json_and_tree_json_produce_different_formats() -> None:
 
     # Nested format uses "key=value" keys
     assert any("=" in k for k in nested.keys())
-    # Tree format uses "key", "values", "children" structure
-    assert "key" in tree
-    assert "children" in tree
+    # Tree format is versioned: {"version": "1", "tree": {...}}
+    assert "version" in tree
+    assert "key" in tree["tree"]
+    assert "children" in tree["tree"]
 
 
 def test_arena_preserves_leading_zeros() -> None:

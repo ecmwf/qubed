@@ -329,24 +329,9 @@ impl PyQube {
     pub fn axes(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let dim_coords = self.inner.all_unique_dim_coords();
         let py_dict = PyDict::new(py);
-
         for (dimension, coordinates) in dim_coords {
-            let coord_str = coordinates.to_string();
-            let values: Vec<&str> = if coord_str.is_empty() {
-                vec![]
-            } else if coord_str.contains('/') {
-                coord_str.split('/').collect()
-            } else {
-                vec![&coord_str]
-            };
-
-            let py_list = PyList::empty(py);
-            for value in values {
-                py_list.append(value)?;
-            }
-            py_dict.set_item(dimension, py_list)?;
+            py_dict.set_item(dimension, coordinates_to_list(py, &coordinates)?)?;
         }
-
         Ok(py_dict.into_any().unbind())
     }
 
