@@ -194,20 +194,6 @@ impl PyQube {
         Ok(py_dict.into_any().unbind())
     }
 
-    /// Return ``{dim: [values...]}`` for every dimension in the tree.
-    pub fn axes(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        // Delegates to the same Rust method; kept as a separate Python name
-        // so callers can use the more natural ``qube.axes()`` spelling.
-        self.all_unique_dim_coords(py)
-    }
-
-    /// Return the set of dimension names present in the tree.
-    pub fn dimensions(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let dims = self.inner.dimensions();
-        let py_set = pyo3::types::PySet::new(py, &dims)?;
-        Ok(py_set.into_any().unbind())
-    }
-
     /// Return a deep copy of this Qube.
     pub fn clone_qube(&self) -> Self {
         PyQube { inner: self.inner.clone() }
