@@ -2,6 +2,7 @@ use ::qubed::Qube;
 #[cfg(feature = "rsfdb-support")]
 use ::qubed_meteo::adapters::fdb::FromFDBList;
 use ::qubed_meteo::adapters::mars_list::FromMARSList;
+use ::qubed_meteo::adapters::opendata::FromOpenData;
 use ::qubed_meteo::adapters::to_constraints::ToDssConstraints;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -17,6 +18,22 @@ pub fn from_mars_list_py(text: &str) -> PyResult<String> {
     }
 }
 
+/// Crawl the ECMWF open-data catalogue and return the resulting Qube as an ASCII string.
+///
+/// Args:
+///     date: Date string in `YYYYMMDD` format (e.g. `"20240315"`).
+///     model: Model identifier, e.g. `"ifs"` or `"aifs"`.
+///
+/// Returns:
+///     ASCII representation of the [`Qube`], suitable for passing to `Qube.from_ascii()`.
+#[pyfunction]
+pub fn from_opendata_py(date: &str, model: &str) -> PyResult<String> {
+    match Qube::from_opendata(date, model) {
+        Ok(qube) => Ok(qube.to_ascii()),
+        Err(e) => Err(PyValueError::new_err(e)),
+    }
+}
+
 #[pymodule]
 #[pyo3(name = "qubed_meteo")]
 fn py_qubed_meteo_module(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -24,6 +41,7 @@ fn py_qubed_meteo_module(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<(
     #[cfg(feature = "rsfdb-support")]
     m.add_function(wrap_pyfunction!(from_fdb_list_py, m)?)?;
     m.add_function(wrap_pyfunction!(to_dss_constraints_py, m)?)?;
+    m.add_function(wrap_pyfunction!(from_opendata_py, m)?)?;
     Ok(())
 }
 
