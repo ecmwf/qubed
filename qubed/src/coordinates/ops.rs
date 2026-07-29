@@ -1,5 +1,8 @@
 use crate::Coordinates;
 use crate::coordinates::CoordinateTypes;
+use crate::coordinates::integers::IntegerCoordinates;
+use crate::coordinates::strings::StringCoordinates;
+use crate::utils::tiny_ordered_set::TinyOrderedSet;
 use chrono::NaiveDateTime;
 
 impl From<NaiveDateTime> for CoordinateTypes {
@@ -24,6 +27,16 @@ impl Coordinates {
             Coordinates::Integers(new_ints) => match self {
                 Coordinates::Integers(ints) => {
                     ints.extend(new_ints);
+                }
+                Coordinates::Strings(strings) => {
+                    // Try to coerce all strings to integers
+                    if let Some(converted) = try_strings_to_integers(strings) {
+                        let mut merged = converted;
+                        merged.extend(new_ints);
+                        *self = Coordinates::Integers(merged);
+                    } else {
+                        self.convert_to_mixed().extend(new_coords);
+                    }
                 }
                 Coordinates::Mixed(mixed) => {
                     mixed.integers.extend(new_ints);
@@ -52,6 +65,14 @@ impl Coordinates {
             Coordinates::Strings(new_strings) => match self {
                 Coordinates::Strings(strings) => {
                     strings.extend(new_strings);
+                }
+                Coordinates::Integers(ints) => {
+                    // Try to coerce all new strings to integers
+                    if let Some(converted) = try_strings_to_integers(new_strings) {
+                        ints.extend(&converted);
+                    } else {
+                        self.convert_to_mixed().extend(new_coords);
+                    }
                 }
                 Coordinates::Mixed(mixed) => {
                     mixed.strings.extend(new_strings);
@@ -239,5 +260,33 @@ impl From<f64> for CoordinateTypes {
 impl From<String> for CoordinateTypes {
     fn from(val: String) -> Self {
         CoordinateTypes::String(val)
+    }
+}
+
+/// Attempt to convert all values in a StringCoordinates to integers.
+/// Returns Some(IntegerCoordinates) if every string parses as i32 and none
+/// have leading zeros (which would lose formatting information), None otherwise.
+fn try_strings_to_integers(strings: &StringCoordinates) -> Option<IntegerCoordinates> {
+    match strings {
+        StringCoordinates::Set(set) => {
+            let mut int_set: TinyOrderedSet<i32, 6> = TinyOrderedSet::new();
+            for s in set.iter() {
+                let s_str = s.to_string();
+                // Reject strings with leading zeros to preserve formatting
+                if s_str.len() > 1
+                    && s_str.starts_with('0')
+                    && s_str.chars().nth(1).map_or(false, |c| c.is_ascii_digit())
+                {
+                    return None;
+                }
+                match s_str.parse::<i32>() {
+                    Ok(val) => {
+                        int_set.insert(val);
+                    }
+                    Err(_) => return None,
+                }
+            }
+            Some(IntegerCoordinates::Set(int_set))
+        }
     }
 }

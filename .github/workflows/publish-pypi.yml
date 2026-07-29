@@ -1,0 +1,158 @@
+name: Publish Python packages to PyPI
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  build-wheels:
+    name: Build ${{ matrix.package }} (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [py_qubed, py_qubed_meteo]
+        target: [x86_64, aarch64, x86_64-apple-darwin, aarch64-apple-darwin]
+        include:
+          - target: x86_64
+            runner: ubuntu-latest
+            manylinux: auto
+          - target: aarch64
+            runner: ubuntu-latest
+            manylinux: auto
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            manylinux: 'off'
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            manylinux: 'off'
+          - package: py_qubed
+            manifest_path: py_qubed/Cargo.toml
+          - package: py_qubed_meteo
+            manifest_path: qubed_meteo/py_qubed_meteo/Cargo.toml
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: >
+            --release
+            --manifest-path ${{ matrix.manifest_path }}
+            --out dist
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.package }}-${{ matrix.target }}
+          path: dist/*.whl
+
+  test-wheels-linux:
+    name: Test Linux wheels
+    runs-on: ubuntu-latest
+    needs: build-wheels
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Show wheels
+        run: find dist -name '*.whl' | sort
+
+      - name: Install and test py_qubed
+        run: |
+          WHEEL=$(find dist -name 'qubed-*.whl' | grep manylinux | grep x86_64 | head -n1)
+          echo "Installing $WHEEL"
+          pip install "$WHEEL"
+          python -c "import qubed; print('qubed OK')"
+
+      - name: Install and test py_qubed_meteo
+        run: |
+          WHEEL=$(find dist -name 'qubed_meteo-*.whl' | grep manylinux | grep x86_64 | head -n1)
+          echo "Installing $WHEEL"
+          pip install "$WHEEL"
+          python -c "import qubed_meteo; print('qubed_meteo OK')"
+
+  test-wheels-macos:
+    name: Test macOS wheels
+    runs-on: macos-latest
+    needs: build-wheels
+
+    strategy:
+      matrix:
+        include:
+          - package: py_qubed
+            module: qubed
+
+          - package: py_qubed_meteo
+            module: qubed_meteo
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Show wheels
+        run: find dist -name '*.whl' | sort
+
+      - name: Install wheel
+        run: |
+          if [ "${{ matrix.package }}" = "py_qubed" ]; then
+            WHEEL=$(find dist -name 'qubed-*.whl' | grep macosx | grep arm64 | head -n1)
+          else
+            WHEEL=$(find dist -name 'qubed_meteo-*.whl' | grep macosx | grep arm64 | head -n1)
+          fi
+
+          echo "Installing $WHEEL"
+          pip install "$WHEEL"
+
+      - name: Run import test
+        run: |
+          python -c "import ${{ matrix.module }}; print('${{ matrix.module }} OK')"
+
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [test-wheels-linux, test-wheels-macos]
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: List wheels
+        run: find dist -name '*.whl' | sort
+
+      - name: Publish to PyPI
+        env:
+          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          find dist -name '*.whl' -print0 | xargs -0 maturin upload

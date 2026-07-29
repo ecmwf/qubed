@@ -1,0 +1,10 @@
+[tool.uv.workspace]
+members = [
+    "py_qubed_meteo",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "maturin",
+]
