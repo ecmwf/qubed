@@ -11,10 +11,8 @@ use std::time::Instant;
 fn main() {
     // Ensure FDB config is set so the internal listing can open the DB
     let config_path =
-        env::current_dir().unwrap().join("/Users/male/git/fdb-home/etc/fdb/config.yaml");
-    unsafe {
-        std::env::set_var("FDB5_CONFIG_FILE", config_path.to_str().expect("Invalid config path"));
-    }
+        env::var("FDB5_CONFIG_FILE").expect("Set FDB5_CONFIG_FILE to your local FDB config path");
+    unsafe { std::env::set_var("FDB5_CONFIG_FILE", config_path) };
 
     let request_map = json!({
         "class" : "od",
