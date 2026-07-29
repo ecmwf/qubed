@@ -657,12 +657,8 @@ mod tests {
 
         let result = a.intersect(&b);
 
-        // intersection empty
-        if let Coordinates::Integers(IntegerCoordinates::RangeSet(ranges)) = &result.intersection {
-            assert_eq!(ranges.len(), 0);
-        } else {
-            panic!("Expected empty RangeSet intersection");
-        }
+        // intersection empty — wrap_ints returns Empty when len == 0
+        assert_eq!(result.intersection, Coordinates::Empty);
     }
 
     #[test]

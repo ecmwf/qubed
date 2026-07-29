@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn test_ascii_datetime_range_daily_roundtrip() {
         // Daily datetime range (no /by/ suffix — daily is the default)
-        let input = "root\n└── date=2020-01-01T00:00:00/to/2020-01-10T00:00:00\n";
+        let input = "root\n└── date=20200101/to/20200110\n";
         let qube = Qube::from_ascii(input).unwrap();
         let out = qube.to_ascii();
         assert_eq!(input, out, "Daily datetime range ASCII roundtrip failed:\n{}", out);
@@ -264,8 +264,8 @@ mod tests {
 
     #[test]
     fn test_ascii_datetime_range_hourly_roundtrip() {
-        // Hourly datetime range (3600s step)
-        let input = "root\n└── date=2020-01-01T00:00:00/to/2020-01-01T06:00:00/by/3600s\n";
+        // Hourly datetime range (3600s step): start is midnight so compact, end has time component
+        let input = "root\n└── date=20200101/to/2020-01-01T06:00:00/by/3600s\n";
         let qube = Qube::from_ascii(input).unwrap();
         let out = qube.to_ascii();
         assert_eq!(input, out, "Hourly datetime range ASCII roundtrip failed:\n{}", out);
@@ -274,7 +274,7 @@ mod tests {
     #[test]
     fn test_ascii_datetime_multi_range_roundtrip() {
         // Two daily ranges joined by `|`
-        let input = "root\n└── date=2020-01-01T00:00:00/to/2020-01-05T00:00:00|2020-02-01T00:00:00/to/2020-02-05T00:00:00\n";
+        let input = "root\n└── date=20200101/to/20200105|20200201/to/20200205\n";
         let qube = Qube::from_ascii(input).unwrap();
         let out = qube.to_ascii();
         assert_eq!(input, out, "Multi datetime range ASCII roundtrip failed:\n{}", out);
@@ -296,7 +296,7 @@ mod tests {
             c.append(v);
             qube.get_or_create_child("param", class, Some(c)).unwrap();
         }
-        qube.compress();
+        qube.compress_to_ranges();
 
         let ascii = qube.to_ascii();
         println!("Compressed ASCII:\n{}", ascii);

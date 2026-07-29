@@ -1,9 +1,24 @@
 use std::hash::Hash;
 
-use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use chrono::DateTime;
+use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use tiny_vec::TinyVec;
 
 use crate::coordinates::{Coordinates, IntersectionResult};
+
+/// Render a `NaiveDateTime` compactly: `YYYYMMDD` when the time is exactly
+/// midnight (00:00:00), otherwise full `YYYY-MM-DDTHH:MM:SS`.
+///
+/// This keeps display output concise for the common ECMWF case where dates
+/// carry no time component, while still being unambiguous for genuine datetimes.
+fn format_dt_smart(dt: NaiveDateTime) -> String {
+    let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+    if dt.time() == midnight {
+        dt.format("%Y%m%d").to_string()
+    } else {
+        dt.format("%Y-%m-%dT%H:%M:%S").to_string()
+    }
+}
 
 /// An inclusive datetime range `[start, end]` with a given step (as a `Duration`).
 /// All values `start + k * step` where `start + k * step <= end` are members.
@@ -173,12 +188,11 @@ impl DateTimeCoordinates {
 
     pub(crate) fn to_string(&self) -> String {
         match self {
-            DateTimeCoordinates::List(list) => list
-                .iter()
-                .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S").to_string())
-                .collect::<Vec<String>>()
-                .join("/"),
+            DateTimeCoordinates::List(list) => {
+                list.iter().map(|dt| format_dt_smart(*dt)).collect::<Vec<String>>().join("/")
+            }
             DateTimeCoordinates::RangeSet(ranges) => {
+                // Keep full machine format for RangeSets so parse_range_from_str can round-trip.
                 ranges.iter().map(|r| r.to_string()).collect::<Vec<String>>().join("/")
             }
         }
@@ -187,34 +201,30 @@ impl DateTimeCoordinates {
     /// Human-readable ASCII representation.
     ///
     /// Each range is rendered as:
-    ///   - singleton `v`       →  `v` (using `%Y-%m-%dT%H:%M:%S`)
-    ///   - daily range         →  `start/to/end`
-    ///   - range with step     →  `start/to/end/by/<secs>s`
+    ///   - singleton `v`       →  `YYYYMMDD` (date-only if time is midnight)
+    ///   - daily range         →  `YYYYMMDD/to/YYYYMMDD`
+    ///   - range with step     →  `YYYYMMDD/to/YYYYMMDD/by/<secs>s`
     ///
     /// Multiple ranges / singletons are separated by `|`.
-    /// Plain `List` values use the standard `/`-joined format.
+    /// Plain `List` values use the same compact date-only format.
     pub(crate) fn to_ascii_string(&self) -> String {
-        let fmt = "%Y-%m-%dT%H:%M:%S";
         match self {
             DateTimeCoordinates::List(list) => {
-                list.iter().map(|dt| dt.format(fmt).to_string()).collect::<Vec<String>>().join("/")
+                list.iter().map(|dt| format_dt_smart(*dt)).collect::<Vec<String>>().join("/")
             }
             DateTimeCoordinates::RangeSet(ranges) => {
                 let day_secs = Duration::days(1).num_seconds();
                 ranges
                     .iter()
                     .map(|r| {
+                        let start = format_dt_smart(r.start);
+                        let end = format_dt_smart(r.end);
                         if r.start == r.end {
-                            r.start.format(fmt).to_string()
+                            start
                         } else if r.step.num_seconds() == day_secs {
-                            format!("{}/to/{}", r.start.format(fmt), r.end.format(fmt))
+                            format!("{}/to/{}", start, end)
                         } else {
-                            format!(
-                                "{}/to/{}/by/{}s",
-                                r.start.format(fmt),
-                                r.end.format(fmt),
-                                r.step.num_seconds()
-                            )
+                            format!("{}/to/{}/by/{}s", start, end, r.step.num_seconds())
                         }
                     })
                     .collect::<Vec<String>>()
@@ -491,7 +501,7 @@ impl DateTimeCoordinates {
             }
         };
 
-        if values.len() < 3 {
+        if values.len() < 2 {
             return;
         }
 
@@ -545,7 +555,7 @@ pub(crate) fn compress_datetimes_to_ranges(values: &[NaiveDateTime]) -> Vec<Date
             1
         };
 
-        if run_len >= 3 {
+        if run_len >= 2 {
             let step = values[i + 1] - values[i];
             result.push(DateTimeRange::new(values[i], values[i + run_len - 1], step));
             i += run_len;
@@ -851,12 +861,8 @@ mod tests {
 
         let result = a.intersect(&b);
 
-        if let Coordinates::DateTimes(DateTimeCoordinates::RangeSet(ranges)) = &result.intersection
-        {
-            assert_eq!(ranges.len(), 0);
-        } else {
-            panic!("Expected empty RangeSet intersection");
-        }
+        // intersection empty — wrap_dts returns Empty when len == 0
+        assert_eq!(result.intersection, Coordinates::Empty);
     }
 
     #[test]
@@ -1055,12 +1061,20 @@ mod tests {
 
     #[test]
     fn test_compress_two_elements_does_not_compress() {
-        // Only 2 datetimes — not worth compressing
+        // With threshold=2, two consecutive datetimes DO compress into a range.
         let mut c = DateTimeCoordinates::default();
         c.append(dt(2020, 1, 1));
         c.append(dt(2020, 1, 2));
         c.try_compress_to_ranges();
-        assert!(matches!(c, DateTimeCoordinates::List(_)));
+        // Should now be a RangeSet with a single range [Jan1..Jan2] step=1day
+        match &c {
+            DateTimeCoordinates::RangeSet(ranges) => {
+                assert_eq!(ranges.len(), 1);
+                assert_eq!(ranges[0].start, dt(2020, 1, 1));
+                assert_eq!(ranges[0].end, dt(2020, 1, 2));
+            }
+            other => panic!("Expected RangeSet, got {:?}", other),
+        }
     }
 
     #[test]
@@ -1118,5 +1132,46 @@ mod tests {
         let s = c.to_string();
         let parsed = Coordinates::from_string(&s);
         assert_eq!(parsed, c, "Roundtrip failed: {:?} → {:?} → {:?}", c, s, parsed);
+    }
+
+    #[test]
+    fn test_compress_to_ranges_date_list_produces_two_ranges() {
+        // [Jan1, Jan2, Jan4, Jan5] has a gap at Jan3 → should compress to two ranges
+        let mut c = DateTimeCoordinates::default();
+        for day in [1u32, 2, 4, 5] {
+            let d = NaiveDate::from_ymd_opt(2020, 1, day).unwrap();
+            c.append(NaiveDateTime::new(d, NaiveTime::from_hms_opt(0, 0, 0).unwrap()));
+        }
+        c.try_compress_to_ranges();
+        match &c {
+            DateTimeCoordinates::RangeSet(ranges) => {
+                assert_eq!(
+                    ranges.len(),
+                    2,
+                    "Expected 2 ranges, got {}: {:?}",
+                    ranges.len(),
+                    ranges
+                );
+                assert_eq!(ranges[0].start, dt(2020, 1, 1));
+                assert_eq!(ranges[0].end, dt(2020, 1, 2));
+                assert_eq!(ranges[1].start, dt(2020, 1, 4));
+                assert_eq!(ranges[1].end, dt(2020, 1, 5));
+            }
+            other => panic!("Expected RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_format_dt_smart_midnight_vs_nonmidnight() {
+        let midnight = NaiveDateTime::new(
+            NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
+            NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        );
+        let noon = NaiveDateTime::new(
+            NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
+            NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+        );
+        assert_eq!(format_dt_smart(midnight), "20200101");
+        assert_eq!(format_dt_smart(noon), "2020-01-01T12:00:00");
     }
 }

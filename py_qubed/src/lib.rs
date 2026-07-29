@@ -213,6 +213,13 @@ impl PyQube {
         Ok(())
     }
 
+    /// Like `compress()` but also compresses runs of consecutive integers or
+    /// datetimes into compact range notation (e.g. `step=0/to/24/by/6`).
+    pub fn compress_to_ranges(&mut self) -> PyResult<()> {
+        self.inner.compress_to_ranges();
+        Ok(())
+    }
+
     pub fn drop(&self, dims: &Bound<'_, PyList>) -> PyResult<Self> {
         let to_drop: Vec<String> = dims
             .iter()
