@@ -18,6 +18,12 @@ pub struct PyQube {
     inner: Qube,
 }
 
+impl From<Qube> for PyQube {
+    fn from(inner: Qube) -> Self {
+        Self { inner }
+    }
+}
+
 #[pymethods]
 impl PyQube {
     #[new]
