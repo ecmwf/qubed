@@ -561,6 +561,11 @@ impl Qube {
         seen.into_iter().collect()
     }
 
+    /// Return all node IDs in this Qube.
+    pub(crate) fn all_node_ids(&self) -> Vec<NodeIdx> {
+        self.nodes.keys().collect()
+    }
+
     pub(crate) fn invalidate_ancestors(&self, id: NodeIdx) {
         if let Some(node) = self.nodes.get(id) {
             node.structural_hash.store(0, Ordering::Release);
