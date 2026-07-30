@@ -4,10 +4,12 @@ use ::qubed_meteo::adapters::fdb::FromFDBList;
 use ::qubed_meteo::adapters::mars_list::FromMARSList;
 use ::qubed_meteo::adapters::opendata::FromOpenData;
 use ::qubed_meteo::adapters::to_constraints::ToDssConstraints;
+use ::qubed_meteo::adapters::from_constraints::FromDssConstraints;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
 use pyo3::wrap_pyfunction;
+use ::py_qubed::PyQube;
 
 #[pyfunction]
 pub fn from_mars_list_py(text: &str) -> PyResult<String> {
@@ -62,3 +64,17 @@ pub fn to_dss_constraints_py(ascii: &str) -> PyResult<String> {
     let v = qube.to_dss_constraints();
     serde_json::to_string(&v).map_err(|e| PyValueError::new_err(e.to_string()))
 }
+
+#[pyfunction]
+pub fn from_dss_constraints_py(text: &str) -> PyResult<PyQube> {
+    let value: serde_json::Value =
+        serde_json::from_str(text)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+    match Qube::from_dss_constraints(&value) {
+        // ASCII is our stable bridge format so callers can pipe into PyQube.from_ascii().
+        Ok(qube) => Ok(PyQube::from(qube)),
+        Err(e) => Err(PyValueError::new_err(e)),
+    }
+}
+
