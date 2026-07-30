@@ -501,7 +501,7 @@ impl DateTimeCoordinates {
             }
         };
 
-        if values.len() < 2 {
+        if values.len() < 3 {
             return;
         }
 
@@ -555,7 +555,7 @@ pub(crate) fn compress_datetimes_to_ranges(values: &[NaiveDateTime]) -> Vec<Date
             1
         };
 
-        if run_len >= 2 {
+        if run_len >= 3 {
             let step = values[i + 1] - values[i];
             result.push(DateTimeRange::new(values[i], values[i + run_len - 1], step));
             i += run_len;
@@ -1061,20 +1061,12 @@ mod tests {
 
     #[test]
     fn test_compress_two_elements_does_not_compress() {
-        // With threshold=2, two consecutive datetimes DO compress into a range.
+        // Only 2 datetimes — below threshold of 3, should stay as List
         let mut c = DateTimeCoordinates::default();
         c.append(dt(2020, 1, 1));
         c.append(dt(2020, 1, 2));
         c.try_compress_to_ranges();
-        // Should now be a RangeSet with a single range [Jan1..Jan2] step=1day
-        match &c {
-            DateTimeCoordinates::RangeSet(ranges) => {
-                assert_eq!(ranges.len(), 1);
-                assert_eq!(ranges[0].start, dt(2020, 1, 1));
-                assert_eq!(ranges[0].end, dt(2020, 1, 2));
-            }
-            other => panic!("Expected RangeSet, got {:?}", other),
-        }
+        assert!(matches!(c, DateTimeCoordinates::List(_)));
     }
 
     #[test]
@@ -1136,9 +1128,9 @@ mod tests {
 
     #[test]
     fn test_compress_to_ranges_date_list_produces_two_ranges() {
-        // [Jan1, Jan2, Jan4, Jan5] has a gap at Jan3 → should compress to two ranges
+        // [Jan1..Jan3, Jan5..Jan7] — runs of 3 each, gap at Jan4 → two ranges
         let mut c = DateTimeCoordinates::default();
-        for day in [1u32, 2, 4, 5] {
+        for day in [1u32, 2, 3, 5, 6, 7] {
             let d = NaiveDate::from_ymd_opt(2020, 1, day).unwrap();
             c.append(NaiveDateTime::new(d, NaiveTime::from_hms_opt(0, 0, 0).unwrap()));
         }
@@ -1153,9 +1145,9 @@ mod tests {
                     ranges
                 );
                 assert_eq!(ranges[0].start, dt(2020, 1, 1));
-                assert_eq!(ranges[0].end, dt(2020, 1, 2));
-                assert_eq!(ranges[1].start, dt(2020, 1, 4));
-                assert_eq!(ranges[1].end, dt(2020, 1, 5));
+                assert_eq!(ranges[0].end, dt(2020, 1, 3));
+                assert_eq!(ranges[1].start, dt(2020, 1, 5));
+                assert_eq!(ranges[1].end, dt(2020, 1, 7));
             }
             other => panic!("Expected RangeSet, got {:?}", other),
         }
