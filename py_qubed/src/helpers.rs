@@ -22,7 +22,7 @@ pub(crate) fn check_dict_against_axes(
             k.extract().map_err(|_| PyTypeError::new_err("contains: dict keys must be strings"))?;
 
         let query_vals: Vec<String> = if v.is_instance_of::<PyList>() {
-            let lst = v.downcast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
+            let lst = v.cast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
             lst.iter().map(|it| Ok(it.str()?.extract::<String>()?)).collect::<PyResult<_>>()?
         } else {
             vec![v.str()?.extract::<String>()?]

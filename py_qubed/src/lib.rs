@@ -18,6 +18,12 @@ pub struct PyQube {
     inner: Qube,
 }
 
+impl From<Qube> for PyQube {
+    fn from(inner: Qube) -> Self {
+        Self { inner }
+    }
+}
+
 #[pymethods]
 impl PyQube {
     #[new]
@@ -154,8 +160,7 @@ impl PyQube {
                 k.extract().map_err(|_| PyTypeError::new_err("select keys must be strings"))?;
 
             let coords = if v.is_instance_of::<PyList>() {
-                let lst =
-                    v.downcast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
+                let lst = v.cast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
                 let joined = join_pylist_as_path(lst)?;
                 Coordinates::from_string(&joined)
             } else {
@@ -390,8 +395,7 @@ impl PyQube {
                 .map_err(|_| PyTypeError::new_err("expand: dimension keys must be strings"))?;
 
             let coords = if v.is_instance_of::<PyList>() {
-                let lst =
-                    v.downcast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
+                let lst = v.cast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
                 let joined = join_pylist_as_path(lst)?;
                 Coordinates::from_string(&joined)
             } else {
@@ -427,7 +431,7 @@ impl PyQube {
     pub fn collapse(&mut self, axis: Bound<'_, PyAny>) -> PyResult<()> {
         // Accept either a single string or a list of strings.
         let axes: Vec<String> = if axis.is_instance_of::<PyList>() {
-            let lst = axis.downcast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
+            let lst = axis.cast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
             lst.iter()
                 .map(|item| {
                     item.str()
@@ -535,12 +539,14 @@ impl PyQube {
         }
 
         // --- branch 2: item is a dict ---
-        if let Ok(dict) = item.downcast::<PyDict>() {
+        if item.is_instance_of::<PyDict>() {
+            let dict = item.cast::<PyDict>().unwrap();
             return helpers::check_dict_against_axes(dict, &current_axes, py);
         }
 
         // --- branch 3: item is a Qube ---
-        if let Ok(other_cell) = item.downcast::<PyQube>() {
+        if item.is_instance_of::<PyQube>() {
+            let other_cell = item.cast::<PyQube>().unwrap();
             let other_ref = other_cell.borrow();
             let other_axes: std::collections::BTreeMap<String, Vec<String>> = other_ref
                 .inner
@@ -924,7 +930,7 @@ fn pydict_to_datacube(datacube: Bound<'_, PyDict>) -> PyResult<(Datacube, Vec<St
             k.extract().map_err(|_| PyTypeError::new_err("datacube keys must be strings"))?;
         key_order.push(key.clone());
         let coords = if v.is_instance_of::<PyList>() {
-            let lst = v.downcast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
+            let lst = v.cast::<PyList>().map_err(|e| PyTypeError::new_err(e.to_string()))?;
             pylist_to_coords(lst)?
         } else if v.is_instance_of::<PyInt>() {
             let val: i32 = v.extract()?;
@@ -978,9 +984,9 @@ fn py_to_json_value(input: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
         let s: String = input.extract()?;
         serde_json::from_str(&s).map_err(|e| PyTypeError::new_err(e.to_string()))
     } else if input.is_instance_of::<PyDict>() {
-        py_dict_to_json(input.downcast::<PyDict>().unwrap())
+        py_dict_to_json(input.cast::<PyDict>().unwrap())
     } else if input.is_instance_of::<PyList>() {
-        py_list_to_json(input.downcast::<PyList>().unwrap())
+        py_list_to_json(input.cast::<PyList>().unwrap())
     } else {
         Err(PyTypeError::new_err("Expected str, dict, or list for JSON input"))
     }
@@ -1021,9 +1027,9 @@ fn py_any_to_json(obj: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
     } else if obj.is_instance_of::<PyString>() {
         Ok(JsonValue::String(obj.extract::<String>()?))
     } else if obj.is_instance_of::<PyDict>() {
-        py_dict_to_json(obj.downcast::<PyDict>().unwrap())
+        py_dict_to_json(obj.cast::<PyDict>().unwrap())
     } else if obj.is_instance_of::<PyList>() {
-        py_list_to_json(obj.downcast::<PyList>().unwrap())
+        py_list_to_json(obj.cast::<PyList>().unwrap())
     } else {
         // Fallback: convert to string representation
         Ok(JsonValue::String(obj.str()?.extract::<String>()?))

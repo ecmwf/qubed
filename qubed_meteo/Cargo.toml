@@ -11,3 +11,4 @@ version = "0.4.8"
 
 [workspace.dependencies]
 qubed = { path = "../qubed", version = "0.4.8" }
+py_qubed = {path = "../py_qubed", version = "0.4.8"}
