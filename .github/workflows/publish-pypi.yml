@@ -18,12 +18,17 @@ jobs:
       fail-fast: false
       matrix:
         package: [py_qubed, py_qubed_meteo]
-        target: [x86_64, aarch64, x86_64-apple-darwin, aarch64-apple-darwin]
+        # target: [x86_64, aarch64, x86_64-apple-darwin, aarch64-apple-darwin]
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
         include:
-          - target: x86_64
+          - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             manylinux: auto
-          - target: aarch64
+          - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
             manylinux: auto
           - target: x86_64-apple-darwin
