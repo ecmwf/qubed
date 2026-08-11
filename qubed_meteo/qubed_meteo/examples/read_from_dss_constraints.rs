@@ -1,5 +1,5 @@
 use qubed::Qube;
-use qubed_meteo::adapters::dss_constraints::FromDssConstraints;
+use qubed_meteo::adapters::from_constraints::FromDssConstraints;
 use std::time::Instant;
 
 fn main() {
