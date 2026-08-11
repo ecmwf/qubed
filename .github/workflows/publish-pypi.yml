@@ -24,19 +24,39 @@ jobs:
           - aarch64-unknown-linux-gnu
           - x86_64-apple-darwin
           - aarch64-apple-darwin
+        # include:
+        #   - target: x86_64-unknown-linux-gnu
+        #     runner: ubuntu-latest
+        #     manylinux: auto
+        #   - target: aarch64-unknown-linux-gnu
+        #     runner: ubuntu-latest
+        #     manylinux: auto
+        #   - target: x86_64-apple-darwin
+        #     runner: macos-latest
+        #     manylinux: 'off'
+        #   - target: aarch64-apple-darwin
+        #     runner: macos-latest
+        #     manylinux: 'off'
         include:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             manylinux: auto
+            cflags: ""
+
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
             manylinux: auto
+            cflags: "-D__ARM_ARCH=8"
+
           - target: x86_64-apple-darwin
             runner: macos-latest
-            manylinux: 'off'
+            manylinux: "off"
+            cflags: ""
+
           - target: aarch64-apple-darwin
             runner: macos-latest
-            manylinux: 'off'
+            manylinux: "off"
+            cflags: ""
           - package: py_qubed
             manifest_path: py_qubed/Cargo.toml
           - package: py_qubed_meteo
@@ -49,6 +69,8 @@ jobs:
 
       - name: Build wheel
         uses: PyO3/maturin-action@v1
+        env:
+          CFLAGS_aarch64_unknown_linux_gnu: ${{ matrix.cflags }}
         with:
           command: build
           target: ${{ matrix.target }}
