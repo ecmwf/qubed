@@ -7,17 +7,15 @@ class=rd,expver=2,param=3
 """
 
 
-def test_from_mars_list_py_produces_parseable_ascii() -> None:
-    ascii_tree = qubed_meteo.from_mars_list_py(MARS_LIST_SAMPLE)
+def test_from_mars_list_py_returns_qube() -> None:
+    qube = qubed_meteo.from_mars_list_py(MARS_LIST_SAMPLE)
 
-    # Parsing the adapter output through PyQube verifies end-to-end contract compatibility.
-    parsed = Qube.from_ascii(ascii_tree)
-    datacubes = parsed.to_datacubes()
-
-    assert ascii_tree.startswith("root")
+    assert isinstance(qube, Qube)
+    datacubes = qube.to_datacubes()
     assert len(datacubes) >= 1
 
 
 def test_from_mars_list_py_handles_empty_input() -> None:
-    ascii_tree = qubed_meteo.from_mars_list_py("\n\n")
-    assert ascii_tree == "root\n"
+    qube = qubed_meteo.from_mars_list_py("\n\n")
+    assert isinstance(qube, Qube)
+    assert qube.is_empty()
