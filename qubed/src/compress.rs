@@ -296,6 +296,21 @@ impl Qube {
     }
 
     /// Compresses the tree by merging nodes, pruning empty nodes, and deduplicating nodes.
+    /// Step-by-step version of [`compress`] that calls a callback after each
+    /// internal pass, so callers can measure the effect of each step.
+    /// Callback receives a label and the Qube at that point.
+    pub fn compress_instrumented<F: FnMut(&str, &Qube)>(&mut self, mut cb: F) {
+        let root = self.root();
+        self.compress_recursively(root);
+        cb("after compress_recursively", self);
+        self.prune_empty_nodes_recursively(root);
+        cb("after prune_empty_nodes", self);
+        self.dedup_recursively(root);
+        cb("after dedup_recursively", self);
+        self.consolidate_all_metadata(root);
+        cb("after consolidate_metadata", self);
+    }
+
     /// After all structural operations, runs a bottom-up metadata consolidation pass so
     /// that uniform metadata is bubbled up to the highest node where it applies.
     pub fn compress(&mut self) {
@@ -305,6 +320,18 @@ impl Qube {
         self.dedup_recursively(root);
         // Bubble up consistent metadata after all structural merging is done.
         self.consolidate_all_metadata(root);
+    }
+
+    /// Run only the `try_compress` range-encoding step on every node, without
+    /// the preceding structural `compress()` pass.  Useful for isolating whether
+    /// data loss comes from structural merging or from range compression.
+    pub fn try_compress_all_nodes(&mut self) {
+        let ids: Vec<NodeIdx> = self.all_node_ids();
+        for id in ids {
+            if let Some(node) = self.node_mut(id) {
+                node.coords_mut().try_compress();
+            }
+        }
     }
 
     /// Like [`compress`] but also compresses runs of consecutive integers or
@@ -484,5 +511,188 @@ impl Qube {
 
         // Invalidate group[0]'s cached structural hash: its children list changed.
         self.invalidate_structural_hash(group[0]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Coordinates;
+    use crate::datacube::Datacube;
+    use crate::qube::Qube;
+    use crate::select::SelectMode;
+
+    /// Count the total number of individual data points in a Qube by summing
+    /// the product of coordinate lengths across all leaf datacubes.
+    ///
+    /// Empty coordinates (including the virtual root node) are excluded from
+    /// each datacube's product so they don't zero it out.
+    fn total_data_points(qube: &Qube) -> usize {
+        qube.to_datacubes()
+            .iter()
+            .map(|dc| {
+                let non_empty: Vec<usize> =
+                    dc.coordinates().values().filter(|c| !c.is_empty()).map(|c| c.len()).collect();
+                if non_empty.is_empty() { 0 } else { non_empty.into_iter().product() }
+            })
+            .sum()
+    }
+
+    fn make_qube(datacubes: &[&[(&str, &str)]]) -> Qube {
+        let mut qube = Qube::new();
+        for &pairs in datacubes {
+            let mut dc = Datacube::new();
+            for &(k, v) in pairs {
+                dc.add_coordinate(k, Coordinates::from_string(v));
+            }
+            let mut part = Qube::from_datacube(&dc, None);
+            qube.append(&mut part);
+        }
+        qube
+    }
+
+    /// Verify that `compress_to_ranges` does not change the total number of
+    /// individual data points represented by the Qube.
+    #[test]
+    fn compress_to_ranges_preserves_data_point_count() {
+        // Build a Qube from several datacubes with consecutive integer steps
+        // so that try_compress() will actually merge them into RangeSet form.
+        let mut qube = make_qube(&[
+            &[("class", "od"), ("stream", "oper"), ("step", "0"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "6"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "12"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "18"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "24"), ("param", "t/u")],
+            // A second stream with a different (non-contiguous) step set so we
+            // exercise both merged and non-merged paths.
+            &[("class", "od"), ("stream", "enfo"), ("step", "0"), ("param", "z")],
+            &[("class", "od"), ("stream", "enfo"), ("step", "120"), ("param", "z")],
+            &[("class", "od"), ("stream", "enfo"), ("step", "240"), ("param", "z")],
+        ]);
+
+        let before = total_data_points(&qube);
+        assert!(before > 0, "test Qube must be non-empty before compression");
+
+        qube.compress_to_ranges();
+
+        let after = total_data_points(&qube);
+        assert_eq!(
+            before, after,
+            "compress_to_ranges changed the data-point count: {} → {}",
+            before, after
+        );
+    }
+
+    /// Verify that a Qube with a single datacube round-trips through
+    /// `compress_to_ranges` without losing any data points.
+    #[test]
+    fn compress_to_ranges_single_datacube_is_identity() {
+        let mut qube = make_qube(&[&[
+            ("date", "20200101/20200102/20200103/20200104/20200105"),
+            ("time", "0000/1200"),
+            ("step", "0/6/12/18/24"),
+            ("param", "t/u/v"),
+        ]]);
+
+        let before = total_data_points(&qube);
+        qube.compress_to_ranges();
+        let after = total_data_points(&qube);
+
+        assert_eq!(
+            before, after,
+            "single-datacube compress_to_ranges changed count: {} → {}",
+            before, after
+        );
+    }
+
+    /// After `compress_to_ranges` folds steps into a RangeSet, selecting an
+    /// individual step value that was part of the range must return a non-empty
+    /// Qube containing exactly the right data points.
+    #[test]
+    fn select_individual_value_from_range_compressed_qube() {
+        let mut qube = make_qube(&[
+            &[("class", "od"), ("stream", "oper"), ("step", "0"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "6"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "12"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "18"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "24"), ("param", "t/u")],
+        ]);
+        qube.compress_to_ranges();
+
+        // Select step=6 out of the range-compressed qube.
+        let result = qube
+            .select(&[("step", Coordinates::from_string("6"))], SelectMode::Default)
+            .expect("select should succeed");
+
+        let dcs = result.to_datacubes();
+        assert!(!dcs.is_empty(), "select(step=6) returned empty qube");
+
+        // Every returned datacube must contain step=6.
+        for dc in &dcs {
+            let steps = dc
+                .coordinates()
+                .get("step")
+                .expect("step dimension must be present")
+                .iter_sorted_strings();
+            assert!(
+                steps.iter().any(|s| s == "6"),
+                "returned datacube does not contain step=6: {steps:?}"
+            );
+        }
+
+        // Total data points must equal the single-step slice (param=t/u → 2).
+        assert_eq!(
+            total_data_points(&result),
+            2,
+            "select(step=6) should yield exactly 2 data points (param t and u)"
+        );
+    }
+
+    /// Two independently range-compressed Qubes can be appended and
+    /// re-compressed without data loss or explosion.
+    #[test]
+    fn append_and_recompress_two_range_compressed_qubes() {
+        // First half: steps 0..24 for stream=oper.
+        let mut qube_a = make_qube(&[
+            &[("class", "od"), ("stream", "oper"), ("step", "0"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "6"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "12"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "18"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "24"), ("param", "t")],
+        ]);
+        qube_a.compress_to_ranges();
+        let pts_a = total_data_points(&qube_a);
+
+        // Second half: steps 30..54 for stream=oper (different range, same dim layout).
+        let mut qube_b = make_qube(&[
+            &[("class", "od"), ("stream", "oper"), ("step", "30"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "36"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "42"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "48"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "54"), ("param", "t")],
+        ]);
+        qube_b.compress_to_ranges();
+        let pts_b = total_data_points(&qube_b);
+
+        // Merge and re-compress.
+        qube_a.append(&mut qube_b);
+        qube_a.compress_to_ranges();
+        let pts_merged = total_data_points(&qube_a);
+
+        assert_eq!(
+            pts_merged,
+            pts_a + pts_b,
+            "merged+recompressed qube should contain exactly pts_a({pts_a}) + pts_b({pts_b}) = {} points, got {pts_merged}",
+            pts_a + pts_b,
+        );
+
+        // The merged qube must still answer selects correctly.
+        let result = qube_a
+            .select(&[("step", Coordinates::from_string("30"))], SelectMode::Default)
+            .expect("select on merged qube should succeed");
+        assert_eq!(
+            total_data_points(&result),
+            1,
+            "select(step=30) from merged qube should yield 1 data point"
+        );
     }
 }
