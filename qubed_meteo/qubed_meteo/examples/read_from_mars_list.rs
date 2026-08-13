@@ -19,9 +19,12 @@ fn main() {
     println!("Number of datacubes: {}", datacubes.len());
 
     // Total data-point count across all datacubes (product of all coordinate cardinalities).
-    let total_points: u64 = datacubes.iter().map(|dc| {
-        dc.coordinates().values().map(|c| c.iter_sorted_strings().len() as u64).product::<u64>()
-    }).sum();
+    let total_points: u64 = datacubes
+        .iter()
+        .map(|dc| {
+            dc.coordinates().values().map(|c| c.iter_sorted_strings().len() as u64).product::<u64>()
+        })
+        .sum();
     println!("Total data points across all datacubes: {total_points}");
 
     // Debug: print per-dim counts for datacube [3]
@@ -37,20 +40,29 @@ fn main() {
     for (i, dc) in datacubes.iter().enumerate() {
         let coords = dc.coordinates();
         let get = |k: &str| {
-            coords.get(k).map(|c| {
-                let vals = c.iter_sorted_strings();
-                if vals.len() <= 3 {
-                    vals.join("/")
-                } else {
-                    format!("{}..{} ({} values)", vals[0], vals[vals.len()-1], vals.len())
-                }
-            }).unwrap_or_else(|| "-".into())
+            coords
+                .get(k)
+                .map(|c| {
+                    let vals = c.iter_sorted_strings();
+                    if vals.len() <= 3 {
+                        vals.join("/")
+                    } else {
+                        format!("{}..{} ({} values)", vals[0], vals[vals.len() - 1], vals.len())
+                    }
+                })
+                .unwrap_or_else(|| "-".into())
         };
-        let point_count: u64 = coords.values().map(|c| c.iter_sorted_strings().len() as u64).product();
+        let point_count: u64 =
+            coords.values().map(|c| c.iter_sorted_strings().len() as u64).product();
         println!(
             "  [{i:>2}] ({point_count:>15} pts) class={} dataset={} levtype={} time={} date={} param={} number={}",
-            get("class"), get("dataset"), get("levtype"),
-            get("time"), get("date"), get("param"), get("number"),
+            get("class"),
+            get("dataset"),
+            get("levtype"),
+            get("time"),
+            get("date"),
+            get("param"),
+            get("number"),
         );
     }
 
@@ -68,27 +80,31 @@ fn main() {
     let found = datacubes.iter().any(|dc| {
         let coords = dc.coordinates();
         checks.iter().all(|(dim, val)| {
-            coords.get(*dim)
+            coords
+                .get(*dim)
                 .map(|c| c.iter_sorted_strings().iter().any(|v| v.as_str() == *val))
                 .unwrap_or(false)
         })
     });
-    println!("\nSpot-check (class=ea, dataset=mean, date=1940-02-15, param=129): {}", if found { "FOUND ✓" } else { "MISSING ✗" });
+    println!(
+        "\nSpot-check (class=ea, dataset=mean, date=1940-02-15, param=129): {}",
+        if found { "FOUND ✓" } else { "MISSING ✗" }
+    );
 
     // Spot-check members dataset with early date.
-    let checks2: &[(&str, &str)] = &[
-        ("class", "ea"),
-        ("dataset", "members"),
-        ("date", "1940-03-10"),
-        ("number", "5"),
-    ];
+    let checks2: &[(&str, &str)] =
+        &[("class", "ea"), ("dataset", "members"), ("date", "1940-03-10"), ("number", "5")];
     let found2 = datacubes.iter().any(|dc| {
         let coords = dc.coordinates();
         checks2.iter().all(|(dim, val)| {
-            coords.get(*dim)
+            coords
+                .get(*dim)
                 .map(|c| c.iter_sorted_strings().iter().any(|v| v.as_str() == *val))
                 .unwrap_or(false)
         })
     });
-    println!("Spot-check (dataset=members, date=1940-03-10, number=5):         {}", if found2 { "FOUND ✓" } else { "MISSING ✗" });
+    println!(
+        "Spot-check (dataset=members, date=1940-03-10, number=5):         {}",
+        if found2 { "FOUND ✓" } else { "MISSING ✗" }
+    );
 }

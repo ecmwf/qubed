@@ -188,10 +188,7 @@ mod tests {
         // All datacubes should include the top-level fields from the header.
         for dc in &dcs {
             let coords = dc.coordinates();
-            assert!(
-                coords.contains_key("class"),
-                "expected 'class' dimension in datacube"
-            );
+            assert!(coords.contains_key("class"), "expected 'class' dimension in datacube");
         }
     }
 
@@ -216,11 +213,7 @@ mod tests {
         // reanalysis, spread).  After compress we expect to see those.
         let datasets: std::collections::HashSet<String> = dcs
             .iter()
-            .filter_map(|dc| {
-                dc.coordinates()
-                    .get("dataset")
-                    .map(|c| c.iter_sorted_strings())
-            })
+            .filter_map(|dc| dc.coordinates().get("dataset").map(|c| c.iter_sorted_strings()))
             .flatten()
             .collect();
 
@@ -235,10 +228,7 @@ mod tests {
         for dc in &dcs {
             let coords = dc.coordinates();
             for dim in &["class", "levtype", "param", "date"] {
-                assert!(
-                    coords.contains_key(*dim),
-                    "expected dimension '{dim}' in datacube"
-                );
+                assert!(coords.contains_key(*dim), "expected dimension '{dim}' in datacube");
             }
         }
     }
@@ -260,18 +250,12 @@ mod tests {
 
         // After compression the ERA5 multi-year catalog should collapse to a
         // small number of structural datacubes (empirically 21).
-        assert_eq!(
-            dcs.len(),
-            21,
-            "expected 21 datacubes from big_mars.list, got {}",
-            dcs.len()
-        );
+        assert_eq!(dcs.len(), 21, "expected 21 datacubes from big_mars.list, got {}", dcs.len());
 
         // Every datacube must have real coordinate values (no phantom root=0 issue).
         for (i, dc) in dcs.iter().enumerate() {
-            let total_pts: u64 = dc.coordinates().values()
-                .map(|c| c.iter_sorted_strings().len() as u64)
-                .product();
+            let total_pts: u64 =
+                dc.coordinates().values().map(|c| c.iter_sorted_strings().len() as u64).product();
             assert!(total_pts > 0, "datacube [{i}] has zero data points (root included?)");
         }
 
