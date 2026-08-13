@@ -39,7 +39,10 @@ impl Qube {
                 if let Some(dim) = self.dimension_str(self.node_dim(node_id).unwrap()) {
                     if let Some(coords) = self.node(node_id).map(|node| node.coordinates().clone())
                     {
-                        datacube.add_coordinate(&dim, coords.clone());
+                        // Skip virtual nodes with no coordinates (e.g. the root node).
+                        if !coords.is_empty() {
+                            datacube.add_coordinate(&dim, coords);
+                        }
                     }
                 }
             }
