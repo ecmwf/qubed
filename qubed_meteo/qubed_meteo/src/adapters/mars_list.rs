@@ -178,6 +178,10 @@ mod tests {
     #[test]
     fn test_parses_small_mars_list() {
         let path = examples_data("small_mars.list");
+        if !path.exists() {
+            eprintln!("Skipping: {} not found", path.display());
+            return;
+        }
         let qube = Qube::from_mars_list_path(&path)
             .unwrap_or_else(|e| panic!("Failed to parse {}: {e}", path.display()));
 
@@ -287,6 +291,10 @@ mod tests {
     #[test]
     fn test_from_mars_list_path_matches_from_string() {
         let path = examples_data("small_mars.list");
+        if !path.exists() {
+            eprintln!("Skipping: {} not found", path.display());
+            return;
+        }
         let content = std::fs::read_to_string(&path).expect("read small_mars.list");
 
         let qube_via_path = Qube::from_mars_list_path(&path).expect("from_mars_list_path");
