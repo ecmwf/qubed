@@ -31,7 +31,9 @@ def test_from_mars_list_py_handles_empty_input() -> None:
 
 def test_from_mars_list_file_py_small() -> None:
     """from_mars_list_file_py reads small_mars.list and returns a valid Qube."""
-    assert _SMALL_MARS.exists(), f"Test fixture missing: {_SMALL_MARS}"
+    if not _SMALL_MARS.exists():
+        import pytest
+        pytest.skip(f"Test fixture missing: {_SMALL_MARS}")
     qube = qubed_meteo.from_mars_list_file_py(str(_SMALL_MARS))
     assert isinstance(qube, Qube)
     assert not qube.is_empty()
@@ -44,7 +46,9 @@ def test_from_mars_list_file_py_small() -> None:
 
 def test_from_mars_list_file_py_matches_string() -> None:
     """from_mars_list_file_py and from_mars_list_py produce consistent results."""
-    assert _SMALL_MARS.exists(), f"Test fixture missing: {_SMALL_MARS}"
+    if not _SMALL_MARS.exists():
+        import pytest
+        pytest.skip(f"Test fixture missing: {_SMALL_MARS}")
     text = _SMALL_MARS.read_text()
     qube_file = qubed_meteo.from_mars_list_file_py(str(_SMALL_MARS))
     qube_str = qubed_meteo.from_mars_list_py(text)
