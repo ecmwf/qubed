@@ -31,6 +31,13 @@ pub fn from_mars_list_py(py: Python<'_>, text: &str) -> PyResult<Py<PyAny>> {
     qube_to_py(py, qube)
 }
 
+#[pyfunction]
+pub fn from_mars_list_file_py(py: Python<'_>, path: &str) -> PyResult<Py<PyAny>> {
+    let qube = Qube::from_mars_list_path(std::path::Path::new(path))
+        .map_err(|e| PyValueError::new_err(e))?;
+    qube_to_py(py, qube)
+}
+
 /// Crawl the ECMWF open-data catalogue and return the resulting Qube.
 ///
 /// Args:
@@ -49,6 +56,7 @@ pub fn from_opendata_py(py: Python<'_>, date: &str, model: &str) -> PyResult<Py<
 #[pyo3(name = "qubed_meteo")]
 fn py_qubed_meteo_module(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(from_mars_list_py, m)?)?;
+    m.add_function(wrap_pyfunction!(from_mars_list_file_py, m)?)?;
     #[cfg(feature = "rsfdb-support")]
     m.add_function(wrap_pyfunction!(from_fdb_list_py, m)?)?;
     m.add_function(wrap_pyfunction!(to_dss_constraints_py, m)?)?;
