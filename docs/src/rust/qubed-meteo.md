@@ -54,47 +54,30 @@ println!("{}", qube.to_ascii());
 
 ---
 
-## FromFDBList — FDB Path Parser
+## FromFDBList — FDB Listing
 
-**Trait:** `qubed_meteo::adapters::fdb::FromFDBList`
+**Trait:** `qubed_meteo::adapters::fdb::FromFDBList` (feature `fdb-support`)
 
 ```rust
 fn from_fdb_list(request_map: &serde_json::Value) -> Result<Qube, String>
+fn from_fdb_list_str(fdb: &Fdb, selector: &str) -> Result<Qube, String>
+fn from_fdb_list_with<S: RequestState>(fdb: &Fdb, request: &MarsRequest<S>) -> Result<Qube, String>
 ```
 
-Builds a Qube from FDB-style comma-separated path strings, as produced by the `rsfdb` listing tools.
+Lists an FDB through the `fdb` wrapper and builds a Qube from the key of every listed field. `from_fdb_list` opens the FDB from the environment (`FDB5_CONFIG_FILE`) and takes the request as a JSON object. The other two take an already opened `Fdb`, with either a MARS selector string or a `metkit::MarsRequest`.
 
-### Input Format
-
-Each item is a comma-separated sequence of `key=value` segments:
-
-```
-class=od,expver=0001,param=1/2
-class=rd,expver=0003,param=3/4
-```
-
-- Each segment's values can be slash-separated for multiple coordinates.
-- Segments without `=` become dimension-only nodes (no coordinates).
-- Values with leading zeros are preserved as strings.
-- The resulting tree is automatically compressed.
+- Each listed field contributes one path of `key=value` nodes in schema order.
+- Slash-separated values become multiple coordinates; values with leading zeros stay strings.
+- The resulting tree is compressed.
 
 ### Example
 
 ```rust
 use qubed::Qube;
-use qubed_meteo::adapters::fdb::FromFDBList;
-use serde_json::json;
+use qubed_meteo::adapters::fdb::{Fdb, FromFDBList};
 
-let request_map = json!({
-  "class" : "od",
-  "expver" : "0001",
-  "stream" : "oper",
-  "time" : "0000",
-  "domain" : "g",
-  "levtype" : "sfc",
-});
-
-let qube = Qube::from_fdb_list(&request_map).unwrap();
+let fdb = Fdb::open_default().unwrap();
+let qube = Qube::from_fdb_list_str(&fdb, "class=od,expver=0001,stream=oper,date=20240101").unwrap();
 println!("{}", qube.to_ascii());
 ```
 
