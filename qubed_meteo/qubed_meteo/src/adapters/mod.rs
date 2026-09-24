@@ -1,4 +1,4 @@
-#[cfg(feature = "rsfdb-support")]
+#[cfg(feature = "fdb-support")]
 pub mod fdb;
 pub mod from_constraints;
 pub mod mars_list;
