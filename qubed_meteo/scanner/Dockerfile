@@ -38,19 +38,17 @@ RUN pip install maturin
 WORKDIR /build
 
 # Copy the workspace Cargo files and replace with a minimal one that
-# includes only the crates needed for the scanner (no rsfdb path dep).
+# includes only the crates needed for the scanner.
 COPY qubed/        ./qubed/
 COPY qubed_meteo/  ./qubed_meteo/
 
-# Build qubed and qubed_meteo wheels with rsfdb-support feature.
-# rsfdb must be present in the workspace; this build context assumes the
-# production build environment has rsfdb available via the workspace patch.
+# Build qubed and qubed_meteo wheels with the fdb-support feature.
 RUN printf '[workspace]\nresolver = "3"\nmembers = ["qubed/py_qubed", "qubed_meteo/py_qubed_meteo"]\n\n[workspace.package]\nversion = "0.4.7"\n\n[workspace.dependencies]\nqubed = { path = "qubed/qubed" }\n' \
         > ./Cargo.toml
 
 RUN cd qubed_meteo/py_qubed_meteo && \
     maturin build --release \
-        --features "qubed_meteo/rsfdb-support" \
+        --features "qubed_meteo/fdb-support" \
         --out /tmp/wheels
 
 RUN cd qubed/py_qubed && \
