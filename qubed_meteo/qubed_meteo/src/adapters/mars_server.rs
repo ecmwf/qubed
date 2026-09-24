@@ -113,7 +113,7 @@ impl<R: Read, W: Write> MarsStream<R, W> {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!("expected tag {expected} ({:?}), got {t}", tag_name(expected)),
-                    ))
+                    ));
                 }
             }
         }
@@ -259,9 +259,7 @@ enum FetchedData {
     },
 
     /// `PLeafNode`: a forwarding pointer to a shape node.
-    Redirect {
-        shape_ref: String,
-    },
+    Redirect { shape_ref: String },
 
     /// `PMonoAxisShape` / `PBufrShape` / `PShape`: the terminal leaf containing
     /// the actual coordinate axes.
@@ -279,12 +277,10 @@ enum FetchedData {
 /// Mirrors `adduv()` in the Python reference implementation.
 fn adduv(params: &mut Vec<String>) {
     let has_vo_d = (params.iter().any(|p| p == "138") && params.iter().any(|p| p == "155"))
-        || (params.iter().any(|p| p == "138.128")
-            && params.iter().any(|p| p == "155.128"));
+        || (params.iter().any(|p| p == "138.128") && params.iter().any(|p| p == "155.128"));
 
     let has_u_v = (params.iter().any(|p| p == "131") && params.iter().any(|p| p == "132"))
-        || (params.iter().any(|p| p == "131.128")
-            && params.iter().any(|p| p == "132.128"));
+        || (params.iter().any(|p| p == "131.128") && params.iter().any(|p| p == "132.128"));
 
     if has_vo_d && !has_u_v {
         params.push("131".to_string());
@@ -447,12 +443,10 @@ fn decode_node_handler<R: Read, W: Write>(
 /// Returns `Ok(None)` when the server indicates `ref_` is absent from the
 /// catalogue.
 fn fetch_node(host: &str, port: u16, ref_: &str, arg: &str) -> Result<Option<FetchedData>, String> {
-    let mut stream = MarsStream::connect(host, port)
-        .map_err(|e| format!("connect to {host}:{port}: {e}"))?;
+    let mut stream =
+        MarsStream::connect(host, port).map_err(|e| format!("connect to {host}:{port}: {e}"))?;
 
-    stream
-        .write_object("FetchAgent", ref_)
-        .map_err(|e| format!("write_object: {e}"))?;
+    stream.write_object("FetchAgent", ref_).map_err(|e| format!("write_object: {e}"))?;
 
     // The server always sends an INT password request; we ignore it.
     stream.read_int().map_err(|e| format!("password-request read: {e}"))?;
@@ -899,10 +893,7 @@ mod tests {
 
         let mut s = mock_stream(bytes);
         let result = decode_node_handler("PLeafNode", &mut s, "").unwrap();
-        assert_eq!(
-            result,
-            Some(FetchedData::Redirect { shape_ref: "shape_ref_42".to_string() })
-        );
+        assert_eq!(result, Some(FetchedData::Redirect { shape_ref: "shape_ref_42".to_string() }));
     }
 
     #[test]
@@ -952,10 +943,7 @@ mod tests {
             Some(FetchedData::Leaf {
                 axes: vec![
                     ("param".to_string(), vec!["130".to_string(), "131".to_string()]),
-                    (
-                        "step".to_string(),
-                        vec!["0".to_string(), "6".to_string(), "12".to_string()],
-                    ),
+                    ("step".to_string(), vec!["0".to_string(), "6".to_string(), "12".to_string()],),
                 ],
             })
         );
@@ -973,9 +961,7 @@ mod tests {
         let result = decode_node_handler("PBufrShape", &mut s, "").unwrap();
         assert_eq!(
             result,
-            Some(FetchedData::Leaf {
-                axes: vec![("obstype".to_string(), vec!["1".to_string()])],
-            })
+            Some(FetchedData::Leaf { axes: vec![("obstype".to_string(), vec!["1".to_string()])] })
         );
     }
 
@@ -1094,8 +1080,8 @@ mod tests {
     #[test]
     #[ignore = "requires live MARS catalogue server; set MARS_CATALOGUE_HOST and MARS_CATALOGUE_PORT"]
     fn test_from_mars_server_integration() {
-        let host = std::env::var("MARS_CATALOGUE_HOST")
-            .expect("set MARS_CATALOGUE_HOST to run this test");
+        let host =
+            std::env::var("MARS_CATALOGUE_HOST").expect("set MARS_CATALOGUE_HOST to run this test");
         let port: u16 = std::env::var("MARS_CATALOGUE_PORT")
             .ok()
             .and_then(|p| p.parse().ok())
