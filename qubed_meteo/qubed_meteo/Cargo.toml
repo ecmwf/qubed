@@ -23,6 +23,7 @@ tempfile = "3"
 [features]
 default = []
 fdb-support = ["dep:fdb", "dep:metkit", "dep:eckit"]
+mars-server-support = ["dep:eckit"]
 opendata-support = ["reqwest"]
 
 [lib]

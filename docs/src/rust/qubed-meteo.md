@@ -83,6 +83,34 @@ println!("{}", qube.to_ascii());
 
 ---
 
+## FromMarsServer — MARS Catalogue Traversal
+
+**Trait:** `qubed_meteo::adapters::mars_server::FromMarsServer` (feature `mars-server-support`)
+
+```rust
+fn from_mars_server(host: &str, port: u16) -> Result<Qube, String>
+fn from_mars_server_with(server: &MarsServer) -> Result<Qube, String>
+```
+
+Traverses a live MARS catalogue server exhaustively and builds a Qube from every path it finds. Each node is fetched over its own TCP connection with eckit's `Stream` protocol. `MarsServer` holds the host and port plus the retry count and backoff applied to each node fetch.
+
+- Simple nodes become one child per value; shape leaves become a chain of one node per axis.
+- Both sides of a branch node are followed under the same parent and merged by compression.
+- Experiment versions behind research nodes are resolved one character at a time, as the server requires.
+- The resulting tree is compressed.
+
+### Example
+
+```rust
+use qubed::Qube;
+use qubed_meteo::adapters::mars_server::FromMarsServer;
+
+let qube = Qube::from_mars_server("mars-catalogue.example", 9000).unwrap();
+println!("{}", qube.to_ascii());
+```
+
+---
+
 ## ToDssConstraints — DSS Constraints Exporter
 
 **Trait:** `qubed_meteo::adapters::to_constraints::ToDssConstraints`
