@@ -44,12 +44,11 @@ logging.basicConfig(
 # ── qubed imports (lazy — FDB lib must be on LD_LIBRARY_PATH first) ─────────
 # Resolved after environment is set up in _configure_env().
 _qubed_meteo = None
-_Qube = None
 
 
 def _configure_env() -> None:
     """Set FDB library path and import qubed modules."""
-    global _qubed_meteo, _Qube
+    global _qubed_meteo
 
     fdb_lib_path = os.environ.get("FDB_LIB_PATH", "/usr/local/lib")
     existing = os.environ.get("LD_LIBRARY_PATH", "")
@@ -64,10 +63,8 @@ def _configure_env() -> None:
         os.environ["FDB5_CONFIG_FILE"] = fdb5_config
 
     import qubed_meteo as _qm
-    from qubed import Qube as _Q
 
     _qubed_meteo = _qm
-    _Qube = _Q
 
 
 # ── Date helpers ─────────────────────────────────────────────────────────────
@@ -121,13 +118,12 @@ def _scan_selector(
     if not quiet:
         logger.info("[scan] %s — request: %s", name, selector)
 
-    ascii_tree: str = _qubed_meteo.from_fdb_list_py([selector])
+    qube = _qubed_meteo.from_fdb_list_py(selector)
 
-    if not ascii_tree.strip() or ascii_tree.strip() == "root":
+    if qube.is_empty():
         logger.warning("[scan] %s — empty result from FDB, skipping upload", name)
         return
 
-    qube = _Qube.from_ascii(ascii_tree)
     datacubes = len(qube)
     if datacubes == 0:
         logger.warning("[scan] %s — 0 datacubes after parse, skipping upload", name)
