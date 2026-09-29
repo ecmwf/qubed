@@ -103,12 +103,12 @@ mod tests {
         Fdb::open(Some(&config), None).unwrap()
     }
 
-    fn archive(fdb: &Fdb, step: &str, param: &str) {
+    fn archive(fdb: &Fdb, date: &str, step: &str, param: &str) {
         let entries = [
             ("class", "od"),
             ("expver", "0001"),
             ("stream", "oper"),
-            ("date", "20240101"),
+            ("date", date),
             ("time", "0000"),
             ("domain", "g"),
             ("type", "fc"),
@@ -128,7 +128,7 @@ mod tests {
         let fdb = open_temp_fdb(dir.path());
         for step in ["0", "6", "12"] {
             for param in ["130", "131"] {
-                archive(&fdb, step, param);
+                archive(&fdb, "20240101", step, param);
             }
         }
         fdb.flush().unwrap();
@@ -142,6 +142,29 @@ mod tests {
         assert_eq!(coords["expver"].iter_sorted_strings(), vec!["0001"]);
         assert_eq!(coords["step"].iter_sorted_strings(), vec!["0", "6", "12"]);
         assert_eq!(coords["param"].iter_sorted_strings(), vec!["130", "131"]);
+    }
+
+    #[test]
+    fn date_range_selector_lists_every_day_in_range() {
+        let dir = tempfile::tempdir().unwrap();
+        let fdb = open_temp_fdb(dir.path());
+        for date in ["20240101", "20240102", "20240103"] {
+            archive(&fdb, date, "0", "130");
+        }
+        fdb.flush().unwrap();
+
+        let qube = Qube::from_fdb_list_str(
+            &fdb,
+            "class=od,expver=0001,stream=oper,date=20240101/to/20240102",
+        )
+        .unwrap();
+
+        let datacubes = qube.to_datacubes();
+        assert_eq!(datacubes.len(), 1);
+        assert_eq!(
+            datacubes[0].coordinates()["date"].iter_sorted_strings(),
+            vec!["20240101T0000", "20240102T0000"]
+        );
     }
 
     #[test]
