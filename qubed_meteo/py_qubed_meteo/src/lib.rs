@@ -3,6 +3,8 @@ use ::qubed::Qube;
 use ::qubed_meteo::adapters::fdb::{Fdb, FromFDBList};
 use ::qubed_meteo::adapters::from_constraints::FromDssConstraints;
 use ::qubed_meteo::adapters::mars_list::FromMARSList;
+#[cfg(feature = "mars-server-support")]
+use ::qubed_meteo::adapters::mars_server::FromMarsServer;
 use ::qubed_meteo::adapters::opendata::FromOpenData;
 use ::qubed_meteo::adapters::to_constraints::ToDssConstraints;
 use pyo3::exceptions::PyValueError;
@@ -62,6 +64,8 @@ fn py_qubed_meteo_module(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<(
     m.add_function(wrap_pyfunction!(from_mars_list_file_py, m)?)?;
     #[cfg(feature = "fdb-support")]
     m.add_function(wrap_pyfunction!(from_fdb_list_py, m)?)?;
+    #[cfg(feature = "mars-server-support")]
+    m.add_function(wrap_pyfunction!(from_mars_server_py, m)?)?;
     m.add_function(wrap_pyfunction!(to_dss_constraints_py, m)?)?;
     m.add_function(wrap_pyfunction!(from_opendata_py, m)?)?;
     m.add_function(wrap_pyfunction!(from_dss_constraints_py, m)?)?;
@@ -76,6 +80,15 @@ pub fn from_fdb_list_py(py: Python<'_>, selector: &str) -> PyResult<Py<PyAny>> {
             let fdb = Fdb::open_default().map_err(|e| format!("open FDB: {e}"))?;
             Qube::from_fdb_list_str(&fdb, selector).map(|qube| qube.to_ascii())
         })
+        .map_err(PyValueError::new_err)?;
+    ascii_to_py(py, ascii)
+}
+
+#[cfg(feature = "mars-server-support")]
+#[pyfunction]
+pub fn from_mars_server_py(py: Python<'_>, host: &str, port: u16) -> PyResult<Py<PyAny>> {
+    let ascii = py
+        .detach(|| Qube::from_mars_server(host, port).map(|qube| qube.to_ascii()))
         .map_err(PyValueError::new_err)?;
     ascii_to_py(py, ascii)
 }
