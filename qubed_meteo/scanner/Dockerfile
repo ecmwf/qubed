@@ -3,13 +3,14 @@
 # ============================================================
 #
 # Multi-stage build:
-#   builder  – compiles the qubed_meteo Rust/PyO3 wheel
-#   runtime  – lean image with FDB5 libs, the wheel, and the scanner script
+#   builder  – compiles the qubed and qubed_meteo wheels together with the
+#              vendored ECMWF libraries they link against
+#   runtime  – lean image with those libraries, the wheels, and the scanner
 #
-# Build context: the qubed repository root
+# Build context: the qubed repository root. The ECMWF Rust wrappers are git
+# dependencies fetched over ssh, so forward an agent holding a GitHub key:
 #
-# Usage:
-#   docker build -f qubed_meteo/scanner/Dockerfile -t fdb_scanner_manual .
+#   docker build --ssh default -f qubed_meteo/scanner/Dockerfile -t fdb_scanner_manual .
 #
 #   docker run \
 #     -e CATALOGUE_STORE_URL=http://catalogue-store-lumi:8080 \
@@ -25,34 +26,45 @@ FROM python:3.12-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
+        bison \
+        flex \
         curl \
+        git \
+        libclang-dev \
+        libeigen3-dev \
+        openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Rust toolchain
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     | sh -s -- -y --default-toolchain stable --profile minimal
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-RUN pip install maturin
+RUN pip install maturin cmake
+
+RUN mkdir -p -m 0700 /root/.ssh \
+    && ssh-keyscan -t rsa,ecdsa,ed25519 github.com >> /root/.ssh/known_hosts
 
 WORKDIR /build
 
-# Copy the workspace Cargo files and replace with a minimal one that
-# includes only the crates needed for the scanner.
-COPY qubed/        ./qubed/
-COPY qubed_meteo/  ./qubed_meteo/
+COPY Cargo.toml Cargo.lock ./
+COPY .cargo/        ./.cargo/
+COPY qubed/         ./qubed/
+COPY py_qubed/      ./py_qubed/
+COPY qubed_meteo/   ./qubed_meteo/
 
-# Build qubed and qubed_meteo wheels with the fdb-support feature.
-RUN printf '[workspace]\nresolver = "3"\nmembers = ["qubed/py_qubed", "qubed_meteo/py_qubed_meteo"]\n\n[workspace.package]\nversion = "0.4.7"\n\n[workspace.dependencies]\nqubed = { path = "qubed/qubed" }\n' \
-        > ./Cargo.toml
-
-RUN cd qubed_meteo/py_qubed_meteo && \
+RUN --mount=type=ssh cd qubed_meteo/py_qubed_meteo && \
     maturin build --release \
-        --features "qubed_meteo/fdb-support" \
+        --compatibility linux \
+        --features fdb-support \
         --out /tmp/wheels
 
-RUN cd qubed/py_qubed && \
-    maturin build --release --out /tmp/wheels
+RUN cd py_qubed && \
+    maturin build --release --compatibility linux --out /tmp/wheels
+
+# Shared libraries built by the vendored -sys crates; the wheel links them.
+RUN mkdir -p /tmp/libs && \
+    find qubed_meteo/target/release/build -path '*/out/install/*' -name '*.so*' \
+        -exec cp -a {} /tmp/libs/ \;
 
 
 # ── Stage 2: runtime ────────────────────────────────────────
@@ -61,14 +73,14 @@ FROM python:3.12-slim AS runtime
 LABEL org.opencontainers.image.title="FDB Scanner" \
       org.opencontainers.image.description="Scans FDB catalogues and uploads Qube JSON to the catalogue-store"
 
-# FDB5 runtime shared libraries are expected to be installed in /usr/local/lib.
-# Mount or COPY them into the image as needed for your environment.
 ENV FDB_LIB_PATH=/usr/local/lib
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Non-root user
 RUN groupadd --gid 1001 appgroup && \
     useradd  --uid 1001 --gid appgroup --no-create-home appuser
+
+COPY --from=builder /tmp/libs/ /usr/local/lib/
 
 # Install qubed + qubed_meteo from locally-built wheels
 COPY --from=builder /tmp/wheels /tmp/wheels
