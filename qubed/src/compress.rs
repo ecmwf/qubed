@@ -223,6 +223,16 @@ impl Qube {
                 let existing = seen.get(&h).copied();
 
                 if let Some(kept_id) = existing {
+                    // The structural hash of an inner node covers its dimension and
+                    // its subtree but NOT its own coords, so two siblings such as
+                    // `dim_0=0 -> dim_1=0/1` and `dim_0=1 -> dim_1=0/1` collide.
+                    // They describe different data, so union their coords onto the
+                    // kept node rather than discarding the duplicate's values.
+                    let dup_coords = self.node_ref(child).unwrap().coords().clone();
+                    if *self.node_ref(kept_id).unwrap().coords() != dup_coords {
+                        self.node_mut(kept_id).unwrap().coords_mut().extend(&dup_coords);
+                    }
+
                     // Merge this duplicate's metadata into the kept node.
                     let dup_meta = self.node_ref(child).unwrap().metadata().clone();
                     if !dup_meta.is_empty() {
@@ -406,6 +416,7 @@ impl Qube {
                 }
             }
 
+            self.remove_empty_children(node_id);
             return;
         }
 
@@ -429,6 +440,34 @@ impl Qube {
 
             self.merge_coords(group.clone());
         }
+
+        self.remove_empty_children(node_id);
+    }
+
+    /// Drop direct children whose coords were emptied by `merge_coords`.
+    ///
+    /// Without this, the emptied placeholders remain until the later
+    /// `prune_empty_nodes_recursively` pass, and they are included in this node's
+    /// structural hash in the meantime. Two siblings that are really identical
+    /// then hash differently, so the parent fails to merge them.
+    fn remove_empty_children(&mut self, node_id: NodeIdx) {
+        let empty: std::collections::HashSet<NodeIdx> = {
+            let node = self.node_ref(node_id).unwrap();
+            node.children()
+                .values()
+                .flat_map(|v| v.iter().copied())
+                .filter(|&c| matches!(self.node_ref(c).unwrap().coords(), Coordinates::Empty))
+                .collect()
+        };
+        if empty.is_empty() {
+            return;
+        }
+        let node = self.node_mut(node_id).unwrap();
+        for kids in node.children_mut().values_mut() {
+            kids.retain(|id| !empty.contains(id));
+        }
+        node.children_mut().retain(|_, kids| !kids.is_empty());
+        self.invalidate_structural_hash(node_id);
     }
 
     /// Merges the coordinates of a group of nodes into the first node in the group,
