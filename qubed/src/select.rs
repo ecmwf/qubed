@@ -3,10 +3,11 @@ use std::collections::{HashMap, HashSet};
 
 // TODO: select should return a QubeView, but this is an optimization
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SelectMode {
     Default,
     Prune,
+    Strict,
 }
 
 pub(crate) struct WalkPair {
@@ -40,7 +41,13 @@ impl Qube {
 
         let parents = WalkPair { left: root, right: result.root() };
 
-        self.select_recurse(&selection, &mut result, parents)?;
+        if mode == SelectMode::Strict {
+            self.select_recurse(&selection, &mut result, parents, true)?;
+        } else {
+            self.select_recurse(&selection, &mut result, parents, false)?;
+        }
+
+        // self.select_recurse(&selection, &mut result, parents)?;
 
         // Prune any nodes which do not have all selected dimensions
         if mode == SelectMode::Prune {
@@ -61,6 +68,7 @@ impl Qube {
         selection: &HashMap<&str, Coordinates>,
         result: &mut Qube,
         parents: WalkPair,
+        strict_mode: bool,
     ) -> Result<(), String> {
         let source_node =
             self.node(parents.left).ok_or_else(|| format!("Node {:?} not found", parents.left))?;
@@ -68,7 +76,7 @@ impl Qube {
         // For each child in the source Qube, find the values which overlap and create a child in the result Qube
         // We ignore values only_in_a and only_in_b, we only want the intersection
 
-        // Get the dimension of each chil
+        // Get the dimension of each child
         let span = source_node.child_dimensions();
 
         for dimension in span {
@@ -85,6 +93,8 @@ impl Qube {
                     None => continue, // Skip this dimension if no children
                 };
 
+                let sel_keys_not_in_source = selection_coordinates.clone();
+
                 for child_id in source_children {
                     let child_node = self
                         .node(child_id)
@@ -93,7 +103,23 @@ impl Qube {
                     let coordinates = child_node.coordinates();
 
                     let intersection_result = coordinates.intersect(selection_coordinates);
-                    let intersection = intersection_result.intersection;
+                    let intersection = &intersection_result.intersection;
+                    // sel_keys_not_in_source.subtract(&intersection_result.intersection);
+                    let sel_keys_intersection =
+                        sel_keys_not_in_source.intersect(&intersection_result.intersection);
+                    let sel_keys_not_in_source = sel_keys_intersection.only_a;
+                    // let only_in_sel = intersection_result.only_b;
+
+                    // println!("{:?}", intersection);
+                    // println!("{:?}", only_in_sel);
+
+                    // if strict_mode && !only_in_sel.is_empty() {
+                    //     // Return an error if the selection contains values that are not present in the source Qube
+                    //     return Err(format!(
+                    //         "Selection contains values not present in the source Qube for dimension '{}': {:?}",
+                    //         dimension_str, only_in_sel
+                    //     ));
+                    // }
 
                     if intersection.is_empty() {
                         continue;
@@ -102,7 +128,7 @@ impl Qube {
                     let new_child = result.get_or_create_child(
                         dimension_str,
                         parents.right,
-                        Some(intersection),
+                        Some(intersection.clone()),
                     )?;
 
                     // Propagate source-node metadata to the result node so that
@@ -117,7 +143,7 @@ impl Qube {
 
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
-                    self.select_recurse(selection, result, new_parents)?;
+                    self.select_recurse(selection, result, new_parents, strict_mode)?;
 
                     // If the newly created result node ended up with no children,
                     // and the source node was NOT a leaf (i.e., had children of its
@@ -137,6 +163,13 @@ impl Qube {
                             format!("Failed to remove result node {:?}: {:?}", new_child, e)
                         })?;
                     }
+                }
+
+                if strict_mode && !sel_keys_not_in_source.is_empty() {
+                    return Err(format!(
+                        "Selection contains values not present in the source Qube for dimension '{}': {:?}",
+                        dimension_str, sel_keys_not_in_source
+                    ));
                 }
             } else {
                 // Dimension not in selection, so we take all children.
@@ -172,7 +205,7 @@ impl Qube {
 
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
-                    self.select_recurse(selection, result, new_parents)?;
+                    self.select_recurse(selection, result, new_parents, strict_mode)?;
 
                     // If the newly created result node ended up with no children,
                     // and the source node was NOT a leaf (i.e., had children of
