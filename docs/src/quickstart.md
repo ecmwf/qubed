@@ -158,6 +158,15 @@ println!("{}", result.to_ascii());
 
 **SelectMode::Prune** additionally removes branches that don't contain all selected dimensions.
 
+**SelectMode::Strict** returns the same result as `Default`, but returns an error if any requested value can't be found. Each value only needs to exist in one branch that the selection reaches, not in every branch:
+
+```rust
+// Err: param=4 does not exist anywhere in the qube.
+assert!(q.select(&[("class", &[1][..]), ("param", &[1, 4][..])], SelectMode::Strict).is_err());
+```
+
+In Python, pass the mode as a string: `q.select({"param": [1, 4]}, "strict")` raises `ValueError`.
+
 ## Union (Append)
 
 Merge two Qubes together. The result contains all identifiers from both:
