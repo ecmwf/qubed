@@ -473,3 +473,13 @@ def test_prepend_with_multiple_values() -> None:
     coords = result.all_unique_dim_coords()
     assert set(coords["class"]) == {"od", "rd"}
     assert coords["param"] == [1]
+
+
+def test_append_completing_grid_keeps_all_points():
+    """Regression: compress() used to drop dim_0=1 when its subtree matched dim_0=0's."""
+    qube = Qube.from_datacube({"dim_0": [0], "dim_1": [0, 1]}) | Qube.from_datacube(
+        {"dim_0": [1], "dim_1": [0]}
+    )
+    qube.append(Qube.from_datacube({"dim_0": [1], "dim_1": [1]}))
+    expected = Qube.from_ascii("root\n└── dim_0=0/1\n    └── dim_1=0/1")
+    assert qube.to_ascii() == expected.to_ascii()

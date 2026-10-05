@@ -355,3 +355,58 @@ mod tests {
         assert_eq!(steps, ["0", "12", "18", "24", "6"].iter().map(|s| s.to_string()).collect());
     }
 }
+
+#[cfg(test)]
+mod regression_sibling_dedup {
+    use crate::Qube;
+
+    fn count(q: &Qube) -> usize {
+        q.to_datacubes()
+            .iter()
+            .map(|dc| {
+                dc.coordinates()
+                    .values()
+                    .filter(|c| !c.is_empty())
+                    .map(|c| c.len())
+                    .product::<usize>()
+            })
+            .sum()
+    }
+
+    /// Appending the last missing point of a 2x2 grid must yield the full grid.
+    /// Previously compress() deduplicated `dim_0=0 -> dim_1=0/1` and
+    /// `dim_0=1 -> dim_1=0/1` by structural hash (which ignores an inner node's
+    /// own coords) and silently dropped `dim_0=1`.
+    #[test]
+    fn append_completing_grid_keeps_all_points() {
+        let mut a =
+            Qube::from_ascii("root\n├── dim_0=0\n│   └── dim_1=0/1\n└── dim_0=1\n    └── dim_1=0")
+                .unwrap();
+        let mut b = Qube::from_ascii("root\n└── dim_0=1\n    └── dim_1=1").unwrap();
+        a.append(&mut b);
+
+        let expected = Qube::from_ascii("root\n└── dim_0=0/1\n    └── dim_1=0/1").unwrap();
+        assert_eq!(a.to_ascii(), expected.to_ascii());
+        assert_eq!(count(&a), 4);
+    }
+
+    /// Same scenario with three levels and appends in several orders.
+    #[test]
+    fn append_order_does_not_lose_points() {
+        let points = ["0/0", "0/1", "1/0", "1/1", "2/0", "2/1"];
+        let orders: [[usize; 6]; 3] = [[0, 1, 2, 3, 4, 5], [5, 4, 3, 2, 1, 0], [0, 2, 4, 1, 3, 5]];
+        for order in orders {
+            let mut q = Qube::new();
+            for &i in &order {
+                let (x, y) = points[i].split_once('/').unwrap();
+                let mut p = Qube::from_ascii(&format!(
+                    "root\n└── a=x\n    └── dim_0={x}\n        └── dim_1={y}"
+                ))
+                .unwrap();
+                q.append(&mut p);
+                assert!(count(&q) > 0);
+            }
+            assert_eq!(count(&q), 6, "order {:?} lost points:\n{}", order, q.to_ascii());
+        }
+    }
+}
