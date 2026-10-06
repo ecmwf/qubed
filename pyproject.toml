@@ -1,5 +1,6 @@
 [project]
-name = "qubed"
+name = "qubed-workspace"
+version = "0.4.12"
 requires-python = ">=3.8"
 dependencies = []
 
