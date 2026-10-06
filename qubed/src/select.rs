@@ -3,10 +3,11 @@ use std::collections::{HashMap, HashSet};
 
 // TODO: select should return a QubeView, but this is an optimization
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SelectMode {
     Default,
     Prune,
+    Strict,
 }
 
 pub(crate) struct WalkPair {
@@ -40,7 +41,27 @@ impl Qube {
 
         let parents = WalkPair { left: root, right: result.root() };
 
-        self.select_recurse(&selection, &mut result, parents)?;
+        // Values from the selection that have not (yet) been found anywhere in
+        // the source Qube. Only consulted in strict mode, where every requested
+        // value must exist in at least one branch of the source Qube.
+        let mut unmatched: HashMap<&str, Coordinates> =
+            selection.iter().map(|(k, v)| (*k, v.clone())).collect();
+
+        self.select_recurse(&selection, &mut result, parents, &mut unmatched)?;
+
+        if mode == SelectMode::Strict {
+            let mut missing: Vec<(&str, Coordinates)> =
+                unmatched.into_iter().filter(|(_, c)| !c.is_empty()).collect();
+            if !missing.is_empty() {
+                missing.sort_by(|a, b| a.0.cmp(b.0));
+                let details: Vec<String> =
+                    missing.iter().map(|(k, c)| format!("{}={}", k, c.to_string())).collect();
+                return Err(format!(
+                    "Strict select: values not present anywhere in the source Qube: {}",
+                    details.join(", ")
+                ));
+            }
+        }
 
         // Prune any nodes which do not have all selected dimensions
         if mode == SelectMode::Prune {
@@ -56,11 +77,12 @@ impl Qube {
         Ok(result)
     }
 
-    fn select_recurse(
+    fn select_recurse<'a>(
         &self,
-        selection: &HashMap<&str, Coordinates>,
+        selection: &HashMap<&'a str, Coordinates>,
         result: &mut Qube,
         parents: WalkPair,
+        unmatched: &mut HashMap<&'a str, Coordinates>,
     ) -> Result<(), String> {
         let source_node =
             self.node(parents.left).ok_or_else(|| format!("Node {:?} not found", parents.left))?;
@@ -68,7 +90,7 @@ impl Qube {
         // For each child in the source Qube, find the values which overlap and create a child in the result Qube
         // We ignore values only_in_a and only_in_b, we only want the intersection
 
-        // Get the dimension of each chil
+        // Get the dimension of each child
         let span = source_node.child_dimensions();
 
         for dimension in span {
@@ -93,16 +115,20 @@ impl Qube {
                     let coordinates = child_node.coordinates();
 
                     let intersection_result = coordinates.intersect(selection_coordinates);
-                    let intersection = intersection_result.intersection;
-
+                    let intersection = &intersection_result.intersection;
                     if intersection.is_empty() {
                         continue;
+                    }
+
+                    // Record that these values exist in the source Qube.
+                    if let Some(remaining) = unmatched.get_mut(dimension_str) {
+                        *remaining = remaining.intersect(intersection).only_a;
                     }
 
                     let new_child = result.get_or_create_child(
                         dimension_str,
                         parents.right,
-                        Some(intersection),
+                        Some(intersection.clone()),
                     )?;
 
                     // Propagate source-node metadata to the result node so that
@@ -117,7 +143,7 @@ impl Qube {
 
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
-                    self.select_recurse(selection, result, new_parents)?;
+                    self.select_recurse(selection, result, new_parents, unmatched)?;
 
                     // If the newly created result node ended up with no children,
                     // and the source node was NOT a leaf (i.e., had children of its
@@ -172,7 +198,7 @@ impl Qube {
 
                     let new_parents = WalkPair { left: child_id, right: new_child };
 
-                    self.select_recurse(selection, result, new_parents)?;
+                    self.select_recurse(selection, result, new_parents, unmatched)?;
 
                     // If the newly created result node ended up with no children,
                     // and the source node was NOT a leaf (i.e., had children of
@@ -322,10 +348,6 @@ mod tests {
 
         let qube = Qube::from_ascii(input).unwrap();
 
-        let mut selection = std::collections::HashMap::new();
-        selection.insert("class".to_string(), Coordinates::from(1));
-        selection.insert("param".to_string(), Coordinates::from(1));
-
         let selection = [("class", &[1]), ("param", &[1])];
 
         let selected_qube = qube.select(&selection, SelectMode::Default)?;
@@ -342,6 +364,192 @@ mod tests {
         let result = Qube::from_ascii(result).unwrap();
         assert_eq!(selected_qube.to_ascii(), result.to_ascii());
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_strict() -> Result<(), String> {
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        let selection = [("class", &[1]), ("param", &[4])];
+
+        let selected_qube = qube.select(&selection, SelectMode::Strict);
+
+        assert!(selected_qube.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_strict_2() -> Result<(), String> {
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        // param=4 does not exist in the source, so strict mode must error even
+        // though param=1 does.
+        let selection = [("class", &[1][..]), ("param", &[4, 1][..])];
+
+        let selected_qube = qube.select(&selection, SelectMode::Strict);
+
+        assert!(selected_qube.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_strict_3() -> Result<(), String> {
+        let input = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+        let qube = Qube::from_ascii(input).unwrap();
+
+        let selection = [("class", &[1]), ("param", &[1])];
+
+        let selected_qube = qube.select(&selection, SelectMode::Strict);
+
+        assert!(selected_qube.is_ok());
+
+        Ok(())
+    }
+
+    const BRANCHY: &str = r#"root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"#;
+
+    #[test]
+    fn test_select_strict_value_only_in_one_branch() -> Result<(), String> {
+        // param=3 only exists under class=2/expver=0001. Sibling branches lacking
+        // it must not cause a strict error.
+        let qube = Qube::from_ascii(BRANCHY).unwrap();
+        let strict = qube.select(&[("param", &[3][..])], SelectMode::Strict)?;
+        let default = qube.select(&[("param", &[3][..])], SelectMode::Default)?;
+
+        let expected = r#"root
+└── class=2
+    └── expver=0001
+        └── param=3"#;
+        assert_eq!(strict.to_ascii(), Qube::from_ascii(expected).unwrap().to_ascii());
+        assert_eq!(strict.to_ascii(), default.to_ascii());
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_strict_values_split_across_branches() -> Result<(), String> {
+        // class=1 and class=2 are found in different branches, and param=3 only
+        // under class=2: every value exists somewhere, so strict succeeds.
+        let qube = Qube::from_ascii(BRANCHY).unwrap();
+        let strict =
+            qube.select(&[("class", &[1, 2][..]), ("param", &[1, 3][..])], SelectMode::Strict)?;
+        let default =
+            qube.select(&[("class", &[1, 2][..]), ("param", &[1, 3][..])], SelectMode::Default)?;
+        assert_eq!(strict.to_ascii(), default.to_ascii());
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_strict_value_in_unselected_branch_still_errors() {
+        // param=3 exists in the source, but only under class=2, which is
+        // filtered out by class=1. Because strict mode only checks existence in
+        // the source *along the selected paths*, this is an error: the
+        // combination class=1, param=3 does not exist.
+        let qube = Qube::from_ascii(BRANCHY).unwrap();
+        let res = qube.select(&[("class", &[1][..]), ("param", &[3][..])], SelectMode::Strict);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_select_strict_missing_value_errors_and_reports_it() {
+        let qube = Qube::from_ascii(BRANCHY).unwrap();
+        let err = qube
+            .select(&[("class", &[1, 9][..]), ("param", &[1][..])], SelectMode::Strict)
+            .unwrap_err();
+        assert!(err.contains("class=9"), "error should name the missing value: {err}");
+        assert!(!err.contains("param"), "param=1 exists and must not be reported: {err}");
+    }
+
+    #[test]
+    fn test_select_strict_unknown_dimension_errors() {
+        let qube = Qube::from_ascii(BRANCHY).unwrap();
+        let res = qube.select(&[("levtype", &["sfc"][..])], SelectMode::Strict);
+        assert!(res.is_err());
+        // Default mode silently ignores it.
+        assert!(qube.select(&[("levtype", &["sfc"][..])], SelectMode::Default).is_ok());
+    }
+
+    #[test]
+    fn test_select_strict_irregular_tree() -> Result<(), String> {
+        // class appears at different depths in different branches; class=1 is
+        // found at depth 1, class=2 at depth 2.
+        let input = r#"root
+├── class=1
+│   └── expver=0001
+│       └── param=1
+└── expver=0003
+    └── class=2
+        └── param=5"#;
+        let qube = Qube::from_ascii(input).unwrap();
+        let strict = qube.select(&[("class", &[1, 2][..])], SelectMode::Strict)?;
+        assert_eq!(strict.to_ascii(), Qube::from_ascii(input).unwrap().to_ascii());
         Ok(())
     }
 

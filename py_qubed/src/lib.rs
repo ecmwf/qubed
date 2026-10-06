@@ -174,8 +174,16 @@ impl PyQube {
         }
 
         let select_mode = match mode.as_deref() {
+            None => SelectMode::Default,
+            Some(m) if m.eq_ignore_ascii_case("default") => SelectMode::Default,
             Some(m) if m.eq_ignore_ascii_case("prune") => SelectMode::Prune,
-            _ => SelectMode::Default,
+            Some(m) if m.eq_ignore_ascii_case("strict") => SelectMode::Strict,
+            Some(m) => {
+                return Err(PyValueError::new_err(format!(
+                    "unknown select mode '{}'; expected 'default', 'prune' or 'strict'",
+                    m
+                )));
+            }
         };
 
         // Convert to references for the select call
@@ -184,7 +192,7 @@ impl PyQube {
 
         match self.inner.select(&pairs, select_mode) {
             Ok(q) => Ok(PyQube { inner: q }),
-            Err(e) => Err(PyTypeError::new_err(e)),
+            Err(e) => Err(PyValueError::new_err(e)),
         }
     }
 

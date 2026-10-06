@@ -187,6 +187,14 @@ Remove branches that don't contain **all** of the specified dimensions.
 **SelectMode:**
 - `Default` — keep branches with at least one matching value per constrained dimension.
 - `Prune` — additionally remove branches missing any selected dimension entirely.
+- `Strict` — same result as `Default`, but returns `Err` unless every requested value is found in at least one branch that the selection reaches. A value doesn't have to appear in every branch: selecting `param=3` succeeds even if only one subtree contains it. It fails if a value or dimension doesn't exist at all, or if it only exists under branches excluded by another constraint (e.g. `class=1, param=3` when `param=3` only occurs under `class=2`). The error message lists all missing `dimension=values`.
+
+```rust
+// Ok: param=3 only exists under class=2, which is enough.
+q.select(&[("param", &[3][..])], SelectMode::Strict)?;
+// Err: class=9 does not exist anywhere.
+assert!(q.select(&[("class", &[1, 9][..])], SelectMode::Strict).is_err());
+```
 
 ### Serialization
 
@@ -311,5 +319,5 @@ A flat `HashMap<String, Coordinates>` representing one dense datacube.
 | `NodeIdx` | SlotMap key for node identity |
 | `Dimension` | Interned string key (`MiniSpur` from `lasso`) |
 | `IntersectionResult<T>` | `{ intersection, only_a, only_b }` |
-| `SelectMode` | `Default` or `Prune` |
+| `SelectMode` | `Default`, `Prune` or `Strict` |
 | `CoordinateTypes` | `Integer(i32)`, `Float(f64)`, `String(String)` |

@@ -492,13 +492,54 @@ dims = q.dimensions()
 
 Return a new Qube containing only the identifiers that satisfy the request. Each key in `request` is a dimension name; values may be a single string/int or a list.
 
-`mode` controls behaviour for dimensions absent in a branch:
-- `None` / any other string -- default: keep branches that have at least one matching value.
+`mode` (case-insensitive) selects the selection behaviour:
+- `None` / `"default"` -- keep branches that have at least one matching value. Requested values that don't exist are silently ignored.
 - `"prune"` -- additionally remove branches that are missing any requested dimension entirely.
+- `"strict"` -- same result as the default mode, but raises `ValueError` if any requested value is missing (see below).
+
+Any other `mode` string raises `ValueError`.
 
 ```python
-selected = q.select({"class": [1], "param": [1, 2]}, None, None)
+selected = q.select({"class": [1], "param": [1, 2]})
+selected = q.select({"class": [1], "param": [1, 2]}, "strict")
 ```
+
+##### Strict selection
+
+Use strict mode when every requested value must exist in the qube, for example to validate a user request before acting on it. It succeeds when **each requested value is found in at least one branch** that the selection reaches. A value doesn't have to appear in every branch.
+
+```python
+q = qubed.Qube.from_ascii("""root
+├── class=1
+│   └── expver=0001
+│       ├── param=1
+│       └── param=2
+└── class=2
+    └── expver=0001
+        ├── param=1
+        ├── param=2
+        └── param=3""")
+
+# OK: param=3 exists only under class=2. class=1 lacking it is fine.
+q.select({"param": [3]}, "strict")
+
+# OK: class=1 and class=2 come from different branches, and param=1 and param=3
+# are each found somewhere.
+q.select({"class": [1, 2], "param": [1, 3]}, "strict")
+
+# ValueError: class=9 does not exist.
+q.select({"class": [1, 9]}, "strict")
+
+# ValueError: dimension 'levtype' does not exist.
+q.select({"levtype": ["sfc"]}, "strict")
+
+# ValueError: param=3 exists, but only under class=2, which class=1 excludes.
+# No identifier has both class=1 and param=3.
+q.select({"class": [1], "param": [3]}, "strict")
+```
+
+The error message lists every missing value, e.g.
+`Strict select: values not present anywhere in the source Qube: class=9`.
 
 ---
 
