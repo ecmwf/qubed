@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-5f0c7d41.js";
+            window.path_to_searchindex_js = "../searchindex-ef4a359b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-78e66672.js"></script>
@@ -362,7 +362,15 @@ where C: Into&lt;Coordinates&gt; + Clone
 <ul>
 <li><code>Default</code> — keep branches with at least one matching value per constrained dimension.</li>
 <li><code>Prune</code> — additionally remove branches missing any selected dimension entirely.</li>
+<li><code>Strict</code> — same result as <code>Default</code>, but returns <code>Err</code> unless every requested value is found in at least one branch that the selection reaches. A value doesn’t have to appear in every branch: selecting <code>param=3</code> succeeds even if only one subtree contains it. It fails if a value or dimension doesn’t exist at all, or if it only exists under branches excluded by another constraint (e.g. <code>class=1, param=3</code> when <code>param=3</code> only occurs under <code>class=2</code>). The error message lists all missing <code>dimension=values</code>.</li>
 </ul>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Ok: param=3 only exists under class=2, which is enough.
+q.select(&amp;[("param", &amp;[3][..])], SelectMode::Strict)?;
+// Err: class=9 does not exist anywhere.
+assert!(q.select(&amp;[("class", &amp;[1, 9][..])], SelectMode::Strict).is_err());
+<span class="boring">}</span></code></pre>
 <h3 id="serialization"><a class="header" href="#serialization">Serialization</a></h3>
 <div class="table-wrapper">
 <table>
@@ -523,7 +531,7 @@ where C: Into&lt;Coordinates&gt; + Clone
 <tr><td><code>NodeIdx</code></td><td>SlotMap key for node identity</td></tr>
 <tr><td><code>Dimension</code></td><td>Interned string key (<code>MiniSpur</code> from <code>lasso</code>)</td></tr>
 <tr><td><code>IntersectionResult&lt;T&gt;</code></td><td><code>{ intersection, only_a, only_b }</code></td></tr>
-<tr><td><code>SelectMode</code></td><td><code>Default</code> or <code>Prune</code></td></tr>
+<tr><td><code>SelectMode</code></td><td><code>Default</code>, <code>Prune</code> or <code>Strict</code></td></tr>
 <tr><td><code>CoordinateTypes</code></td><td><code>Integer(i32)</code>, <code>Float(f64)</code>, <code>String(String)</code></td></tr>
 </tbody>
 </table>

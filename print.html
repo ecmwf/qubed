@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5f0c7d41.js";
+            window.path_to_searchindex_js = "searchindex-ef4a359b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-78e66672.js"></script>
@@ -539,6 +539,13 @@ let result = q.select(&amp;selection, SelectMode::Default).unwrap();
 println!("{}", result.to_ascii());
 <span class="boring">}</span></code></pre>
 <p><strong>SelectMode::Prune</strong> additionally removes branches that don’t contain all selected dimensions.</p>
+<p><strong>SelectMode::Strict</strong> returns the same result as <code>Default</code>, but returns an error if any requested value can’t be found. Each value only needs to exist in one branch that the selection reaches, not in every branch:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Err: param=4 does not exist anywhere in the qube.
+assert!(q.select(&amp;[("class", &amp;[1][..]), ("param", &amp;[1, 4][..])], SelectMode::Strict).is_err());
+<span class="boring">}</span></code></pre>
+<p>In Python, pass the mode as a string: <code>q.select({"param": [1, 4]}, "strict")</code> raises <code>ValueError</code>.</p>
 <h2 id="union-append"><a class="header" href="#union-append">Union (Append)</a></h2>
 <p>Merge two Qubes together. The result contains all identifiers from both:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -886,7 +893,15 @@ where C: Into&lt;Coordinates&gt; + Clone
 <ul>
 <li><code>Default</code> — keep branches with at least one matching value per constrained dimension.</li>
 <li><code>Prune</code> — additionally remove branches missing any selected dimension entirely.</li>
+<li><code>Strict</code> — same result as <code>Default</code>, but returns <code>Err</code> unless every requested value is found in at least one branch that the selection reaches. A value doesn’t have to appear in every branch: selecting <code>param=3</code> succeeds even if only one subtree contains it. It fails if a value or dimension doesn’t exist at all, or if it only exists under branches excluded by another constraint (e.g. <code>class=1, param=3</code> when <code>param=3</code> only occurs under <code>class=2</code>). The error message lists all missing <code>dimension=values</code>.</li>
 </ul>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Ok: param=3 only exists under class=2, which is enough.
+q.select(&amp;[("param", &amp;[3][..])], SelectMode::Strict)?;
+// Err: class=9 does not exist anywhere.
+assert!(q.select(&amp;[("class", &amp;[1, 9][..])], SelectMode::Strict).is_err());
+<span class="boring">}</span></code></pre>
 <h3 id="serialization-1"><a class="header" href="#serialization-1">Serialization</a></h3>
 <div class="table-wrapper">
 <table>
@@ -1047,7 +1062,7 @@ where C: Into&lt;Coordinates&gt; + Clone
 <tr><td><code>NodeIdx</code></td><td>SlotMap key for node identity</td></tr>
 <tr><td><code>Dimension</code></td><td>Interned string key (<code>MiniSpur</code> from <code>lasso</code>)</td></tr>
 <tr><td><code>IntersectionResult&lt;T&gt;</code></td><td><code>{ intersection, only_a, only_b }</code></td></tr>
-<tr><td><code>SelectMode</code></td><td><code>Default</code> or <code>Prune</code></td></tr>
+<tr><td><code>SelectMode</code></td><td><code>Default</code>, <code>Prune</code> or <code>Strict</code></td></tr>
 <tr><td><code>CoordinateTypes</code></td><td><code>Integer(i32)</code>, <code>Float(f64)</code>, <code>String(String)</code></td></tr>
 </tbody>
 </table>
@@ -1550,13 +1565,48 @@ assert q.is_empty()
 </code></pre>
 <h4 id="selectrequest-dict-mode-str--none-consume-bool--none---qube"><a class="header" href="#selectrequest-dict-mode-str--none-consume-bool--none---qube"><code>select(request: dict, mode: str | None, consume: bool | None) -&gt; Qube</code></a></h4>
 <p>Return a new Qube containing only the identifiers that satisfy the request. Each key in <code>request</code> is a dimension name; values may be a single string/int or a list.</p>
-<p><code>mode</code> controls behaviour for dimensions absent in a branch:</p>
+<p><code>mode</code> (case-insensitive) selects the selection behaviour:</p>
 <ul>
-<li><code>None</code> / any other string – default: keep branches that have at least one matching value.</li>
+<li><code>None</code> / <code>"default"</code> – keep branches that have at least one matching value. Requested values that don’t exist are silently ignored.</li>
 <li><code>"prune"</code> – additionally remove branches that are missing any requested dimension entirely.</li>
+<li><code>"strict"</code> – same result as the default mode, but raises <code>ValueError</code> if any requested value is missing (see below).</li>
 </ul>
-<pre><code class="language-python">selected = q.select({"class": [1], "param": [1, 2]}, None, None)
+<p>Any other <code>mode</code> string raises <code>ValueError</code>.</p>
+<pre><code class="language-python">selected = q.select({"class": [1], "param": [1, 2]})
+selected = q.select({"class": [1], "param": [1, 2]}, "strict")
 </code></pre>
+<h5 id="strict-selection"><a class="header" href="#strict-selection">Strict selection</a></h5>
+<p>Use strict mode when every requested value must exist in the qube, for example to validate a user request before acting on it. It succeeds when <strong>each requested value is found in at least one branch</strong> that the selection reaches. A value doesn’t have to appear in every branch.</p>
+<pre><code class="language-python">q = qubed.Qube.from_ascii("""root
+├── class=1
+│   └── expver=0001
+│       ├── param=1
+│       └── param=2
+└── class=2
+    └── expver=0001
+        ├── param=1
+        ├── param=2
+        └── param=3""")
+
+# OK: param=3 exists only under class=2. class=1 lacking it is fine.
+q.select({"param": [3]}, "strict")
+
+# OK: class=1 and class=2 come from different branches, and param=1 and param=3
+# are each found somewhere.
+q.select({"class": [1, 2], "param": [1, 3]}, "strict")
+
+# ValueError: class=9 does not exist.
+q.select({"class": [1, 9]}, "strict")
+
+# ValueError: dimension 'levtype' does not exist.
+q.select({"levtype": ["sfc"]}, "strict")
+
+# ValueError: param=3 exists, but only under class=2, which class=1 excludes.
+# No identifier has both class=1 and param=3.
+q.select({"class": [1], "param": [3]}, "strict")
+</code></pre>
+<p>The error message lists every missing value, e.g.
+<code>Strict select: values not present anywhere in the source Qube: class=9</code>.</p>
 <hr>
 <h3 id="copying"><a class="header" href="#copying">Copying</a></h3>
 <h4 id="clone_qube---qube"><a class="header" href="#clone_qube---qube"><code>clone_qube() -&gt; Qube</code></a></h4>

@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-5f0c7d41.js";
+            window.path_to_searchindex_js = "../searchindex-ef4a359b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-78e66672.js"></script>
@@ -514,13 +514,48 @@ assert q.is_empty()
 </code></pre>
 <h4 id="selectrequest-dict-mode-str--none-consume-bool--none---qube"><a class="header" href="#selectrequest-dict-mode-str--none-consume-bool--none---qube"><code>select(request: dict, mode: str | None, consume: bool | None) -&gt; Qube</code></a></h4>
 <p>Return a new Qube containing only the identifiers that satisfy the request. Each key in <code>request</code> is a dimension name; values may be a single string/int or a list.</p>
-<p><code>mode</code> controls behaviour for dimensions absent in a branch:</p>
+<p><code>mode</code> (case-insensitive) selects the selection behaviour:</p>
 <ul>
-<li><code>None</code> / any other string – default: keep branches that have at least one matching value.</li>
+<li><code>None</code> / <code>"default"</code> – keep branches that have at least one matching value. Requested values that don’t exist are silently ignored.</li>
 <li><code>"prune"</code> – additionally remove branches that are missing any requested dimension entirely.</li>
+<li><code>"strict"</code> – same result as the default mode, but raises <code>ValueError</code> if any requested value is missing (see below).</li>
 </ul>
-<pre><code class="language-python">selected = q.select({"class": [1], "param": [1, 2]}, None, None)
+<p>Any other <code>mode</code> string raises <code>ValueError</code>.</p>
+<pre><code class="language-python">selected = q.select({"class": [1], "param": [1, 2]})
+selected = q.select({"class": [1], "param": [1, 2]}, "strict")
 </code></pre>
+<h5 id="strict-selection"><a class="header" href="#strict-selection">Strict selection</a></h5>
+<p>Use strict mode when every requested value must exist in the qube, for example to validate a user request before acting on it. It succeeds when <strong>each requested value is found in at least one branch</strong> that the selection reaches. A value doesn’t have to appear in every branch.</p>
+<pre><code class="language-python">q = qubed.Qube.from_ascii("""root
+├── class=1
+│   └── expver=0001
+│       ├── param=1
+│       └── param=2
+└── class=2
+    └── expver=0001
+        ├── param=1
+        ├── param=2
+        └── param=3""")
+
+# OK: param=3 exists only under class=2. class=1 lacking it is fine.
+q.select({"param": [3]}, "strict")
+
+# OK: class=1 and class=2 come from different branches, and param=1 and param=3
+# are each found somewhere.
+q.select({"class": [1, 2], "param": [1, 3]}, "strict")
+
+# ValueError: class=9 does not exist.
+q.select({"class": [1, 9]}, "strict")
+
+# ValueError: dimension 'levtype' does not exist.
+q.select({"levtype": ["sfc"]}, "strict")
+
+# ValueError: param=3 exists, but only under class=2, which class=1 excludes.
+# No identifier has both class=1 and param=3.
+q.select({"class": [1], "param": [3]}, "strict")
+</code></pre>
+<p>The error message lists every missing value, e.g.
+<code>Strict select: values not present anywhere in the source Qube: class=9</code>.</p>
 <hr>
 <h3 id="copying"><a class="header" href="#copying">Copying</a></h3>
 <h4 id="clone_qube---qube"><a class="header" href="#clone_qube---qube"><code>clone_qube() -&gt; Qube</code></a></h4>

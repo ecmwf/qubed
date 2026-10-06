@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5f0c7d41.js";
+            window.path_to_searchindex_js = "searchindex-ef4a359b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-78e66672.js"></script>
@@ -314,6 +314,13 @@ let result = q.select(&amp;selection, SelectMode::Default).unwrap();
 println!("{}", result.to_ascii());
 <span class="boring">}</span></code></pre>
 <p><strong>SelectMode::Prune</strong> additionally removes branches that don’t contain all selected dimensions.</p>
+<p><strong>SelectMode::Strict</strong> returns the same result as <code>Default</code>, but returns an error if any requested value can’t be found. Each value only needs to exist in one branch that the selection reaches, not in every branch:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Err: param=4 does not exist anywhere in the qube.
+assert!(q.select(&amp;[("class", &amp;[1][..]), ("param", &amp;[1, 4][..])], SelectMode::Strict).is_err());
+<span class="boring">}</span></code></pre>
+<p>In Python, pass the mode as a string: <code>q.select({"param": [1, 4]}, "strict")</code> raises <code>ValueError</code>.</p>
 <h2 id="union-append"><a class="header" href="#union-append">Union (Append)</a></h2>
 <p>Merge two Qubes together. The result contains all identifiers from both:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
