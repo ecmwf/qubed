@@ -483,3 +483,9 @@ def test_append_completing_grid_keeps_all_points():
     qube.append(Qube.from_datacube({"dim_0": [1], "dim_1": [1]}))
     expected = Qube.from_ascii("root\n└── dim_0=0/1\n    └── dim_1=0/1")
     assert qube.to_ascii() == expected.to_ascii()
+
+def test_select_prune_root() -> None:
+    """selecting with prune mode on an empty Qube should return an empty Qube."""
+    qube = Qube.empty()
+    qube = qube.select({"dim": 0}, mode="prune")
+    assert qube.is_empty() is True
