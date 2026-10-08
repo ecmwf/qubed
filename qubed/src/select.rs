@@ -774,4 +774,12 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn test_select_prune_root() -> Result<(), String> {
+        let qube = Qube::new();
+        let selected = qube.select(&[("param", &[3][..])], SelectMode::Prune)?;
+        assert_eq!(selected.is_empty(), true);
+        Ok(())
+    }
 }

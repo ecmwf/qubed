@@ -370,22 +370,35 @@ impl Qube {
     }
 
     pub fn remove_node(&mut self, id: NodeIdx) -> Result<(), String> {
-        let node = self.nodes.remove(id).ok_or_else(|| format!("Node {:?} not found", id))?;
+        let (dim, parent_id, children) = self
+            .nodes
+            .get(id)
+            .map(|node| {
+                (
+                    node.dim,
+                    node.parent,
+                    node.children.values().flatten().copied().collect::<Vec<_>>(),
+                )
+            })
+            .ok_or_else(|| format!("Node {:?} not found", id))?;
+
+        // The root is permanent; removing it would invalidate the Qube itself.
+        if id != self.root_id {
+            self.nodes.remove(id);
+        }
 
         // Recursively remove all children
-        for child_ids in node.children.values() {
-            for &child_id in child_ids.iter() {
-                self.remove_node(child_id)?;
-            }
+        for child_id in children {
+            self.remove_node(child_id)?;
         }
 
         // Remove from parent's children
-        if let Some(parent_id) = node.parent {
+        if let Some(parent_id) = parent_id {
             if let Some(parent) = self.nodes.get_mut(parent_id) {
-                if let Some(children) = parent.children.get_mut(&node.dim) {
+                if let Some(children) = parent.children.get_mut(&dim) {
                     children.retain(|&child_id| child_id != id);
                     if children.is_empty() {
-                        parent.children.remove(&node.dim);
+                        parent.children.remove(&dim);
                     }
                 }
                 parent.structural_hash.store(0, Ordering::Release);
