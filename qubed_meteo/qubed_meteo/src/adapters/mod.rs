@@ -1,5 +1,7 @@
 #[cfg(feature = "rsfdb-support")]
 pub mod fdb;
+#[cfg(feature = "fdb-support")]
+pub mod fdb_compact;
 pub mod from_constraints;
 pub mod mars_list;
 #[cfg(feature = "opendata-support")]
