@@ -1,28 +1,12 @@
 //! Adapter that builds a [`Qube`] by exhaustively traversing a live MARS
-//! catalogue server using the marstools tagged-binary TCP protocol.
+//! catalogue server.
 //!
-//! # Wire protocol overview
-//!
-//! Every value on the wire is preceded by a 1-byte **tag** that identifies
-//! its type.  The tags used by the MARS catalogue server are:
-//!
-//! | Tag | Name                  | Payload                                     |
-//! |-----|-----------------------|---------------------------------------------|
-//! |   1 | `TAG_START_OBJ`       | (none – object header)                      |
-//! |   2 | `TAG_END_OBJ`         | (none – object footer; silently discarded)  |
-//! |   5 | `TAG_INT`             | 4 bytes, big-endian u32                     |
-//! |  10 | `TAG_UNSIGNED_LONG`   | 4 bytes, big-endian u32                     |
-//! |  12 | `TAG_UNSIGNED_LONG_LONG` | 8 bytes, big-endian (hi-word, lo-word)   |
-//! |  15 | `TAG_STRING`          | 4-byte length + `length` bytes UTF-8        |
-//!
-//! Importantly, `read_tag` silently skips any `TAG_END_OBJ` bytes before
-//! reading the expected tag, exactly mirroring `Stream.read_tag()` in
-//! `marstools/streaming.py`.
+//! Every node is fetched over its own TCP connection as one eckit `Stream`
+//! exchange: the client sends a `FetchAgent` object carrying the node ref,
+//! the server answers with a password request (ignored) followed by the node
+//! object, or closes the connection when the ref is not in the catalogue.
 //!
 //! # Node types
-//!
-//! Each server connection resolves a `ref` (an opaque string key) to one of
-//! the following node handler classes, decoded into [`FetchedData`]:
 //!
 //! | Handler class        | Meaning                                              |
 //! |----------------------|------------------------------------------------------|
@@ -36,395 +20,139 @@
 //! | `PBufrShape`         | Same wire format as `PMonoAxisShape`                |
 //! | `PShape`             | Same wire format as `PMonoAxisShape`                |
 
-use std::io::{self, BufReader, Read, Write};
-use std::net::{TcpStream, ToSocketAddrs};
+use std::thread;
 use std::time::Duration;
 
+use eckit::{Stream, TcpStream};
 use qubed::{Coordinates, NodeIdx, Qube};
 
-// ── Wire-protocol constants ───────────────────────────────────────────────────
-
-const TAG_START_OBJ: u8 = 1;
-const TAG_END_OBJ: u8 = 2;
-const TAG_INT: u8 = 5;
-const TAG_UNSIGNED_LONG: u8 = 10;
-const TAG_UNSIGNED_LONG_LONG: u8 = 12;
-const TAG_STRING: u8 = 15;
-
-/// The MARS server sends `u32::MAX` as the `n` field of a `PResearchNode` to
-/// signal that the accumulated prefix has uniquely resolved one experiment
-/// version and the next node ref follows immediately.
-const RESEARCH_TERMINAL: u32 = u32::MAX;
-
-// ── MarsStream ────────────────────────────────────────────────────────────────
-
-/// Typed read/write wrapper over the marstools binary protocol.
-///
-/// The type parameters `R` and `W` allow tests to substitute in-memory
-/// buffers without changing any protocol or Qube-building logic.
-struct MarsStream<R: Read, W: Write> {
-    reader: R,
-    writer: W,
-}
-
-// Production constructor (TcpStream)
-impl MarsStream<BufReader<TcpStream>, TcpStream> {
-    fn connect(host: &str, port: u16) -> io::Result<Self> {
-        let addr_str = format!("{host}:{port}");
-        let sock_addr = addr_str
-            .to_socket_addrs()?
-            .next()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no address resolved"))?;
-
-        let stream = TcpStream::connect_timeout(&sock_addr, Duration::from_secs(5))?;
-        stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
-
-        let writer = stream.try_clone()?;
-        let reader = BufReader::new(stream);
-        Ok(MarsStream { reader, writer })
-    }
-}
-
-impl<R: Read, W: Write> MarsStream<R, W> {
-    #[cfg(test)]
-    fn new(reader: R, writer: W) -> Self {
-        MarsStream { reader, writer }
-    }
-
-    // ── Low-level I/O ─────────────────────────────────────────────────────────
-
-    fn read_exact_n(&mut self, n: usize) -> io::Result<Vec<u8>> {
-        let mut buf = vec![0u8; n];
-        self.reader.read_exact(&mut buf)?;
-        Ok(buf)
-    }
-
-    /// Read one byte, silently discarding any `TAG_END_OBJ` bytes until the
-    /// expected tag is found.  Mirrors `Stream.read_tag()` in streaming.py.
-    fn read_tag(&mut self, expected: u8) -> io::Result<()> {
-        loop {
-            let mut b = [0u8; 1];
-            self.reader.read_exact(&mut b)?;
-            match b[0] {
-                TAG_END_OBJ => continue,
-                t if t == expected => return Ok(()),
-                t => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("expected tag {expected} ({:?}), got {t}", tag_name(expected)),
-                    ));
-                }
-            }
-        }
-    }
-
-    fn write_tag(&mut self, tag: u8) -> io::Result<()> {
-        self.writer.write_all(&[tag])
-    }
-
-    // ── Typed readers ─────────────────────────────────────────────────────────
-
-    /// `TAG_INT(5)` + 4-byte big-endian u32
-    fn read_int(&mut self) -> io::Result<u32> {
-        self.read_tag(TAG_INT)?;
-        let b = self.read_exact_n(4)?;
-        Ok(u32::from_be_bytes(b.try_into().unwrap()))
-    }
-
-    /// `TAG_UNSIGNED_LONG(10)` + 4-byte big-endian u32
-    fn read_unsigned_long(&mut self) -> io::Result<u32> {
-        self.read_tag(TAG_UNSIGNED_LONG)?;
-        let b = self.read_exact_n(4)?;
-        Ok(u32::from_be_bytes(b.try_into().unwrap()))
-    }
-
-    /// `TAG_UNSIGNED_LONG_LONG(12)` + 4-byte hi-word + 4-byte lo-word, big-endian
-    fn read_unsigned_long_long(&mut self) -> io::Result<u64> {
-        self.read_tag(TAG_UNSIGNED_LONG_LONG)?;
-        let hi = u32::from_be_bytes(self.read_exact_n(4)?.try_into().unwrap());
-        let lo = u32::from_be_bytes(self.read_exact_n(4)?.try_into().unwrap());
-        Ok(((hi as u64) << 32) | lo as u64)
-    }
-
-    /// `TAG_STRING(15)` + 4-byte big-endian length + `length` bytes UTF-8
-    fn read_string(&mut self) -> io::Result<String> {
-        self.read_tag(TAG_STRING)?;
-        let lb = self.read_exact_n(4)?;
-        let len = u32::from_be_bytes(lb.try_into().unwrap()) as usize;
-        let data = self.read_exact_n(len)?;
-        String::from_utf8(data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-    }
-
-    // ── Typed writers ─────────────────────────────────────────────────────────
-
-    /// `TAG_STRING(15)` + 4-byte big-endian length + `length` bytes UTF-8
-    fn write_string(&mut self, s: &str) -> io::Result<()> {
-        self.write_tag(TAG_STRING)?;
-        let n = s.len() as u32;
-        self.writer.write_all(&n.to_be_bytes())?;
-        self.writer.write_all(s.as_bytes())
-    }
-
-    // ── Object framing ────────────────────────────────────────────────────────
-
-    /// Read `TAG_START_OBJ` then the object class-name string.
-    ///
-    /// Returns `None` on EOF (the server indicates the ref is absent from
-    /// the catalogue).
-    fn read_object(&mut self) -> io::Result<Option<String>> {
-        let mut b = [0u8; 1];
-        match self.reader.read_exact(&mut b) {
-            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
-            Err(e) => return Err(e),
-            Ok(()) => {}
-        }
-        match b[0] {
-            0 => Ok(None), // null / EOF sentinel
-            TAG_START_OBJ => Ok(Some(self.read_string()?)),
-            other => Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("read_object: expected TAG_START_OBJ({TAG_START_OBJ}), got {other}"),
-            )),
-        }
-    }
-
-    /// `TAG_START_OBJ` + `write_string(name)` + `write_string(ref_)` + `TAG_END_OBJ`
-    fn write_object(&mut self, name: &str, ref_: &str) -> io::Result<()> {
-        self.write_tag(TAG_START_OBJ)?;
-        self.write_string(name)?;
-        self.write_string(ref_)?;
-        self.write_tag(TAG_END_OBJ)
-    }
-}
-
-fn tag_name(tag: u8) -> &'static str {
-    match tag {
-        0 => "zero",
-        TAG_START_OBJ => "start_obj",
-        TAG_END_OBJ => "end_obj",
-        TAG_INT => "int",
-        TAG_UNSIGNED_LONG => "unsigned_long",
-        TAG_UNSIGNED_LONG_LONG => "unsigned_long_long",
-        TAG_STRING => "string",
-        _ => "unknown",
-    }
-}
-
-// ── Decoded node data ─────────────────────────────────────────────────────────
+/// Sent by a `PResearchNode` as the match count once the accumulated prefix
+/// uniquely resolves one experiment version; the next node ref follows.
+const RESEARCH_TERMINAL: i32 = -1;
 
 /// Decoded payload of a single MARS catalogue node.
-///
-/// Each variant corresponds to one or more handler classes in the Python
-/// reference implementation.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 enum FetchedData {
-    /// `PSimpleNode` / `PSimpleNodeDefault` / `PBalanceNode`:
-    /// a dimension with a finite enumeration of named values and child refs.
-    Simple {
-        /// The dimension name at this level (e.g. `"class"`, `"stream"`).
-        name: String,
-        /// `(value, child_ref)` pairs in wire order.
-        children: Vec<(String, String)>,
-    },
+    /// `PSimpleNode` / `PSimpleNodeDefault` / `PBalanceNode`: a dimension with
+    /// `(value, child_ref)` pairs in wire order.
+    Simple { name: String, children: Vec<(String, String)> },
 
-    /// `PBranchNode`: conditional routing.
-    ///
-    /// Both branches are followed under the same parent so that `compress()`
-    /// can later merge the resulting parallel subtrees.
-    Branch {
-        /// The branch condition, e.g. `"%param%==251"`.
-        expr: String,
-        /// Ref for the branch where the condition is satisfied.
-        true_ref: String,
-        /// Ref for the default (condition not satisfied) branch.
-        false_ref: String,
-    },
+    /// `PBranchNode`: conditional routing. Both branches are followed under
+    /// the same parent so that `compress()` can merge the parallel subtrees.
+    Branch { true_ref: String, false_ref: String },
 
-    /// `PResearchNode` with `n > 0`: the server has returned a list of valid
-    /// experiment-version strings.  Each must be sent back character-by-character
-    /// to resolve its terminal ref (see [`traverse_research_expver`]).
-    Research {
-        /// The dimension name (typically `"expver"`).
-        name: String,
-        /// All experiment versions available at this node.
-        expvers: Vec<String>,
-    },
+    /// `PResearchNode` with a positive count: the experiment versions
+    /// available at this node. Each is resolved to its terminal ref by
+    /// [`traverse_research_expver`].
+    Research { name: String, expvers: Vec<String> },
 
-    /// `PResearchNode` with `n == u32::MAX`: the research traversal is complete
-    /// and the following node ref has been sent by the server.
-    ResearchTerminal {
-        /// Ref of the next node to fetch.
-        next_ref: String,
-    },
+    /// `PResearchNode` with [`RESEARCH_TERMINAL`]: the prefix resolved and the
+    /// server sent the ref of the next node.
+    ResearchTerminal { next_ref: String },
 
     /// `PLeafNode`: a forwarding pointer to a shape node.
     Redirect { shape_ref: String },
 
-    /// `PMonoAxisShape` / `PBufrShape` / `PShape`: the terminal leaf containing
-    /// the actual coordinate axes.
-    Leaf {
-        /// `(axis_name, axis_values)` pairs, in wire order.
-        axes: Vec<(String, Vec<String>)>,
-    },
+    /// `PMonoAxisShape` / `PBufrShape` / `PShape`: `(axis_name, values)` pairs
+    /// in wire order.
+    Leaf { axes: Vec<(String, Vec<String>)> },
 }
-
-// ── Helper functions ──────────────────────────────────────────────────────────
 
 /// If `params` contains VOR (`138`) and DIV (`155`) but not U (`131`) and
 /// V (`132`), append `"131"` and `"132"`.
-///
-/// Mirrors `adduv()` in the Python reference implementation.
 fn adduv(params: &mut Vec<String>) {
-    let has_vo_d = (params.iter().any(|p| p == "138") && params.iter().any(|p| p == "155"))
-        || (params.iter().any(|p| p == "138.128") && params.iter().any(|p| p == "155.128"));
-
-    let has_u_v = (params.iter().any(|p| p == "131") && params.iter().any(|p| p == "132"))
-        || (params.iter().any(|p| p == "131.128") && params.iter().any(|p| p == "132.128"));
-
+    let has = |p: &str| params.iter().any(|x| x == p);
+    let has_vo_d = (has("138") && has("155")) || (has("138.128") && has("155.128"));
+    let has_u_v = (has("131") && has("132")) || (has("131.128") && has("132.128"));
     if has_vo_d && !has_u_v {
         params.push("131".to_string());
         params.push("132".to_string());
     }
 }
 
-/// Convert a slice of string values into a [`Coordinates`] object using the
-/// same heuristics as the other `qubed_meteo` adapters:
-///
-/// * strings with a leading zero digit (e.g. `"0001"`) → `StringCoordinates`
-/// * parseable as `i32` → `IntegerCoordinates`
-/// * parseable as `f64` → `FloatCoordinates`
-/// * everything else → `StringCoordinates`
-fn make_coords(vals: &[&str]) -> Option<Coordinates> {
-    let mut coords = Coordinates::new();
-    for &v in vals {
-        let s = v.trim();
-        if s.is_empty() {
-            continue;
-        }
-        let leading_zero = s.len() > 1
-            && s.starts_with('0')
-            && s.chars().nth(1).map_or(false, |c| c.is_ascii_digit());
-
-        if leading_zero {
-            coords.append(s.to_string());
-        } else if let Ok(i) = s.parse::<i32>() {
-            coords.append(i);
-        } else if let Ok(f) = s.parse::<f64>() {
-            coords.append(f);
-        } else {
-            coords.append(s.to_string());
-        }
-    }
+fn coords(values: &[String]) -> Option<Coordinates> {
+    let coords = Coordinates::from_string(&values.join("/"));
     if coords.is_empty() { None } else { Some(coords) }
 }
 
-// ── Node decoder ──────────────────────────────────────────────────────────────
+fn read_children(stream: &mut dyn Stream) -> eckit::Result<Vec<(String, String)>> {
+    let count = stream.read_u32()?;
+    (0..count).map(|_| Ok((stream.read_string()?, stream.read_string()?))).collect()
+}
 
-/// Decode the node payload from an already-opened `stream`, given the handler
-/// class name `handler` that was read from `stream.read_object()`.
+/// Decode the node payload that follows the handler class name on `stream`.
 ///
-/// `arg` is forwarded to `PResearchNode` as the experiment-version prefix to
-/// send back to the server (empty string for the initial enumeration fetch).
-///
-/// This is a free function so that tests can drive it with an in-memory
-/// `Cursor` rather than a live socket.
-fn decode_node_handler<R: Read, W: Write>(
+/// `arg` is the experiment-version prefix a `PResearchNode` sends back to the
+/// server; it is empty for the initial enumeration and for every other node.
+fn decode_node_handler(
     handler: &str,
-    stream: &mut MarsStream<R, W>,
+    stream: &mut dyn Stream,
     arg: &str,
 ) -> Result<Option<FetchedData>, String> {
-    let io_err = |e: io::Error| format!("I/O error in handler {handler}: {e}");
+    let io = |e: eckit::Error| format!("{handler}: {e}");
 
     match handler {
-        // ── Simple dimension nodes ──────────────────────────────────────────
         "PSimpleNode" | "PBalanceNode" => {
-            let name = stream.read_string().map_err(io_err)?;
-            let count = stream.read_unsigned_long().map_err(io_err)? as usize;
-            let mut children = Vec::with_capacity(count);
-            for _ in 0..count {
-                let value = stream.read_string().map_err(io_err)?;
-                let child_ref = stream.read_string().map_err(io_err)?;
-                children.push((value, child_ref));
-            }
+            let name = stream.read_string().map_err(io)?;
+            let children = read_children(stream).map_err(io)?;
             Ok(Some(FetchedData::Simple { name, children }))
         }
 
         "PSimpleNodeDefault" => {
-            let name = stream.read_string().map_err(io_err)?;
-            // The server-side default value is internal and not exposed externally.
-            let _default_val = stream.read_string().map_err(io_err)?;
-            let count = stream.read_unsigned_long().map_err(io_err)? as usize;
-            let mut children = Vec::with_capacity(count);
-            for _ in 0..count {
-                let value = stream.read_string().map_err(io_err)?;
-                let child_ref = stream.read_string().map_err(io_err)?;
-                children.push((value, child_ref));
-            }
+            let name = stream.read_string().map_err(io)?;
+            stream.read_string().map_err(io)?;
+            let children = read_children(stream).map_err(io)?;
             Ok(Some(FetchedData::Simple { name, children }))
         }
 
-        // ── Branch node ─────────────────────────────────────────────────────
         "PBranchNode" => {
-            let expr = stream.read_string().map_err(io_err)?;
-            let true_ref = stream.read_string().map_err(io_err)?;
-            let false_ref = stream.read_string().map_err(io_err)?;
-            Ok(Some(FetchedData::Branch { expr, true_ref, false_ref }))
+            stream.read_string().map_err(io)?;
+            let true_ref = stream.read_string().map_err(io)?;
+            let false_ref = stream.read_string().map_err(io)?;
+            Ok(Some(FetchedData::Branch { true_ref, false_ref }))
         }
 
-        // ── Research node (interactive experiment-version lookup) ────────────
         "PResearchNode" => {
-            let name = stream.read_string().map_err(io_err)?;
-            // Bidirectional exchange: we send the current prefix, the server
-            // replies with how many experiment versions match it.
-            stream.write_string(arg).map_err(io_err)?;
-            let n = stream.read_int().map_err(io_err)?;
-
-            if n == 0 {
-                // The prefix is invalid; no experiment versions match.
-                Ok(None)
-            } else if n == RESEARCH_TERMINAL {
-                // The prefix uniquely identifies one experiment version.
-                // The server immediately sends the ref for the next node.
-                let next_ref = stream.read_string().map_err(io_err)?;
-                Ok(Some(FetchedData::ResearchTerminal { next_ref }))
-            } else {
-                // The server returns a list of all matching experiment versions.
-                let mut expvers = Vec::with_capacity(n as usize);
-                for _ in 0..n {
-                    expvers.push(stream.read_string().map_err(io_err)?);
+            let name = stream.read_string().map_err(io)?;
+            stream.write_string(arg).map_err(io)?;
+            match stream.read_i32().map_err(io)? {
+                0 => Ok(None),
+                RESEARCH_TERMINAL => {
+                    let next_ref = stream.read_string().map_err(io)?;
+                    Ok(Some(FetchedData::ResearchTerminal { next_ref }))
                 }
-                Ok(Some(FetchedData::Research { name, expvers }))
+                n => {
+                    let expvers = (0..n)
+                        .map(|_| stream.read_string())
+                        .collect::<eckit::Result<_>>()
+                        .map_err(io)?;
+                    Ok(Some(FetchedData::Research { name, expvers }))
+                }
             }
         }
 
-        // ── Leaf-forwarding node ────────────────────────────────────────────
         "PLeafNode" => {
-            // Skip the 64-bit size field; we only need the shape ref.
-            let _size = stream.read_unsigned_long_long().map_err(io_err)?;
-            let shape_ref = stream.read_string().map_err(io_err)?;
+            stream.read_u64().map_err(io)?;
+            let shape_ref = stream.read_string().map_err(io)?;
             Ok(Some(FetchedData::Redirect { shape_ref }))
         }
 
-        // ── Leaf / shape nodes ──────────────────────────────────────────────
-        // PBufrShape and PShape share the wire format of PMonoAxisShape.
         "PMonoAxisShape" | "PBufrShape" | "PShape" => {
-            let mut axes: Vec<(String, Vec<String>)> = Vec::new();
+            let mut axes = Vec::new();
             loop {
-                let val_count = stream.read_unsigned_long().map_err(io_err)? as usize;
-                if val_count == 0 {
-                    break; // terminator
+                let count = stream.read_u32().map_err(io)?;
+                if count == 0 {
+                    break;
                 }
-                let axis_name = stream.read_string().map_err(io_err)?;
-                let mut axis_values = Vec::with_capacity(val_count);
-                for _ in 0..val_count {
-                    axis_values.push(stream.read_string().map_err(io_err)?);
+                let name = stream.read_string().map_err(io)?;
+                let mut values = (0..count)
+                    .map(|_| stream.read_string())
+                    .collect::<eckit::Result<Vec<_>>>()
+                    .map_err(io)?;
+                if name == "param" {
+                    adduv(&mut values);
                 }
-                // Inject derived U/V wind components when VOR/DIV are present.
-                if axis_name == "param" {
-                    adduv(&mut axis_values);
-                }
-                axes.push((axis_name, axis_values));
+                axes.push((name, values));
             }
             Ok(Some(FetchedData::Leaf { axes }))
         }
@@ -433,54 +161,90 @@ fn decode_node_handler<R: Read, W: Write>(
     }
 }
 
-// ── Network layer ─────────────────────────────────────────────────────────────
+trait NodeFetcher {
+    fn fetch(&self, ref_: &str, arg: &str) -> Result<Option<FetchedData>, String>;
+}
 
-/// Open a fresh TCP connection to `host:port`, send the `FetchAgent` request
-/// for `ref_`, and decode the server response.
-///
-/// `arg` is passed through to `PResearchNode` (use `""` for all other nodes).
-///
-/// Returns `Ok(None)` when the server indicates `ref_` is absent from the
-/// catalogue.
-fn fetch_node(host: &str, port: u16, ref_: &str, arg: &str) -> Result<Option<FetchedData>, String> {
-    let mut stream =
-        MarsStream::connect(host, port).map_err(|e| format!("connect to {host}:{port}: {e}"))?;
+/// A MARS catalogue server to traverse.
+#[derive(Debug, Clone)]
+pub struct MarsServer {
+    host: String,
+    port: u16,
+    retries: u32,
+    backoff: Duration,
+}
 
-    stream.write_object("FetchAgent", ref_).map_err(|e| format!("write_object: {e}"))?;
+impl MarsServer {
+    pub fn new(host: impl Into<String>, port: u16) -> Self {
+        Self { host: host.into(), port, retries: 3, backoff: Duration::from_secs(1) }
+    }
 
-    // The server always sends an INT password request; we ignore it.
-    stream.read_int().map_err(|e| format!("password-request read: {e}"))?;
+    /// Further attempts per node fetch after the first one fails. Default 3.
+    /// Connecting already retries inside eckit (five tries, five seconds
+    /// apart), so this mainly covers exchanges that fail after connecting.
+    pub fn retries(mut self, retries: u32) -> Self {
+        self.retries = retries;
+        self
+    }
 
-    match stream.read_object().map_err(|e| format!("handler-name read: {e}"))? {
-        None => Ok(None),
-        Some(handler) => decode_node_handler(&handler, &mut stream, arg),
+    /// Delay before the first retry, doubled on every further one. Default 1s.
+    pub fn backoff(mut self, backoff: Duration) -> Self {
+        self.backoff = backoff;
+        self
+    }
+
+    fn fetch_once(&self, ref_: &str, arg: &str) -> Result<Option<FetchedData>, String> {
+        let mut stream = TcpStream::connect(&self.host, i32::from(self.port))
+            .map_err(|e| format!("connect to {}:{}: {e}", self.host, self.port))?;
+        let io = |e: eckit::Error| format!("FetchAgent {ref_:?}: {e}");
+
+        stream.start_object().map_err(io)?;
+        stream.write_string("FetchAgent").map_err(io)?;
+        stream.write_string(ref_).map_err(io)?;
+        stream.end_object().map_err(io)?;
+
+        stream.read_i32().map_err(io)?;
+        if !stream.next_object().map_err(io)? {
+            return Ok(None);
+        }
+        let handler = stream.read_string().map_err(io)?;
+        decode_node_handler(&handler, &mut stream, arg)
     }
 }
 
-// ── Research-node traversal ───────────────────────────────────────────────────
+impl NodeFetcher for MarsServer {
+    fn fetch(&self, ref_: &str, arg: &str) -> Result<Option<FetchedData>, String> {
+        let mut delay = self.backoff;
+        let mut failures = 0;
+        loop {
+            match self.fetch_once(ref_, arg) {
+                Err(_) if failures < self.retries => {
+                    failures += 1;
+                    thread::sleep(delay);
+                    delay *= 2;
+                }
+                result => return result,
+            }
+        }
+    }
+}
 
-/// Resolve `expver` to the ref of the following node by feeding the characters
-/// of `expver` to the server one-at-a-time (accumulating a prefix) until the
-/// server replies with `RESEARCH_TERMINAL`.
+/// Resolve `expver` to the ref of the node below it by sending the server one
+/// more character of the version at a time until it answers with a terminal.
 ///
 /// Returns `None` if the server declares the prefix invalid at any point.
 fn traverse_research_expver(
-    host: &str,
-    port: u16,
+    fetcher: &dyn NodeFetcher,
     research_ref: &str,
     expver: &str,
 ) -> Result<Option<String>, String> {
     let mut prefix = String::with_capacity(expver.len());
-
     for ch in expver.chars() {
         prefix.push(ch);
-
-        match fetch_node(host, port, research_ref, &prefix)? {
-            None => return Ok(None), // prefix declared invalid
+        match fetcher.fetch(research_ref, &prefix)? {
+            None => return Ok(None),
             Some(FetchedData::ResearchTerminal { next_ref }) => return Ok(Some(next_ref)),
-            Some(FetchedData::Research { .. }) => {
-                // Prefix still ambiguous; continue sending more characters.
-            }
+            Some(FetchedData::Research { .. }) => {}
             Some(other) => {
                 return Err(format!(
                     "Unexpected node type during research traversal for expver '{expver}': {other:?}"
@@ -488,88 +252,64 @@ fn traverse_research_expver(
             }
         }
     }
-
-    // Exhausted all characters without reaching terminal: expver is incomplete.
     Ok(None)
 }
 
-// ── Qube builder ─────────────────────────────────────────────────────────────
-
-/// Fetch the node at `ref_` (with optional research prefix `arg`), decode it,
-/// and recursively insert all reachable paths into `qube` under `parent`.
 fn build_subtree(
-    host: &str,
-    port: u16,
+    fetcher: &dyn NodeFetcher,
     ref_: &str,
     arg: &str,
     qube: &mut Qube,
     parent: NodeIdx,
 ) -> Result<(), String> {
-    let data = match fetch_node(host, port, ref_, arg)? {
-        None => return Ok(()),
-        Some(d) => d,
+    let Some(data) = fetcher.fetch(ref_, arg)? else {
+        return Ok(());
     };
 
     match data {
-        // ── Simple dimension: one child per value ─────────────────────────
         FetchedData::Simple { name, children } => {
             for (value, child_ref) in children {
-                let coords = make_coords(&[value.as_str()]);
                 let child = qube
-                    .get_or_create_child(&name, parent, coords)
+                    .get_or_create_child(&name, parent, coords(std::slice::from_ref(&value)))
                     .map_err(|e| format!("get_or_create_child({name}={value}): {e:?}"))?;
-                build_subtree(host, port, &child_ref, "", qube, child)?;
+                build_subtree(fetcher, &child_ref, "", qube, child)?;
             }
         }
 
-        // ── Branch: follow both branches under the same parent ───────────
-        //
-        // Both subtrees are inserted at the same level; `compress()` will
-        // later merge structurally equivalent sibling nodes.  This correctly
-        // enumerates all data regardless of branch direction.
-        FetchedData::Branch { expr: _, true_ref, false_ref } => {
+        FetchedData::Branch { true_ref, false_ref } => {
             if !true_ref.is_empty() {
-                build_subtree(host, port, &true_ref, "", qube, parent)?;
+                build_subtree(fetcher, &true_ref, "", qube, parent)?;
             }
             if !false_ref.is_empty() {
-                build_subtree(host, port, &false_ref, "", qube, parent)?;
+                build_subtree(fetcher, &false_ref, "", qube, parent)?;
             }
         }
 
-        // ── Research: enumerate all experiment versions ───────────────────
         FetchedData::Research { name, expvers } => {
             for expver in expvers {
-                let coords = make_coords(&[expver.as_str()]);
                 let child = qube
-                    .get_or_create_child(&name, parent, coords)
+                    .get_or_create_child(&name, parent, coords(std::slice::from_ref(&expver)))
                     .map_err(|e| format!("get_or_create_child({name}={expver}): {e:?}"))?;
-
-                if let Some(next_ref) = traverse_research_expver(host, port, ref_, &expver)? {
-                    build_subtree(host, port, &next_ref, "", qube, child)?;
+                if let Some(next_ref) = traverse_research_expver(fetcher, ref_, &expver)? {
+                    build_subtree(fetcher, &next_ref, "", qube, child)?;
                 }
             }
         }
 
-        // Reached a terminal during research traversal outside the normal
-        // enumerate→traverse flow (e.g. expver has only one character).
         FetchedData::ResearchTerminal { next_ref } => {
-            build_subtree(host, port, &next_ref, "", qube, parent)?;
+            build_subtree(fetcher, &next_ref, "", qube, parent)?;
         }
 
-        // ── Leaf forwarding: follow the shape ref ─────────────────────────
         FetchedData::Redirect { shape_ref } => {
-            build_subtree(host, port, &shape_ref, "", qube, parent)?;
+            build_subtree(fetcher, &shape_ref, "", qube, parent)?;
         }
 
-        // ── Leaf: build a coordinate chain for each axis ──────────────────
         FetchedData::Leaf { axes } => {
             let mut current = parent;
-            for (axis_name, axis_values) in axes {
-                let vals: Vec<&str> = axis_values.iter().map(String::as_str).collect();
-                let coords = make_coords(&vals);
+            for (name, values) in axes {
                 current = qube
-                    .get_or_create_child(&axis_name, current, coords)
-                    .map_err(|e| format!("get_or_create_child({axis_name}): {e:?}"))?;
+                    .get_or_create_child(&name, current, coords(&values))
+                    .map_err(|e| format!("get_or_create_child({name}): {e:?}"))?;
             }
         }
     }
@@ -577,509 +317,439 @@ fn build_subtree(
     Ok(())
 }
 
-// ── Public trait ─────────────────────────────────────────────────────────────
+fn build_qube(fetcher: &dyn NodeFetcher) -> Result<Qube, String> {
+    let mut qube = Qube::new();
+    let root = qube.root();
+    build_subtree(fetcher, "", "", &mut qube, root)?;
+    qube.compress();
+    Ok(qube)
+}
 
 /// Build a [`Qube`] by exhaustively traversing a live MARS catalogue server.
 ///
-/// The server must speak the marstools tagged-binary protocol over TCP.
-/// All dimension names and values are discovered automatically; no query
+/// All dimension names and values are discovered from the server; no query
 /// filter is applied.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use qubed::Qube;
-/// use qubed_meteo::adapters::mars_server::FromMarsServer;
-///
-/// let qube = Qube::from_mars_server("mars.example.com", 9000)
-///     .expect("failed to traverse MARS catalogue");
-/// println!("{}", qube.to_ascii());
-/// ```
 pub trait FromMarsServer {
-    /// Connect to the MARS catalogue server at `host:port` and traverse its
-    /// tree completely, returning a [`Qube`] that contains all available data
-    /// paths.
-    ///
-    /// # Arguments
-    /// * `host` – Hostname or IP address of the MARS catalogue server.
-    /// * `port` – TCP port the server is listening on.
     fn from_mars_server(host: &str, port: u16) -> Result<Qube, String>;
+    fn from_mars_server_with(server: &MarsServer) -> Result<Qube, String>;
 }
 
 impl FromMarsServer for Qube {
     fn from_mars_server(host: &str, port: u16) -> Result<Qube, String> {
-        let mut qube = Qube::new();
-        let root = qube.root();
-        // Fetch the root node using an empty ref (the MARS convention for the
-        // catalogue root) and recursively build the entire tree.
-        build_subtree(host, port, "", "", &mut qube, root)?;
-        qube.compress();
-        Ok(qube)
+        Self::from_mars_server_with(&MarsServer::new(host, port))
+    }
+
+    fn from_mars_server_with(server: &MarsServer) -> Result<Qube, String> {
+        eckit::init();
+        build_qube(server)
     }
 }
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
+    use eckit::MemoryStream;
+    use std::collections::HashMap;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::mpsc;
 
-    // ── Wire-encoding helpers ─────────────────────────────────────────────────
+    type Fetched = Result<Option<FetchedData>, String>;
 
-    fn enc_tag(tag: u8) -> Vec<u8> {
-        vec![tag]
+    fn written(write: impl FnOnce(&mut dyn Stream) -> eckit::Result<()>) -> Vec<u8> {
+        eckit::init();
+        let mut writer = MemoryStream::writer();
+        write(&mut writer).unwrap();
+        writer.buffer().unwrap().to_vec()
     }
 
-    fn enc_string(s: &str) -> Vec<u8> {
-        let mut v = enc_tag(TAG_STRING);
-        v.extend_from_slice(&(s.len() as u32).to_be_bytes());
-        v.extend_from_slice(s.as_bytes());
-        v
+    fn decode(handler: &str, bytes: &[u8]) -> Fetched {
+        let mut reader = MemoryStream::reader(bytes);
+        decode_node_handler(handler, &mut reader, "")
     }
 
-    fn enc_u32_tagged(tag: u8, n: u32) -> Vec<u8> {
-        let mut v = enc_tag(tag);
-        v.extend_from_slice(&n.to_be_bytes());
-        v
+    fn strings(values: &[&str]) -> Vec<String> {
+        values.iter().map(|v| v.to_string()).collect()
     }
 
-    fn enc_u64_tagged(tag: u8, n: u64) -> Vec<u8> {
-        let mut v = enc_tag(tag);
-        v.extend_from_slice(&((n >> 32) as u32).to_be_bytes());
-        v.extend_from_slice(&(n as u32).to_be_bytes());
-        v
+    fn pairs(values: &[(&str, &str)]) -> Vec<(String, String)> {
+        values.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
     }
 
-    fn enc_int(n: u32) -> Vec<u8> {
-        enc_u32_tagged(TAG_INT, n)
-    }
-    fn enc_ul(n: u32) -> Vec<u8> {
-        enc_u32_tagged(TAG_UNSIGNED_LONG, n)
-    }
-    fn enc_ull(n: u64) -> Vec<u8> {
-        enc_u64_tagged(TAG_UNSIGNED_LONG_LONG, n)
-    }
-
-    /// Build a mock stream with pre-loaded response bytes and a write-capture buffer.
-    fn mock_stream(response: Vec<u8>) -> MarsStream<Cursor<Vec<u8>>, Vec<u8>> {
-        MarsStream::new(Cursor::new(response), Vec::new())
+    fn simple_node(name: &str, children: &[(&str, &str)]) -> Vec<u8> {
+        written(|s| {
+            s.write_string(name)?;
+            s.write_u32(children.len() as u32)?;
+            for (value, child_ref) in children {
+                s.write_string(value)?;
+                s.write_string(child_ref)?;
+            }
+            Ok(())
+        })
     }
 
-    // ── MarsStream protocol unit tests ────────────────────────────────────────
-
-    #[test]
-    fn test_read_string_basic() {
-        let mut s = mock_stream(enc_string("hello"));
-        assert_eq!(s.read_string().unwrap(), "hello");
-    }
-
-    #[test]
-    fn test_read_string_empty() {
-        let mut s = mock_stream(enc_string(""));
-        assert_eq!(s.read_string().unwrap(), "");
+    fn shape(axes: &[(&str, &[&str])]) -> Vec<u8> {
+        written(|s| {
+            for (name, values) in axes {
+                s.write_u32(values.len() as u32)?;
+                s.write_string(name)?;
+                for value in *values {
+                    s.write_string(value)?;
+                }
+            }
+            s.write_u32(0)
+        })
     }
 
     #[test]
-    fn test_write_string_encoding() {
-        let mut s = mock_stream(vec![]);
-        s.write_string("world").unwrap();
-        assert_eq!(s.writer, enc_string("world"));
-    }
-
-    #[test]
-    fn test_read_tag_skips_end_obj() {
-        // Prepend two TAG_END_OBJ bytes before the actual UNSIGNED_LONG tag.
-        let mut bytes = vec![TAG_END_OBJ, TAG_END_OBJ];
-        bytes.extend_from_slice(&enc_ul(99));
-        let mut s = mock_stream(bytes);
-        assert_eq!(s.read_unsigned_long().unwrap(), 99);
-    }
-
-    #[test]
-    fn test_read_int() {
-        let mut s = mock_stream(enc_int(12345));
-        assert_eq!(s.read_int().unwrap(), 12345);
-    }
-
-    #[test]
-    fn test_read_unsigned_long() {
-        let mut s = mock_stream(enc_ul(u32::MAX));
-        assert_eq!(s.read_unsigned_long().unwrap(), u32::MAX);
-    }
-
-    #[test]
-    fn test_read_unsigned_long_long() {
-        let n: u64 = 0x0102_0304_0506_0708;
-        let mut s = mock_stream(enc_ull(n));
-        assert_eq!(s.read_unsigned_long_long().unwrap(), n);
-    }
-
-    #[test]
-    fn test_write_object_encoding() {
-        let mut s = mock_stream(vec![]);
-        s.write_object("FetchAgent", "root_ref").unwrap();
-
-        let mut expected = vec![TAG_START_OBJ];
-        expected.extend_from_slice(&enc_string("FetchAgent"));
-        expected.extend_from_slice(&enc_string("root_ref"));
-        expected.push(TAG_END_OBJ);
-
-        assert_eq!(s.writer, expected);
-    }
-
-    #[test]
-    fn test_read_object_returns_class_name() {
-        let mut bytes = vec![TAG_START_OBJ];
-        bytes.extend_from_slice(&enc_string("PSimpleNode"));
-        let mut s = mock_stream(bytes);
-        assert_eq!(s.read_object().unwrap(), Some("PSimpleNode".to_string()));
-    }
-
-    #[test]
-    fn test_read_object_returns_none_on_eof() {
-        let mut s = mock_stream(vec![]);
-        assert_eq!(s.read_object().unwrap(), None);
-    }
-
-    #[test]
-    fn test_read_object_returns_none_on_null_byte() {
-        let mut s = mock_stream(vec![0u8]);
-        assert_eq!(s.read_object().unwrap(), None);
-    }
-
-    #[test]
-    fn test_read_tag_unexpected_tag_returns_error() {
-        // Feed TAG_STRING when TAG_INT is expected.
-        let bytes = enc_string("oops");
-        let mut s = mock_stream(bytes);
-        assert!(s.read_int().is_err());
-    }
-
-    // ── decode_node_handler unit tests ────────────────────────────────────────
-
-    fn build_simple_node_bytes(name: &str, children: &[(&str, &str)]) -> Vec<u8> {
-        let mut b = enc_string(name);
-        b.extend_from_slice(&enc_ul(children.len() as u32));
-        for (v, r) in children {
-            b.extend_from_slice(&enc_string(v));
-            b.extend_from_slice(&enc_string(r));
-        }
-        b
-    }
-
-    #[test]
-    fn test_decode_simple_node_two_children() {
-        let bytes = build_simple_node_bytes("class", &[("od", "ref1"), ("rd", "ref2")]);
-        let mut s = mock_stream(bytes);
-        let result = decode_node_handler("PSimpleNode", &mut s, "").unwrap();
+    fn decodes_simple_node() {
+        let bytes = simple_node("class", &[("od", "ref1"), ("rd", "ref2")]);
         assert_eq!(
-            result,
+            decode("PSimpleNode", &bytes).unwrap(),
             Some(FetchedData::Simple {
-                name: "class".to_string(),
-                children: vec![
-                    ("od".to_string(), "ref1".to_string()),
-                    ("rd".to_string(), "ref2".to_string()),
-                ],
+                name: "class".into(),
+                children: pairs(&[("od", "ref1"), ("rd", "ref2")]),
             })
         );
     }
 
     #[test]
-    fn test_decode_balance_node_same_as_simple() {
-        let bytes = build_simple_node_bytes("type", &[("fc", "ref_fc")]);
-        let mut s = mock_stream(bytes);
-        let result = decode_node_handler("PBalanceNode", &mut s, "").unwrap();
+    fn decodes_balance_node_like_a_simple_node() {
+        let bytes = simple_node("type", &[("fc", "ref_fc")]);
         assert_eq!(
-            result,
+            decode("PBalanceNode", &bytes).unwrap(),
+            Some(FetchedData::Simple { name: "type".into(), children: pairs(&[("fc", "ref_fc")]) })
+        );
+    }
+
+    #[test]
+    fn decodes_simple_node_default_and_drops_the_default() {
+        let bytes = written(|s| {
+            s.write_string("timespan")?;
+            s.write_string("none")?;
+            s.write_u32(1)?;
+            s.write_string("instantaneous")?;
+            s.write_string("ref_inst")
+        });
+        assert_eq!(
+            decode("PSimpleNodeDefault", &bytes).unwrap(),
             Some(FetchedData::Simple {
-                name: "type".to_string(),
-                children: vec![("fc".to_string(), "ref_fc".to_string())],
+                name: "timespan".into(),
+                children: pairs(&[("instantaneous", "ref_inst")]),
             })
         );
     }
 
     #[test]
-    fn test_decode_simple_node_default_discards_default() {
-        let mut bytes = enc_string("timespan");
-        bytes.extend_from_slice(&enc_string("none")); // default value → discarded
-        bytes.extend_from_slice(&enc_ul(1));
-        bytes.extend_from_slice(&enc_string("instantaneous"));
-        bytes.extend_from_slice(&enc_string("ref_inst"));
-
-        let mut s = mock_stream(bytes);
-        let result = decode_node_handler("PSimpleNodeDefault", &mut s, "").unwrap();
+    fn decodes_branch_node() {
+        let bytes = written(|s| {
+            s.write_string("%param%==251")?;
+            s.write_string("ref_true")?;
+            s.write_string("ref_false")
+        });
         assert_eq!(
-            result,
-            Some(FetchedData::Simple {
-                name: "timespan".to_string(),
-                children: vec![("instantaneous".to_string(), "ref_inst".to_string())],
-            })
-        );
-    }
-
-    #[test]
-    fn test_decode_branch_node() {
-        let mut bytes = enc_string("%param%==251");
-        bytes.extend_from_slice(&enc_string("ref_true"));
-        bytes.extend_from_slice(&enc_string("ref_false"));
-
-        let mut s = mock_stream(bytes);
-        let result = decode_node_handler("PBranchNode", &mut s, "").unwrap();
-        assert_eq!(
-            result,
+            decode("PBranchNode", &bytes).unwrap(),
             Some(FetchedData::Branch {
-                expr: "%param%==251".to_string(),
-                true_ref: "ref_true".to_string(),
-                false_ref: "ref_false".to_string(),
+                true_ref: "ref_true".into(),
+                false_ref: "ref_false".into()
             })
         );
     }
 
     #[test]
-    fn test_decode_research_node_returns_expver_list() {
-        let mut bytes = enc_string("expver");
-        bytes.extend_from_slice(&enc_int(2));
-        bytes.extend_from_slice(&enc_string("0001"));
-        bytes.extend_from_slice(&enc_string("abcd"));
-
-        let mut s = mock_stream(bytes);
-        let result = decode_node_handler("PResearchNode", &mut s, "").unwrap();
-
-        // Verify the empty arg was written back to the server.
-        assert_eq!(s.writer, enc_string(""));
-
+    fn decodes_leaf_node_as_redirect() {
+        let bytes = written(|s| {
+            s.write_u64(98765)?;
+            s.write_string("shape_ref_42")
+        });
         assert_eq!(
-            result,
-            Some(FetchedData::Research {
-                name: "expver".to_string(),
-                expvers: vec!["0001".to_string(), "abcd".to_string()],
-            })
+            decode("PLeafNode", &bytes).unwrap(),
+            Some(FetchedData::Redirect { shape_ref: "shape_ref_42".into() })
         );
     }
 
     #[test]
-    fn test_decode_research_node_terminal() {
-        let mut bytes = enc_string("expver");
-        bytes.extend_from_slice(&enc_int(u32::MAX));
-        bytes.extend_from_slice(&enc_string("next_ref_99"));
-
-        let mut s = mock_stream(bytes);
-        let result = decode_node_handler("PResearchNode", &mut s, "0001").unwrap();
-
-        // Verify "0001" was written to the server.
-        assert_eq!(s.writer, enc_string("0001"));
-
+    fn decodes_mono_axis_shape_with_two_axes() {
+        let bytes = shape(&[("param", &["130", "131"]), ("step", &["0", "6", "12"])]);
         assert_eq!(
-            result,
-            Some(FetchedData::ResearchTerminal { next_ref: "next_ref_99".to_string() })
-        );
-    }
-
-    #[test]
-    fn test_decode_research_node_invalid_prefix() {
-        let mut bytes = enc_string("expver");
-        bytes.extend_from_slice(&enc_int(0)); // n == 0 → invalid
-
-        let mut s = mock_stream(bytes);
-        let result = decode_node_handler("PResearchNode", &mut s, "zzzz").unwrap();
-        assert_eq!(result, None);
-    }
-
-    #[test]
-    fn test_decode_leaf_node() {
-        let mut bytes = enc_ull(98765);
-        bytes.extend_from_slice(&enc_string("shape_ref_42"));
-
-        let mut s = mock_stream(bytes);
-        let result = decode_node_handler("PLeafNode", &mut s, "").unwrap();
-        assert_eq!(result, Some(FetchedData::Redirect { shape_ref: "shape_ref_42".to_string() }));
-    }
-
-    #[test]
-    fn test_decode_mono_axis_shape_single_axis() {
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&enc_ul(3));
-        bytes.extend_from_slice(&enc_string("param"));
-        bytes.extend_from_slice(&enc_string("130"));
-        bytes.extend_from_slice(&enc_string("131"));
-        bytes.extend_from_slice(&enc_string("132"));
-        bytes.extend_from_slice(&enc_ul(0)); // terminator
-
-        let mut s = mock_stream(bytes);
-        let result = decode_node_handler("PMonoAxisShape", &mut s, "").unwrap();
-        assert_eq!(
-            result,
-            Some(FetchedData::Leaf {
-                axes: vec![(
-                    "param".to_string(),
-                    vec!["130".to_string(), "131".to_string(), "132".to_string()],
-                )],
-            })
-        );
-    }
-
-    #[test]
-    fn test_decode_mono_axis_shape_two_axes() {
-        let mut bytes = Vec::new();
-        // axis: param
-        bytes.extend_from_slice(&enc_ul(2));
-        bytes.extend_from_slice(&enc_string("param"));
-        bytes.extend_from_slice(&enc_string("130"));
-        bytes.extend_from_slice(&enc_string("131"));
-        // axis: step
-        bytes.extend_from_slice(&enc_ul(3));
-        bytes.extend_from_slice(&enc_string("step"));
-        bytes.extend_from_slice(&enc_string("0"));
-        bytes.extend_from_slice(&enc_string("6"));
-        bytes.extend_from_slice(&enc_string("12"));
-        // terminator
-        bytes.extend_from_slice(&enc_ul(0));
-
-        let mut s = mock_stream(bytes);
-        let result = decode_node_handler("PMonoAxisShape", &mut s, "").unwrap();
-        assert_eq!(
-            result,
+            decode("PMonoAxisShape", &bytes).unwrap(),
             Some(FetchedData::Leaf {
                 axes: vec![
-                    ("param".to_string(), vec!["130".to_string(), "131".to_string()]),
-                    ("step".to_string(), vec!["0".to_string(), "6".to_string(), "12".to_string()],),
+                    ("param".into(), strings(&["130", "131"])),
+                    ("step".into(), strings(&["0", "6", "12"])),
                 ],
             })
         );
     }
 
     #[test]
-    fn test_decode_bufr_shape_same_as_mono() {
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&enc_ul(1));
-        bytes.extend_from_slice(&enc_string("obstype"));
-        bytes.extend_from_slice(&enc_string("1"));
-        bytes.extend_from_slice(&enc_ul(0));
-
-        let mut s = mock_stream(bytes);
-        let result = decode_node_handler("PBufrShape", &mut s, "").unwrap();
+    fn decodes_bufr_shape_like_mono_axis() {
+        let bytes = shape(&[("obstype", &["1"])]);
         assert_eq!(
-            result,
-            Some(FetchedData::Leaf { axes: vec![("obstype".to_string(), vec!["1".to_string()])] })
+            decode("PBufrShape", &bytes).unwrap(),
+            Some(FetchedData::Leaf { axes: vec![("obstype".into(), strings(&["1"]))] })
         );
     }
 
     #[test]
-    fn test_decode_unknown_handler_returns_error() {
-        let mut s = mock_stream(vec![]);
-        let result = decode_node_handler("PGhostNode", &mut s, "");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Unknown MARS node handler"));
-    }
-
-    // ── adduv unit tests ──────────────────────────────────────────────────────
-
-    #[test]
-    fn test_adduv_adds_u_v_when_vo_d_present() {
-        let mut p = vec!["138".to_string(), "155".to_string(), "130".to_string()];
-        adduv(&mut p);
-        assert!(p.contains(&"131".to_string()), "131 should be added");
-        assert!(p.contains(&"132".to_string()), "132 should be added");
+    fn shape_param_axis_gains_u_and_v_from_vorticity_and_divergence() {
+        let bytes = shape(&[("param", &["138", "155"])]);
+        assert_eq!(
+            decode("PShape", &bytes).unwrap(),
+            Some(FetchedData::Leaf {
+                axes: vec![("param".into(), strings(&["138", "155", "131", "132"]))],
+            })
+        );
     }
 
     #[test]
-    fn test_adduv_no_op_when_u_v_already_present() {
-        let mut p =
-            vec!["138".to_string(), "155".to_string(), "131".to_string(), "132".to_string()];
-        adduv(&mut p);
-        assert_eq!(p.iter().filter(|x| *x == "131").count(), 1);
-        assert_eq!(p.iter().filter(|x| *x == "132").count(), 1);
+    fn rejects_unknown_handler() {
+        let err = decode("PGhostNode", &[]).unwrap_err();
+        assert!(err.contains("Unknown MARS node handler"), "{err}");
     }
 
     #[test]
-    fn test_adduv_no_op_without_vo_d() {
-        let mut p = vec!["130".to_string(), "131".to_string(), "132".to_string()];
-        adduv(&mut p);
-        assert_eq!(p.len(), 3);
+    fn adduv_is_a_no_op_when_u_and_v_are_present_or_vorticity_is_alone() {
+        let mut present = strings(&["138", "155", "131", "132"]);
+        adduv(&mut present);
+        assert_eq!(present, strings(&["138", "155", "131", "132"]));
+
+        let mut alone = strings(&["138", "130"]);
+        adduv(&mut alone);
+        assert_eq!(alone, strings(&["138", "130"]));
     }
 
     #[test]
-    fn test_adduv_dotted_param_ids() {
-        let mut p = vec!["138.128".to_string(), "155.128".to_string()];
-        adduv(&mut p);
-        assert!(p.contains(&"131".to_string()));
-        assert!(p.contains(&"132".to_string()));
+    fn adduv_handles_dotted_param_ids() {
+        let mut params = strings(&["138.128", "155.128"]);
+        adduv(&mut params);
+        assert_eq!(params, strings(&["138.128", "155.128", "131", "132"]));
     }
 
     #[test]
-    fn test_adduv_only_vor_no_action() {
-        // Only VOR present, not DIV → no insertion.
-        let mut p = vec!["138".to_string(), "130".to_string()];
-        adduv(&mut p);
-        assert_eq!(p.len(), 2);
+    fn coords_keep_leading_zeros_as_strings_and_parse_numbers() {
+        assert!(matches!(coords(&strings(&["0001"])), Some(Coordinates::Strings(_))));
+        assert!(matches!(coords(&strings(&["130", "131"])), Some(Coordinates::Integers(_))));
+        assert!(matches!(coords(&strings(&["130.128"])), Some(Coordinates::Floats(_))));
+        assert!(coords(&[]).is_none());
     }
 
-    // ── make_coords unit tests ────────────────────────────────────────────────
+    struct Catalogue(HashMap<(String, String), Fetched>);
 
-    #[test]
-    fn test_make_coords_integer() {
-        let c = make_coords(&["42"]).unwrap();
-        assert!(matches!(c, Coordinates::Integers(_)));
+    impl Catalogue {
+        fn new(entries: Vec<((&str, &str), Fetched)>) -> Self {
+            Self(
+                entries
+                    .into_iter()
+                    .map(|((r, a), v)| ((r.to_string(), a.to_string()), v))
+                    .collect(),
+            )
+        }
     }
 
-    #[test]
-    fn test_make_coords_float() {
-        let c = make_coords(&["3.14"]).unwrap();
-        assert!(matches!(c, Coordinates::Floats(_)));
+    impl NodeFetcher for Catalogue {
+        fn fetch(&self, ref_: &str, arg: &str) -> Result<Option<FetchedData>, String> {
+            self.0.get(&(ref_.to_string(), arg.to_string())).cloned().unwrap_or(Ok(None))
+        }
     }
 
-    #[test]
-    fn test_make_coords_string() {
-        let c = make_coords(&["od"]).unwrap();
-        assert!(matches!(c, Coordinates::Strings(_)));
+    fn simple(name: &str, children: &[(&str, &str)]) -> Fetched {
+        Ok(Some(FetchedData::Simple { name: name.into(), children: pairs(children) }))
     }
 
-    #[test]
-    fn test_make_coords_leading_zero_stays_string() {
-        // "0001" looks like an integer but must be preserved as a string.
-        let c = make_coords(&["0001"]).unwrap();
-        assert!(matches!(c, Coordinates::Strings(_)));
+    fn leaf(axes: &[(&str, &[&str])]) -> Fetched {
+        Ok(Some(FetchedData::Leaf {
+            axes: axes.iter().map(|(n, v)| (n.to_string(), strings(v))).collect(),
+        }))
     }
 
-    #[test]
-    fn test_make_coords_empty_inputs_return_none() {
-        assert!(make_coords(&[]).is_none());
-        assert!(make_coords(&[""]).is_none());
-        assert!(make_coords(&["  "]).is_none());
+    fn research(expvers: &[&str]) -> Fetched {
+        Ok(Some(FetchedData::Research { name: "expver".into(), expvers: strings(expvers) }))
     }
 
-    #[test]
-    fn test_make_coords_multiple_integers() {
-        let c = make_coords(&["130", "131", "132"]).unwrap();
-        assert!(matches!(c, Coordinates::Integers(_)));
+    fn terminal(next_ref: &str) -> Fetched {
+        Ok(Some(FetchedData::ResearchTerminal { next_ref: next_ref.into() }))
     }
 
     #[test]
-    fn test_make_coords_negative_integer() {
-        let c = make_coords(&["-1"]).unwrap();
-        assert!(matches!(c, Coordinates::Integers(_)));
+    fn builds_a_qube_across_simple_branch_redirect_research_and_leaf_nodes() {
+        let catalogue = Catalogue::new(vec![
+            (("", ""), simple("class", &[("od", "c-od"), ("rd", "c-rd")])),
+            (("c-od", ""), simple("stream", &[("oper", "s-oper")])),
+            (
+                ("s-oper", ""),
+                Ok(Some(FetchedData::Branch {
+                    true_ref: "b-true".into(),
+                    false_ref: "b-absent".into(),
+                })),
+            ),
+            (("b-true", ""), Ok(Some(FetchedData::Redirect { shape_ref: "shape-1".into() }))),
+            (("shape-1", ""), leaf(&[("param", &["130", "131"]), ("step", &["0", "6"])])),
+            (("c-rd", ""), research(&["0001", "abcd"])),
+            (("c-rd", "0"), research(&["0001"])),
+            (("c-rd", "00"), research(&["0001"])),
+            (("c-rd", "000"), research(&["0001"])),
+            (("c-rd", "0001"), terminal("e-0001")),
+            (("c-rd", "a"), terminal("e-abcd")),
+            (("e-0001", ""), leaf(&[("param", &["130"])])),
+            (("e-abcd", ""), leaf(&[("param", &["130"])])),
+        ]);
+
+        let qube = build_qube(&catalogue).unwrap();
+        let datacubes = qube.to_datacubes();
+        assert_eq!(datacubes.len(), 2, "{}", qube.to_ascii());
+
+        let by_class = |class: &str| {
+            datacubes
+                .iter()
+                .map(|dc| dc.coordinates())
+                .find(|c| c["class"].iter_sorted_strings() == vec![class])
+                .unwrap_or_else(|| panic!("no datacube for class={class}"))
+        };
+
+        let od = by_class("od");
+        assert_eq!(od["stream"].iter_sorted_strings(), vec!["oper"]);
+        assert_eq!(od["param"].iter_sorted_strings(), vec!["130", "131"]);
+        assert_eq!(od["step"].iter_sorted_strings(), vec!["0", "6"]);
+
+        let rd = by_class("rd");
+        assert_eq!(rd["expver"].iter_sorted_strings(), vec!["0001", "abcd"]);
+        assert_eq!(rd["param"].iter_sorted_strings(), vec!["130"]);
     }
 
     #[test]
-    fn test_make_coords_zero() {
-        // "0" has no leading-zero problem (single digit), should be an integer.
-        let c = make_coords(&["0"]).unwrap();
-        assert!(matches!(c, Coordinates::Integers(_)));
+    fn absent_root_gives_an_empty_qube() {
+        let qube = build_qube(&Catalogue::new(vec![])).unwrap();
+        assert!(qube.is_empty());
     }
 
     #[test]
-    fn test_make_coords_dotted_float_param() {
-        // "130.128" is a MARS param id encoded as a float.
-        let c = make_coords(&["130.128"]).unwrap();
-        assert!(matches!(c, Coordinates::Floats(_)));
+    fn a_failed_fetch_aborts_the_build() {
+        let catalogue = Catalogue::new(vec![
+            (("", ""), simple("class", &[("od", "c-od")])),
+            (("c-od", ""), Err("connection reset".into())),
+        ]);
+        let err = build_qube(&catalogue).unwrap_err();
+        assert!(err.contains("connection reset"), "{err}");
     }
 
-    // ── Integration test (requires a live MARS catalogue server) ─────────────
+    #[test]
+    fn expver_that_never_resolves_gets_no_subtree() {
+        let catalogue = Catalogue::new(vec![
+            (("", ""), research(&["zz"])),
+            (("", "z"), research(&["zz"])),
+            (("", "zz"), research(&["zz"])),
+        ]);
+        let qube = build_qube(&catalogue).unwrap();
+        let datacubes = qube.to_datacubes();
+        assert_eq!(datacubes.len(), 1);
+        assert_eq!(datacubes[0].coordinates().len(), 1);
+    }
+
+    fn request_bytes(ref_: &str) -> Vec<u8> {
+        written(|s| {
+            s.start_object()?;
+            s.write_string("FetchAgent")?;
+            s.write_string(ref_)?;
+            s.end_object()
+        })
+    }
+
+    /// Accept one connection, hand the request bytes back, then run `respond`.
+    fn serve_once(
+        request_len: usize,
+        respond: impl FnOnce(&mut std::net::TcpStream) + Send + 'static,
+    ) -> (u16, mpsc::Receiver<Vec<u8>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let (mut conn, _) = listener.accept().unwrap();
+            let mut request = vec![0u8; request_len];
+            conn.read_exact(&mut request).unwrap();
+            tx.send(request).unwrap();
+            respond(&mut conn);
+        });
+        (port, rx)
+    }
+
+    fn read_tagged_string(conn: &mut std::net::TcpStream) -> String {
+        let mut header = [0u8; 5];
+        conn.read_exact(&mut header).unwrap();
+        let len = u32::from_be_bytes([header[1], header[2], header[3], header[4]]) as usize;
+        let mut bytes = vec![0u8; len];
+        conn.read_exact(&mut bytes).unwrap();
+        String::from_utf8(bytes).unwrap()
+    }
 
     #[test]
-    #[ignore = "requires live MARS catalogue server; set MARS_CATALOGUE_HOST and MARS_CATALOGUE_PORT"]
-    fn test_from_mars_server_integration() {
+    fn fetches_a_node_over_tcp() {
+        eckit::init();
+        let request = request_bytes("");
+        let response = written(|s| {
+            s.write_i32(0)?;
+            s.start_object()?;
+            s.write_string("PSimpleNode")?;
+            s.write_string("class")?;
+            s.write_u32(1)?;
+            s.write_string("od")?;
+            s.write_string("ref-od")
+        });
+        let (port, rx) = serve_once(request.len(), move |conn| conn.write_all(&response).unwrap());
+
+        let fetched = MarsServer::new("127.0.0.1", port).retries(0).fetch("", "").unwrap();
+
+        assert_eq!(rx.recv().unwrap(), request);
+        assert_eq!(
+            fetched,
+            Some(FetchedData::Simple {
+                name: "class".into(),
+                children: pairs(&[("od", "ref-od")])
+            })
+        );
+    }
+
+    #[test]
+    fn a_closed_connection_after_the_password_request_means_absent() {
+        eckit::init();
+        let request = request_bytes("missing");
+        let response = written(|s| s.write_i32(0));
+        let (port, _rx) = serve_once(request.len(), move |conn| conn.write_all(&response).unwrap());
+
+        let fetched = MarsServer::new("127.0.0.1", port).retries(0).fetch("missing", "").unwrap();
+        assert_eq!(fetched, None);
+    }
+
+    #[test]
+    fn research_node_sends_the_prefix_back_before_reading_the_answer() {
+        eckit::init();
+        let request = request_bytes("r");
+        let head = written(|s| {
+            s.write_i32(0)?;
+            s.start_object()?;
+            s.write_string("PResearchNode")?;
+            s.write_string("expver")
+        });
+        let tail = written(|s| {
+            s.write_i32(RESEARCH_TERMINAL)?;
+            s.write_string("next-ref")
+        });
+        let (prefix_tx, prefix_rx) = mpsc::channel();
+        let (port, _rx) = serve_once(request.len(), move |conn| {
+            conn.write_all(&head).unwrap();
+            prefix_tx.send(read_tagged_string(conn)).unwrap();
+            conn.write_all(&tail).unwrap();
+        });
+
+        let fetched = MarsServer::new("127.0.0.1", port).retries(0).fetch("r", "0001").unwrap();
+
+        assert_eq!(prefix_rx.recv().unwrap(), "0001");
+        assert_eq!(fetched, Some(FetchedData::ResearchTerminal { next_ref: "next-ref".into() }));
+    }
+
+    #[test]
+    #[ignore = "requires a live MARS catalogue server; set MARS_CATALOGUE_HOST and MARS_CATALOGUE_PORT"]
+    fn traverses_a_live_catalogue() {
         let host =
             std::env::var("MARS_CATALOGUE_HOST").expect("set MARS_CATALOGUE_HOST to run this test");
         let port: u16 = std::env::var("MARS_CATALOGUE_PORT")
@@ -1087,10 +757,8 @@ mod tests {
             .and_then(|p| p.parse().ok())
             .expect("set MARS_CATALOGUE_PORT to run this test");
 
-        let qube = <Qube as FromMarsServer>::from_mars_server(&host, port)
-            .expect("failed to build Qube from MARS server");
-        let ascii = qube.to_ascii();
-        println!("{ascii}");
-        assert!(!ascii.is_empty());
+        let qube = Qube::from_mars_server(&host, port).expect("traverse MARS catalogue");
+        println!("{}", qube.to_ascii());
+        assert!(!qube.is_empty());
     }
 }
