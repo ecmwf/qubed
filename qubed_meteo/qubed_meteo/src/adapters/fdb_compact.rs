@@ -20,27 +20,40 @@ pub trait FromFDBCompactList {
     fn from_fdb_compact_list(request_map: &JsonValue) -> Result<Qube, String>;
 }
 
+/// Run a compact FDB list for `request_map` and return the raw
+/// `fdb-list --compact` text (one MARS-request line per hypercube).
+pub fn fdb_compact_list_text(request_map: &JsonValue) -> Result<String, String> {
+    let request_str = json_to_mars_request(request_map)?;
+
+    eckit::init();
+    // Syntax check only, no MARS language expansion: expansion can rewrite or
+    // drop keys/values (it returned an empty request for climate-dt keys).
+    // Values must therefore be explicit (e.g. list dates, not `a/to/b`).
+    let request = metkit::MarsRequest::from_trusted(&format!("list,{request_str}"))
+        .map_err(|e| format!("Failed to parse MARS request '{request_str}': {e}"))?;
+    let debug = std::env::var_os("QUBED_FDB_DEBUG").is_some();
+    if debug {
+        eprintln!("compact list request: {request}");
+    }
+
+    let fdb = fdb::Fdb::open_default().map_err(|e| format!("Failed to open FDB: {e}"))?;
+    // dump_compact requires full depth (3) listing.
+    let list_iter = fdb
+        .list(&request, fdb::ListOptions::default())
+        .map_err(|e| format!("FDB list failed: {e}"))?;
+
+    let mut buf = Vec::<u8>::new();
+    let summary =
+        list_iter.dump_compact(&mut buf).map_err(|e| format!("FDB compact list failed: {e}"))?;
+    if debug {
+        eprintln!("compact list: {} fields, {} bytes of output", summary.fields, buf.len());
+    }
+    String::from_utf8(buf).map_err(|e| format!("Compact listing is not UTF-8: {e}"))
+}
+
 impl FromFDBCompactList for Qube {
     fn from_fdb_compact_list(request_map: &JsonValue) -> Result<Qube, String> {
-        let request_str = json_to_mars_request(request_map)?;
-
-        eckit::init();
-        let parsed = metkit::parse(&format!("retrieve,{request_str}"), false)
-            .map_err(|e| format!("Failed to parse MARS request '{request_str}': {e}"))?;
-        let request = parsed.at(0).map_err(|e| format!("Empty MARS request: {e}"))?;
-
-        let fdb = fdb::Fdb::open_default().map_err(|e| format!("Failed to open FDB: {e}"))?;
-        // dump_compact requires full depth (3) listing.
-        let list_iter = fdb
-            .list(&request, fdb::ListOptions::default())
-            .map_err(|e| format!("FDB list failed: {e}"))?;
-
-        let mut buf = Vec::<u8>::new();
-        list_iter.dump_compact(&mut buf).map_err(|e| format!("FDB compact list failed: {e}"))?;
-        let text =
-            String::from_utf8(buf).map_err(|e| format!("Compact listing is not UTF-8: {e}"))?;
-
-        Qube::from_fdb_compact_text(&text)
+        Qube::from_fdb_compact_text(&fdb_compact_list_text(request_map)?)
     }
 }
 
@@ -73,8 +86,9 @@ pub trait QubeFromCompactText {
 /// `class=od,expver=0001,...,type=fc,levtype=sfc,step=0/6/12,param=167/168`
 /// into a datacube plus the dimension order in which keys appeared (which
 /// follows the FDB schema: database key, index key, datum key).
-fn parse_compact_line(line: &str) -> Option<(Datacube, Vec<String>)> {
-    let cleaned: String = line.chars().map(|c| if c == '{' || c == '}' { ',' } else { c }).collect();
+pub fn parse_compact_line(line: &str) -> Option<(Datacube, Vec<String>)> {
+    let cleaned: String =
+        line.chars().map(|c| if c == '{' || c == '}' { ',' } else { c }).collect();
 
     let mut datacube = Datacube::new();
     let mut order: Vec<String> = Vec::new();
@@ -130,11 +144,9 @@ fn json_to_mars_request(request_map: &JsonValue) -> Result<String, String> {
     let mut parts = Vec::with_capacity(obj.len());
     for (k, v) in obj {
         let value = match v {
-            JsonValue::Array(arr) => arr
-                .iter()
-                .map(json_scalar_to_string)
-                .collect::<Result<Vec<_>, _>>()?
-                .join("/"),
+            JsonValue::Array(arr) => {
+                arr.iter().map(json_scalar_to_string).collect::<Result<Vec<_>, _>>()?.join("/")
+            }
             _ => json_scalar_to_string(v)?,
         };
         parts.push(format!("{k}={value}"));
