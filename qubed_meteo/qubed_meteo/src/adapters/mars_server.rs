@@ -46,8 +46,9 @@ enum FetchedData {
     /// [`traverse_research_expver`].
     Research { name: String, expvers: Vec<String> },
 
-    /// `PResearchNode` with [`RESEARCH_TERMINAL`]: the prefix resolved and the
-    /// server sent the ref of the next node.
+    /// `PResearchNode` with [`RESEARCH_TERMINAL`] (or, on some servers, a count
+    /// of `0`): the prefix resolved and the server sent the ref of the next
+    /// node.
     ResearchTerminal { next_ref: String },
 
     /// `PLeafNode`: a forwarding pointer to a shape node.
@@ -73,6 +74,15 @@ fn adduv(params: &mut Vec<String>) {
 fn coords(values: &[String]) -> Option<Coordinates> {
     let coords = Coordinates::from_string(&values.join("/"));
     if coords.is_empty() { None } else { Some(coords) }
+}
+
+/// Whether `err` means the peer closed the connection before the value we
+/// tried to read.
+///
+/// eckit has no typed end-of-stream error: a read at EOF raises `BadTag`
+/// naming the `end of file` tag, which reaches Rust as [`eckit::Error::Other`].
+fn is_end_of_stream(err: &eckit::Error) -> bool {
+    matches!(err, eckit::Error::Other(msg) if msg.contains("got a 'end of file'"))
 }
 
 fn read_children(stream: &mut dyn Stream) -> eckit::Result<Vec<(String, String)>> {
@@ -116,7 +126,15 @@ fn decode_node_handler(
             let name = stream.read_string().map_err(io)?;
             stream.write_string(arg).map_err(io)?;
             match stream.read_i32().map_err(io)? {
-                0 => Ok(None),
+                // Ambiguous on some servers: a complete experiment is answered
+                // with 0 followed by the next node's ref, while an invalid
+                // prefix is answered with 0 and a closed connection. Reading
+                // is the only way to tell the two apart.
+                0 => match stream.read_string() {
+                    Ok(next_ref) => Ok(Some(FetchedData::ResearchTerminal { next_ref })),
+                    Err(e) if is_end_of_stream(&e) => Ok(None),
+                    Err(e) => Err(io(e)),
+                },
                 RESEARCH_TERMINAL => {
                     let next_ref = stream.read_string().map_err(io)?;
                     Ok(Some(FetchedData::ResearchTerminal { next_ref }))
@@ -745,6 +763,50 @@ mod tests {
 
         assert_eq!(prefix_rx.recv().unwrap(), "0001");
         assert_eq!(fetched, Some(FetchedData::ResearchTerminal { next_ref: "next-ref".into() }));
+    }
+
+    fn research_head(name: &str) -> Vec<u8> {
+        written(|s| {
+            s.write_i32(0)?;
+            s.start_object()?;
+            s.write_string("PResearchNode")?;
+            s.write_string(name)
+        })
+    }
+
+    #[test]
+    fn research_count_zero_followed_by_a_ref_is_a_terminal() {
+        eckit::init();
+        let request = request_bytes("r");
+        let head = research_head("expver");
+        let tail = written(|s| {
+            s.write_i32(0)?;
+            s.write_string("next-ref")
+        });
+        let (port, _rx) = serve_once(request.len(), move |conn| {
+            conn.write_all(&head).unwrap();
+            read_tagged_string(conn);
+            conn.write_all(&tail).unwrap();
+        });
+
+        let fetched = MarsServer::new("127.0.0.1", port).retries(0).fetch("r", "0001").unwrap();
+        assert_eq!(fetched, Some(FetchedData::ResearchTerminal { next_ref: "next-ref".into() }));
+    }
+
+    #[test]
+    fn research_count_zero_followed_by_a_closed_connection_means_absent() {
+        eckit::init();
+        let request = request_bytes("r");
+        let head = research_head("expver");
+        let tail = written(|s| s.write_i32(0));
+        let (port, _rx) = serve_once(request.len(), move |conn| {
+            conn.write_all(&head).unwrap();
+            read_tagged_string(conn);
+            conn.write_all(&tail).unwrap();
+        });
+
+        let fetched = MarsServer::new("127.0.0.1", port).retries(0).fetch("r", "zzzz").unwrap();
+        assert_eq!(fetched, None);
     }
 
     #[test]
