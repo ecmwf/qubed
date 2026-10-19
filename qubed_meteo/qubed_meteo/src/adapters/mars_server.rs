@@ -102,15 +102,12 @@ fn decode_node_handler(
     let io = |e: eckit::Error| format!("{handler}: {e}");
 
     match handler {
-        "PSimpleNode" | "PBalanceNode" => {
+        "PSimpleNode" | "PBalanceNode" | "PSimpleNodeDefault" => {
             let name = stream.read_string().map_err(io)?;
-            let children = read_children(stream).map_err(io)?;
-            Ok(Some(FetchedData::Simple { name, children }))
-        }
-
-        "PSimpleNodeDefault" => {
-            let name = stream.read_string().map_err(io)?;
-            stream.read_string().map_err(io)?;
+            if handler == "PSimpleNodeDefault" {
+                // Server-side default value, internal to MARS.
+                stream.read_string().map_err(io)?;
+            }
             let children = read_children(stream).map_err(io)?;
             Ok(Some(FetchedData::Simple { name, children }))
         }
