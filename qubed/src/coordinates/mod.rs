@@ -444,6 +444,40 @@ impl Coordinates {
                     })),
                 }
             }
+            // Integer dates (YYYYMMDD, e.g. from fdb-scanner JSON) vs datetime
+            // values (e.g. a date-like selection string, which from_string
+            // auto-detects as DateTimes). Compare them as YYYYMMDD integers;
+            // each side of the result keeps its own original type.
+            (Coordinates::Integers(a), Coordinates::DateTimes(b)) => match dts_as_yyyymmdd(b) {
+                Some(b_ints) => {
+                    let r = a.intersect(&b_ints);
+                    IntersectionResult {
+                        intersection: wrap_ints(r.intersection),
+                        only_a: wrap_ints(r.only_a),
+                        only_b: ints_as_dts(&r.only_b),
+                    }
+                }
+                None => IntersectionResult {
+                    intersection: Coordinates::Empty,
+                    only_a: self.clone(),
+                    only_b: other.clone(),
+                },
+            },
+            (Coordinates::DateTimes(a), Coordinates::Integers(b)) => match dts_as_yyyymmdd(a) {
+                Some(a_ints) => {
+                    let r = a_ints.intersect(b);
+                    IntersectionResult {
+                        intersection: ints_as_dts(&r.intersection),
+                        only_a: ints_as_dts(&r.only_a),
+                        only_b: wrap_ints(r.only_b),
+                    }
+                }
+                None => IntersectionResult {
+                    intersection: Coordinates::Empty,
+                    only_a: self.clone(),
+                    only_b: other.clone(),
+                },
+            },
             // Type mismatch: no overlap (e.g. Integers vs Strings)
             _ => IntersectionResult {
                 intersection: Coordinates::Empty,
@@ -706,6 +740,39 @@ fn wrap_ints(c: integers::IntegerCoordinates) -> Coordinates {
 
 fn wrap_strs(c: strings::StringCoordinates) -> Coordinates {
     if c.len() == 0 { Coordinates::Empty } else { Coordinates::Strings(c) }
+}
+
+/// Datetimes as YYYYMMDD integers, or None if any value is not at midnight
+/// (a datetime with a time-of-day cannot equal a plain integer date).
+fn dts_as_yyyymmdd(d: &datetime::DateTimeCoordinates) -> Option<IntegerCoordinates> {
+    use chrono::{Datelike, Timelike};
+    let values: Vec<NaiveDateTime> = match d {
+        datetime::DateTimeCoordinates::List(l) => l.iter().copied().collect(),
+        datetime::DateTimeCoordinates::RangeSet(rs) => rs.iter().flat_map(|r| r.iter()).collect(),
+    };
+    let mut out = IntegerCoordinates::default();
+    for v in values {
+        if v.hour() != 0 || v.minute() != 0 || v.second() != 0 {
+            return None;
+        }
+        out.append(v.year() * 10_000 + v.month() as i32 * 100 + v.day() as i32);
+    }
+    Some(out)
+}
+
+/// YYYYMMDD integers back to datetimes (values that are not valid dates are dropped).
+fn ints_as_dts(i: &IntegerCoordinates) -> Coordinates {
+    let mut out = datetime::DateTimeCoordinates::default();
+    let values: Vec<i32> = match i {
+        IntegerCoordinates::Set(s) => s.iter().copied().collect(),
+        IntegerCoordinates::RangeSet(rs) => rs.iter().flat_map(|r| r.iter()).collect(),
+    };
+    for v in values {
+        if let Some(dt) = datetime::DateTimeCoordinates::parse_from_str(&v.to_string()) {
+            out.append(dt);
+        }
+    }
+    wrap_dts(out)
 }
 
 fn wrap_dts(c: datetime::DateTimeCoordinates) -> Coordinates {
