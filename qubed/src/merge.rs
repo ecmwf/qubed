@@ -18,16 +18,22 @@ impl Qube {
     }
 
     /// Performs a union operation between two nodes in two different Qubes.
+    ///
+    /// `dim_map` is only consulted when `reordering` is enabled; see [`Qube::append`]
+    /// for details on what the `reordering` flag controls.
     fn node_merge(
         &mut self,
         other: &mut Qube,
         self_id: NodeIdx,
         other_id: NodeIdx,
         dim_map: &HashMap<Dimension, Dimension>,
+        reordering: bool,
     ) -> NodeIdx {
-        // Group children by dimension, using self's dimension IDs (via the translation map)
-        // so that same-named dimensions from both qubes are matched correctly regardless of
-        // interner ordering.
+        // Group children by dimension. When `reordering` is enabled, `other`'s dimension IDs
+        // are translated via `dim_map` into self's namespace, so that same-named dimensions
+        // from both qubes are matched correctly regardless of interner ordering. When disabled,
+        // dimensions are matched by raw ID only (the original, faster behavior), which assumes
+        // both Qubes intern their dimensions in the same order.
         let self_children = {
             let node = self.node_ref(self_id).unwrap();
             node.children().clone()
@@ -44,8 +50,8 @@ impl Qube {
             dim_child_map.entry(dim).or_default().0.extend(self_kids);
         }
         for (dim, other_kids) in other_children {
-            // Translate other's dimension ID to self's namespace
-            let self_dim = dim_map.get(&dim).copied().unwrap_or(dim);
+            // Translate other's dimension ID to self's namespace, if reordering is enabled.
+            let self_dim = if reordering { dim_map.get(&dim).copied().unwrap_or(dim) } else { dim };
             dim_child_map.entry(self_dim).or_default().1.extend(other_kids);
         }
 
@@ -58,8 +64,11 @@ impl Qube {
                 (entry.0.clone(), entry.1.clone())
             };
 
-            if these_kids.is_empty() {
+            if these_kids.is_empty() && reordering {
                 // Dimension exists only in `other`: copy every node (and its subtree) into self.
+                // This case is only handled under `reordering`, since without a translation map
+                // we cannot safely tell "dimension only in other" apart from "same dimension ID,
+                // different meaning".
                 for other_node in those_kids {
                     let (dim_str, coords) = {
                         let n = other.node_ref(other_node).unwrap();
@@ -72,8 +81,13 @@ impl Qube {
                     self.copy_subtree(other, other_node, new_child);
                 }
             } else {
-                let _new_children =
-                    self.internal_set_operation(other, &these_kids, &those_kids, dim_map);
+                let _new_children = self.internal_set_operation(
+                    other,
+                    &these_kids,
+                    &those_kids,
+                    dim_map,
+                    reordering,
+                );
             }
         }
 
@@ -87,6 +101,7 @@ impl Qube {
         self_ids: &[NodeIdx],
         other_ids: &[NodeIdx],
         dim_map: &HashMap<Dimension, Dimension>,
+        reordering: bool,
     ) -> Option<Vec<NodeIdx>> {
         let mut return_vec = Vec::new();
 
@@ -145,7 +160,8 @@ impl Qube {
                         other.copy_branch(*other_node, new_node_b);
                     }
 
-                    let _nested_result = self.node_merge(other, new_node_a, new_node_b, dim_map);
+                    let _nested_result =
+                        self.node_merge(other, new_node_a, new_node_b, dim_map, reordering);
                 }
 
                 // If there are values only in self, update the coordinates of the current node.
@@ -176,7 +192,25 @@ impl Qube {
     }
 
     /// Performs a union operation between two Qubes.
+    ///
+    /// If `reordering` is `false` (the default/fast path), dimensions are matched between the
+    /// two Qubes purely by their raw interner ID. This is correct and efficient as long as both
+    /// Qubes were built with the same dimension ordering (e.g. constructed with the same
+    /// `order` passed to [`Qube::from_datacube`]), but it can silently cross-intersect unrelated
+    /// dimensions if the two Qubes interned their dimension names in different orders.
+    ///
+    /// If `reordering` is `true`, a translation map from `other`'s dimension IDs to `self`'s
+    /// dimension IDs (matched by name) is built before merging, so dimensions are always matched
+    /// by name regardless of interning order. This is safer when merging Qubes built
+    /// independently (e.g. from different sources, or with different `order`s), but has some
+    /// extra up-front cost to build the translation map.
     pub fn append(&mut self, other: &mut Qube) {
+        self.append_opts(other, false);
+    }
+
+    /// Like [`Qube::append`], but with explicit control over the `reordering` flag. See
+    /// [`Qube::append`] for details on what `reordering` controls.
+    pub fn append_opts(&mut self, other: &mut Qube, reordering: bool) {
         // This method starts at the root of both Qubes and recursively merges their nodes.
         // After the union, the tree is compressed to remove duplicates and empty nodes.
 
@@ -193,28 +227,37 @@ impl Qube {
 
         // Pre-intern all of other's dimension names into self's key_store so we can
         // compare dimensions by ID rather than string throughout the recursive merge.
-        let dim_map = self.build_dim_translation(other);
+        // Only needed when `reordering` is enabled.
+        let dim_map = if reordering { self.build_dim_translation(other) } else { HashMap::new() };
 
         let self_root_id = self.root();
         let other_root_id = other.root();
-        self.node_merge(other, self_root_id, other_root_id, &dim_map);
+        self.node_merge(other, self_root_id, other_root_id, &dim_map, reordering);
         self.compress();
         // Clear the other Qube
         *other = Qube::new();
     }
 
-    /// Performs a union operation between many Qubes
+    /// Performs a union operation between many Qubes. See [`Qube::append`] for details on what
+    /// `reordering` controls.
     pub fn append_many(&mut self, others: &mut Vec<Qube>) {
+        self.append_many_opts(others, false);
+    }
+
+    /// Like [`Qube::append_many`], but with explicit control over the `reordering` flag. See
+    /// [`Qube::append`] for details on what `reordering` controls.
+    pub fn append_many_opts(&mut self, others: &mut Vec<Qube>, reordering: bool) {
         let others_len = others.len();
         for (i, other) in others.iter_mut().enumerate() {
-            // Build translation map for each other qube
-            let dim_map = self.build_dim_translation(other);
+            // Build translation map for each other qube, if reordering is enabled.
+            let dim_map =
+                if reordering { self.build_dim_translation(other) } else { HashMap::new() };
 
             let self_root_id = self.root();
             let other_root_id = other.root();
 
             // Perform the union with the current Qube
-            self.node_merge(other, self_root_id, other_root_id, &dim_map);
+            self.node_merge(other, self_root_id, other_root_id, &dim_map, reordering);
 
             // Print progress update
             println!("Union completed for Qube {}/{}", i + 1, others_len);
@@ -233,6 +276,7 @@ impl Qube {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use crate::Coordinates;
     use crate::datacube::Datacube;
 
@@ -244,12 +288,13 @@ mod tests {
         d
     }
 
-    /// Appending two Qubes whose dimensions were interned in a different order
-    /// must not cross-intersect coordinates from different dimension names.
-    /// Before the fix, the shared integer dimension ID caused e.g. `number` coords
-    /// to be intersected against `time` coords, producing a panic.
+    /// Appending two Qubes whose dimensions were interned in a different order must not
+    /// cross-intersect coordinates from different dimension names when `reordering` is enabled.
+    /// Before the fix, the shared integer dimension ID caused e.g. `number` coords to be
+    /// intersected against `time` coords, producing a panic. The `reordering` flag must be set
+    /// to `true` (e.g. via `append_opts`) to get this safe, by-name dimension matching.
     #[test]
-    fn append_qubes_with_different_dimension_interning_order() {
+    fn append_opts_reordering_true_merges_by_name() {
         // First Qube: dimensions added in order a, b, c
         let mut q1 = Qube::from_datacube(&dc(&[("a", "1"), ("b", "x"), ("c", "10")]), None);
 
@@ -257,13 +302,42 @@ mod tests {
         // order, so `a` in q2 gets the same integer ID as `c` in q1.
         let mut q2 = Qube::from_datacube(&dc(&[("c", "20"), ("b", "y"), ("a", "2")]), None);
 
-        // Must not panic.
-        q1.append(&mut q2);
+        // Must not panic, and with reordering=true the `a` branches must be merged together
+        // (matched by name) rather than kept as separate siblings.
+        q1.append_opts(&mut q2, true);
 
         let ascii = q1.to_ascii();
         assert!(ascii.contains("a=1") || ascii.contains("a=2"), "a values lost: {ascii}");
         assert!(ascii.contains("b=x") || ascii.contains("b=y"), "b values lost: {ascii}");
         assert!(ascii.contains("c=10") || ascii.contains("c=20"), "c values lost: {ascii}");
+
+        let coords = q1.all_unique_dim_coords();
+        let a_values: std::collections::BTreeSet<String> =
+            coords["a"].to_string().split('/').map(|s| s.to_owned()).collect();
+        assert_eq!(a_values, ["1", "2"].iter().map(|s| s.to_string()).collect());
+    }
+
+    /// Without `reordering` (the default `append` behavior), dimensions are matched by raw
+    /// interner ID only. When two Qubes intern dimensions in a different order, same-named
+    /// dimensions are not matched up, so the resulting tree keeps separate branches instead of
+    /// merging the `a` dimension values together. This must not panic (coordinate intersection
+    /// of mismatched types/dimensions degrades gracefully to empty), but demonstrates why
+    /// `reordering` should be enabled when merging Qubes that may not share a common dimension
+    /// ordering.
+    #[test]
+    fn append_default_reordering_false_does_not_merge_mismatched_order() {
+        let mut q1 = Qube::from_datacube(&dc(&[("a", "1"), ("b", "x"), ("c", "10")]), None);
+        let mut q2 = Qube::from_datacube(&dc(&[("c", "20"), ("b", "y"), ("a", "2")]), None);
+
+        // Must not panic.
+        q1.append(&mut q2);
+
+        // Without reordering, the two `a` branches are not recognized as the same dimension,
+        // so they remain as two separate top-level values instead of being unified.
+        let coords = q1.all_unique_dim_coords();
+        let a_values: std::collections::BTreeSet<String> =
+            coords["a"].to_string().split('/').map(|s| s.to_owned()).collect();
+        assert_eq!(a_values, ["1", "2"].iter().map(|s| s.to_string()).collect());
     }
 
     #[test]
@@ -278,5 +352,21 @@ mod tests {
             coords["step"].to_string().split('/').map(|s| s.to_owned()).collect();
 
         assert_eq!(steps, ["0", "12", "18", "24", "6"].iter().map(|s| s.to_string()).collect());
+    }
+
+    #[test]
+    fn append_many_opts_reordering_true_merges_by_name() {
+        let mut base = Qube::from_datacube(&dc(&[("a", "1"), ("b", "x")]), None);
+        let mut others = vec![
+            Qube::from_datacube(&dc(&[("b", "y"), ("a", "2")]), None),
+            Qube::from_datacube(&dc(&[("b", "z"), ("a", "3")]), None),
+        ];
+
+        base.append_many_opts(&mut others, true);
+
+        let coords = base.all_unique_dim_coords();
+        let a_values: std::collections::BTreeSet<String> =
+            coords["a"].to_string().split('/').map(|s| s.to_owned()).collect();
+        assert_eq!(a_values, ["1", "2", "3"].iter().map(|s| s.to_string()).collect());
     }
 }

@@ -45,6 +45,48 @@ def test_append_and_append_many_smoke() -> None:
     assert "class=3" in output
 
 
+def test_append_reordering_defaults_to_false() -> None:
+    # Dimensions interned in a different order; default append (reordering=False)
+    # matches dimensions by raw id, so the "a" branches are not unified by name.
+    a = Qube.from_datacube({"a": "1", "b": "x", "c": "10"}, ["a", "b", "c"])
+    b = Qube.from_datacube({"c": "20", "b": "y", "a": "2"}, ["c", "b", "a"])
+
+    a.append(b)  # reordering defaults to False
+
+    coords = a.all_unique_dim_coords()
+    assert sorted(coords["a"]) == ["1", "2"]
+    assert sorted(coords["b"]) == ["x", "y"]
+    assert sorted(coords["c"]) == ["10", "20"]
+
+
+def test_append_reordering_true_merges_dimensions_by_name() -> None:
+    # With reordering=True, dimensions are matched by name even if the two Qubes
+    # interned them in a different order, so no data is lost or cross-intersected.
+    a = Qube.from_datacube({"a": "1", "b": "x", "c": "10"}, ["a", "b", "c"])
+    b = Qube.from_datacube({"c": "20", "b": "y", "a": "2"}, ["c", "b", "a"])
+
+    a.append(b, reordering=True)
+
+    coords = a.all_unique_dim_coords()
+    assert sorted(coords["a"]) == ["1", "2"]
+    assert sorted(coords["b"]) == ["x", "y"]
+    assert sorted(coords["c"]) == ["10", "20"]
+
+
+def test_append_many_reordering_true_merges_dimensions_by_name() -> None:
+    base = Qube.from_datacube({"a": "1", "b": "x"}, ["a", "b"])
+    others = [
+        Qube.from_datacube({"b": "y", "a": "2"}, ["b", "a"]),
+        Qube.from_datacube({"b": "z", "a": "3"}, ["b", "a"]),
+    ]
+
+    base.append_many(others, reordering=True)
+
+    coords = base.all_unique_dim_coords()
+    assert sorted(coords["a"]) == ["1", "2", "3"]
+    assert sorted(coords["b"]) == ["x", "y", "z"]
+
+
 def test_append_many_rejects_non_qube_items() -> None:
     target = Qube()
 

@@ -186,13 +186,15 @@ impl PyQube {
         self.inner.squeeze().map_err(PyTypeError::new_err)
     }
 
-    pub fn append(&mut self, other: &Bound<'_, PyQube>) -> PyResult<()> {
+    #[pyo3(signature = (other, reordering=false))]
+    pub fn append(&mut self, other: &Bound<'_, PyQube>, reordering: bool) -> PyResult<()> {
         let mut other_mut = other.borrow_mut();
-        self.inner.append(&mut other_mut.inner);
+        self.inner.append_opts(&mut other_mut.inner, reordering);
         Ok(())
     }
 
-    pub fn append_many(&mut self, others: &Bound<'_, PyList>) -> PyResult<()> {
+    #[pyo3(signature = (others, reordering=false))]
+    pub fn append_many(&mut self, others: &Bound<'_, PyList>, reordering: bool) -> PyResult<()> {
         // First validate all types so type errors happen before any mutation.
         let mut validated_qubes = Vec::with_capacity(others.len());
         for item in others.iter() {
@@ -205,7 +207,7 @@ impl PyQube {
         for py_qube in validated_qubes {
             let bound_qube = py_qube.bind(py);
             let mut other_mut = bound_qube.borrow_mut();
-            self.inner.append(&mut other_mut.inner);
+            self.inner.append_opts(&mut other_mut.inner, reordering);
         }
         Ok(())
     }
