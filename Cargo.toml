@@ -4,6 +4,7 @@ resolver = "3"
 members = [
     "qubed",
     "py_qubed",
+    "qubed_wasm",
 ]
 
 exclude = [
