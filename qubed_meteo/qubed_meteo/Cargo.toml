@@ -12,6 +12,7 @@ documentation = "https://ecmwf.github.io/qubed/"
 qubed = { workspace = true }
 serde = "1.0.228"
 serde_json = "1.0.145"
+reqwest = { version = "0.12", features = ["blocking", "rustls-tls"], default-features = false, optional = true }
 
 [features]
 default = []
@@ -22,6 +23,8 @@ default = []
 # rsfdb is intentionally not declared here so Cargo does not attempt to
 # fetch the private git repository during normal CI builds.
 rsfdb-support = []
+# Enable ECMWF open-data HTTP crawling support.
+opendata-support = ["reqwest"]
 
 [lib]
 path = "src/lib.rs"

@@ -1,4 +1,4 @@
-use crate::{Coordinates, NodeIdx, Qube};
+use crate::{Coordinates, MetadataValues, NodeIdx, Qube};
 use serde_json::{Map, Value};
 
 // ---------------- JSON Deserialization ----------------
@@ -129,14 +129,18 @@ impl Qube {
                         }
                     },
                     crate::Coordinates::DateTimes(_) => {
-                        // Fallback to whatever the generic serializer produces (not implemented elsewhere yet)
                         let v = nref.coordinates().to_json_value();
                         match v {
                             Value::Array(arr) => {
                                 map.insert("datetimes".to_string(), Value::Array(arr));
                                 Value::Object(map)
                             }
-                            other => Value::Object(map),
+                            Value::String(s) => {
+                                // RangeSet serialised as a textual string
+                                map.insert("datetimes_range".to_string(), Value::String(s));
+                                Value::Object(map)
+                            }
+                            _ => Value::Object(map),
                         }
                     }
                     crate::Coordinates::Mixed(_) => {
@@ -164,6 +168,26 @@ impl Qube {
                 None => map.insert("parent".to_string(), Value::Null),
             };
             map.insert("children".to_string(), Value::Array(children_indices));
+
+            // Serialise metadata (only when non-empty).  Keys are sorted for
+            // deterministic output.  Each value is a typed object:
+            // `{"ints": [...]}` or `{"strings": [...]}`.
+            let meta = nref.metadata();
+            if !meta.is_empty() {
+                let mut sorted_keys: Vec<(&String, &MetadataValues)> = meta.iter().collect();
+                sorted_keys.sort_by_key(|(k, _)| k.as_str());
+                let mut meta_map = Map::new();
+                for (key, values) in sorted_keys {
+                    let serialized = serialize_metadata_values(values);
+                    // Skip Empty values – they carry no information.
+                    if !serialized.is_null() {
+                        meta_map.insert(key.clone(), serialized);
+                    }
+                }
+                if !meta_map.is_empty() {
+                    map.insert("metadata".to_string(), Value::Object(meta_map));
+                }
+            }
 
             nodes_json.push(Value::Object(map));
         }
@@ -253,12 +277,19 @@ impl Qube {
                         let has_strings = map.get("strings").is_some();
                         let has_floats = map.get("floats").is_some();
                         let has_datetimes = map.get("datetimes").is_some();
+                        let has_datetimes_range = map.get("datetimes_range").is_some();
 
-                        let typed_key_count =
-                            [has_ints, has_ints_text, has_strings, has_floats, has_datetimes]
-                                .iter()
-                                .filter(|&&b| b)
-                                .count();
+                        let typed_key_count = [
+                            has_ints,
+                            has_ints_text,
+                            has_strings,
+                            has_floats,
+                            has_datetimes,
+                            has_datetimes_range,
+                        ]
+                        .iter()
+                        .filter(|&&b| b)
+                        .count();
 
                         if has_ints_text && typed_key_count == 1 {
                             // textual integer representation -> parse as string
@@ -273,6 +304,9 @@ impl Qube {
                             map.get("floats").cloned().unwrap_or(Value::Null)
                         } else if has_datetimes && typed_key_count == 1 {
                             map.get("datetimes").cloned().unwrap_or(Value::Null)
+                        } else if has_datetimes_range && typed_key_count == 1 {
+                            // datetime range stored as textual string — parse via from_string
+                            map.get("datetimes_range").cloned().unwrap_or(Value::Null)
                         } else {
                             // Mixed or unknown: pass the whole object so
                             // `from_json_value` can create a MixedCoordinates
@@ -282,14 +316,7 @@ impl Qube {
                     other => other.clone(),
                 };
 
-                let value_for_parse = match coords_value {
-                    Value::Object(map) if map.len() == 1 && map.contains_key("datetimes") => {
-                        coords_value.clone()
-                    }
-                    _ => coords_for_parse,
-                };
-
-                Coordinates::from_json_value(&value_for_parse)?
+                Coordinates::from_json_value(&coords_for_parse)?
             };
             let created = if i == 0 {
                 // first entry corresponds to root; update root coords if provided
@@ -307,9 +334,87 @@ impl Qube {
             };
 
             index_to_node.insert(i, created);
+
+            // Restore metadata directly on the node, bypassing set_metadata's
+            // consolidation logic so that the exact serialised state is reproduced.
+            if let Some(Value::Object(meta_map)) = obj.get("metadata") {
+                for (key, meta_val) in meta_map {
+                    if let Some(values) = deserialize_metadata_values(meta_val) {
+                        if let Some(node) = qube.node_mut(created) {
+                            node.metadata_mut().set(key.clone(), values);
+                        }
+                    }
+                }
+            }
         }
 
         Ok(qube)
+    }
+}
+
+// -------- Metadata serialisation helpers --------
+
+/// Serialise a `MetadataValues` into a typed JSON object:
+/// `{"ints": [...]}` or `{"strings": [...]}` or `{"per_coord_strings": [...]}`.
+/// Returns `null` for `Empty`.
+fn serialize_metadata_values(values: &MetadataValues) -> Value {
+    match values {
+        MetadataValues::Empty => Value::Null,
+        MetadataValues::Integers(set) => {
+            let arr: Vec<Value> =
+                set.iter().map(|&v| Value::Number(serde_json::Number::from(v))).collect();
+            let mut m = Map::new();
+            m.insert("ints".to_string(), Value::Array(arr));
+            Value::Object(m)
+        }
+        MetadataValues::Strings(set) => {
+            let arr: Vec<Value> = set.iter().map(|v| Value::String(v.to_string())).collect();
+            let mut m = Map::new();
+            m.insert("strings".to_string(), Value::Array(arr));
+            Value::Object(m)
+        }
+        MetadataValues::PerCoordStrings(vec) => {
+            let arr: Vec<Value> = vec
+                .iter()
+                .map(|inner| Value::Array(inner.iter().map(|s| Value::String(s.clone())).collect()))
+                .collect();
+            let mut m = Map::new();
+            m.insert("per_coord_strings".to_string(), Value::Array(arr));
+            Value::Object(m)
+        }
+    }
+}
+
+/// Deserialise a typed metadata JSON object produced by `serialize_metadata_values`.
+/// Returns `None` for unrecognised shapes.
+fn deserialize_metadata_values(val: &Value) -> Option<MetadataValues> {
+    match val {
+        Value::Object(vm) if vm.contains_key("ints") => {
+            let arr = vm.get("ints")?.as_array()?;
+            let ints: Vec<i32> = arr.iter().filter_map(|v| v.as_i64().map(|n| n as i32)).collect();
+            Some(MetadataValues::from_integers(&ints))
+        }
+        Value::Object(vm) if vm.contains_key("strings") => {
+            let arr = vm.get("strings")?.as_array()?;
+            let string_refs: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
+            Some(MetadataValues::from_strings(&string_refs))
+        }
+        Value::Object(vm) if vm.contains_key("per_coord_strings") => {
+            let arr = vm.get("per_coord_strings")?.as_array()?;
+            let strings: Vec<Vec<String>> = arr
+                .iter()
+                .map(|entry| {
+                    entry
+                        .as_array()
+                        .map(|inner| {
+                            inner.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect()
+                        })
+                        .unwrap_or_default()
+                })
+                .collect();
+            Some(MetadataValues::PerCoordStrings(strings))
+        }
+        _ => None,
     }
 }
 
@@ -339,6 +444,106 @@ fn serialize_children_json(qube: &Qube, parent_id: NodeIdx, output: &mut Map<Str
 
         output.insert(key_value, Value::Object(child_map));
     }
+}
+
+// ---------------- Tree JSON (key/values/metadata/children) ----------------
+
+impl Qube {
+    /// Serialize the Qube into a recursive tree JSON layout where each node has:
+    /// `{ "key": <dim>, "values": { "type": "enum", "dtype": <type>, "values": [...] }, "metadata": {}, "children": [...] }`
+    pub fn to_tree_json(&self) -> Value {
+        let mut envelope = Map::new();
+        envelope.insert("version".to_string(), Value::String("1".to_string()));
+        envelope.insert("tree".to_string(), serialize_tree_node(self, self.root()));
+        Value::Object(envelope)
+    }
+
+    /// Reconstruct a Qube from a tree JSON layout created by `to_tree_json`.
+    pub fn from_tree_json(value: Value) -> Result<Qube, String> {
+        let obj = value.as_object().ok_or("Expected JSON object for tree envelope")?;
+
+        let version = obj
+            .get("version")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing 'version' field in tree JSON")?;
+        if version != "1" {
+            return Err(format!("Unsupported tree JSON version: {version:?}"));
+        }
+
+        let root_value = obj.get("tree").ok_or("Missing 'tree' field in tree JSON")?;
+
+        let mut qube = Qube::new();
+        let root = qube.root();
+        parse_tree_node(&mut qube, root, root_value)?;
+        Ok(qube)
+    }
+}
+
+fn coords_dtype(coords: &Coordinates) -> &'static str {
+    match coords {
+        Coordinates::Empty => "str",
+        Coordinates::Integers(_) => "int64",
+        Coordinates::Floats(_) => "float64",
+        Coordinates::Strings(_) => "str",
+        Coordinates::DateTimes(_) => "datetime",
+        Coordinates::Mixed(_) => "mixed",
+    }
+}
+
+fn serialize_tree_node(qube: &Qube, node_id: NodeIdx) -> Value {
+    let node = qube.node(node_id).expect("valid node");
+    let key = node.dimension().unwrap_or("root").to_string();
+    let coords = node.coordinates();
+
+    let dtype = coords_dtype(coords);
+    let values_array = coords.to_json_value();
+
+    let mut values_obj = Map::new();
+    values_obj.insert("type".to_string(), Value::String("enum".to_string()));
+    values_obj.insert("dtype".to_string(), Value::String(dtype.to_string()));
+    // Store the raw json_value (may be Array or String for range types)
+    values_obj.insert("values".to_string(), values_array);
+
+    let children_ids: Vec<NodeIdx> = node.all_children().collect();
+    let children: Vec<Value> =
+        children_ids.iter().map(|&child_id| serialize_tree_node(qube, child_id)).collect();
+
+    let mut map = Map::new();
+    map.insert("key".to_string(), Value::String(key));
+    map.insert("values".to_string(), Value::Object(values_obj));
+    map.insert("metadata".to_string(), Value::Object(Map::new()));
+    map.insert("children".to_string(), Value::Array(children));
+
+    Value::Object(map)
+}
+
+fn parse_tree_node(qube: &mut Qube, parent: NodeIdx, value: &Value) -> Result<(), String> {
+    let obj = value.as_object().ok_or("Expected JSON object for tree node")?;
+
+    let children =
+        obj.get("children").and_then(|v| v.as_array()).ok_or("Missing 'children' array")?;
+
+    for child_value in children {
+        let child_obj = child_value.as_object().ok_or("Expected JSON object for child node")?;
+
+        let key =
+            child_obj.get("key").and_then(|v| v.as_str()).ok_or("Missing 'key' in child node")?;
+
+        let values_obj = child_obj
+            .get("values")
+            .and_then(|v| v.as_object())
+            .ok_or("Missing 'values' object in child node")?;
+
+        let values_array =
+            values_obj.get("values").ok_or("Missing 'values' array in values object")?;
+
+        let coords = Coordinates::from_json_value(values_array)?;
+
+        let child_node = qube.get_or_create_child(key, parent, Some(coords))?;
+        parse_tree_node(qube, child_node, child_value)?;
+    }
+
+    Ok(())
 }
 
 // ---------------- Tests ----------------
@@ -472,5 +677,332 @@ mod json_tests {
         // Reconstruct and verify structure equality via to_json()
         let reconstructed = Qube::from_arena_json(arena).expect("from_arena_json");
         assert_eq!(qube.to_json(), reconstructed.to_json());
+    }
+
+    #[test]
+    fn test_arena_roundtrip_integer_rangeset() {
+        use crate::coordinates::integers::{IntegerCoordinates, IntegerRange};
+        use tiny_vec::TinyVec;
+
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        // param = 1:1:10 (range 1..10 step 1)
+        let mut ranges: TinyVec<IntegerRange, 2> = TinyVec::new();
+        ranges.push(IntegerRange::new_step1(1, 10));
+        let coords = Coordinates::Integers(IntegerCoordinates::RangeSet(ranges));
+        qube.get_or_create_child("param", root, Some(coords)).unwrap();
+
+        let arena = qube.to_arena_json();
+        println!("Integer RangeSet arena JSON:\n{}", serde_json::to_string_pretty(&arena).unwrap());
+
+        let reconstructed = Qube::from_arena_json(arena).expect("from_arena_json");
+        assert_eq!(
+            qube.to_json(),
+            reconstructed.to_json(),
+            "Integer RangeSet arena roundtrip failed"
+        );
+    }
+
+    #[test]
+    fn test_arena_roundtrip_datetime_rangeset() {
+        use crate::coordinates::datetime::{DateTimeCoordinates, DateTimeRange};
+        use chrono::NaiveDate;
+        use tiny_vec::TinyVec;
+
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        let d_start = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let d_end = NaiveDate::from_ymd_opt(2020, 1, 10).unwrap().and_hms_opt(0, 0, 0).unwrap();
+
+        let mut ranges: TinyVec<DateTimeRange, 2> = TinyVec::new();
+        ranges.push(DateTimeRange::daily(d_start, d_end));
+        let coords = Coordinates::DateTimes(DateTimeCoordinates::RangeSet(ranges));
+        qube.get_or_create_child("date", root, Some(coords)).unwrap();
+
+        let arena = qube.to_arena_json();
+        println!(
+            "DateTime RangeSet arena JSON:\n{}",
+            serde_json::to_string_pretty(&arena).unwrap()
+        );
+
+        let reconstructed = Qube::from_arena_json(arena).expect("from_arena_json");
+        assert_eq!(
+            qube.to_json(),
+            reconstructed.to_json(),
+            "DateTime RangeSet arena roundtrip failed"
+        );
+    }
+
+    #[test]
+    fn test_qube_compress_integers_to_rangeset() {
+        // Building a Qube with many single-integer param nodes, then compressing
+        // should merge them and then compress into a range.
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        // class=od branch
+        let class = {
+            let mut c = Coordinates::Empty;
+            c.append("od".to_string());
+            qube.get_or_create_child("class", root, Some(c)).unwrap()
+        };
+
+        // Add params 1..10 as individual nodes under the same parent
+        for v in 1..=10i32 {
+            let mut c = Coordinates::Empty;
+            c.append(v);
+            qube.get_or_create_child("param", class, Some(c)).unwrap();
+        }
+
+        qube.compress_to_ranges();
+
+        // After compression the param node should have a single RangeSet coord
+        let class_node = qube.node(class).unwrap();
+        let param_kids: Vec<_> = class_node.all_children().collect();
+        assert_eq!(param_kids.len(), 1, "Expected params merged into 1 node");
+
+        let param_node = qube.node(param_kids[0]).unwrap();
+        match param_node.coordinates() {
+            Coordinates::Integers(crate::coordinates::integers::IntegerCoordinates::RangeSet(
+                ranges,
+            )) => {
+                // Should have compressed to a single 1..10 range
+                assert_eq!(ranges.len(), 1, "Expected single range, got {:?}", ranges);
+                assert_eq!(ranges[0].start, 1);
+                assert_eq!(ranges[0].end, 10);
+            }
+            other => panic!("Expected IntegerCoordinates::RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_qube_compress_datetimes_to_rangeset() {
+        use chrono::NaiveDate;
+
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        let class = {
+            let mut c = Coordinates::Empty;
+            c.append("od".to_string());
+            qube.get_or_create_child("class", root, Some(c)).unwrap()
+        };
+
+        // Add dates Jan 1..10 as individual nodes
+        for day in 1..=10u32 {
+            let d = NaiveDate::from_ymd_opt(2020, 1, day).unwrap().and_hms_opt(0, 0, 0).unwrap();
+            let mut c = Coordinates::Empty;
+            c.append(d);
+            qube.get_or_create_child("date", class, Some(c)).unwrap();
+        }
+
+        qube.compress_to_ranges();
+
+        let class_node = qube.node(class).unwrap();
+        let date_kids: Vec<_> = class_node.all_children().collect();
+        assert_eq!(date_kids.len(), 1, "Expected dates merged into 1 node");
+
+        let date_node = qube.node(date_kids[0]).unwrap();
+        match date_node.coordinates() {
+            Coordinates::DateTimes(
+                crate::coordinates::datetime::DateTimeCoordinates::RangeSet(ranges),
+            ) => {
+                assert_eq!(ranges.len(), 1, "Expected single daily range, got {:?}", ranges);
+                assert_eq!(
+                    ranges[0].start,
+                    NaiveDate::from_ymd_opt(2020, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap()
+                );
+                assert_eq!(
+                    ranges[0].end,
+                    NaiveDate::from_ymd_opt(2020, 1, 10).unwrap().and_hms_opt(0, 0, 0).unwrap()
+                );
+            }
+            other => panic!("Expected DateTimeCoordinates::RangeSet, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_qube_compress_two_integer_ranges() {
+        // Two disjoint ranges of integers should both be preserved as ranges
+        let mut qube = Qube::new();
+        let root = qube.root();
+
+        let class = {
+            let mut c = Coordinates::Empty;
+            c.append("od".to_string());
+            qube.get_or_create_child("class", root, Some(c)).unwrap()
+        };
+
+        // Add 1..5 and 10..15 as individual integer nodes
+        for v in (1..=5i32).chain(10..=15) {
+            let mut c = Coordinates::Empty;
+            c.append(v);
+            qube.get_or_create_child("param", class, Some(c)).unwrap();
+        }
+
+        qube.compress_to_ranges();
+
+        let class_node = qube.node(class).unwrap();
+        let param_kids: Vec<_> = class_node.all_children().collect();
+        assert_eq!(param_kids.len(), 1);
+
+        let param_node = qube.node(param_kids[0]).unwrap();
+        match param_node.coordinates() {
+            Coordinates::Integers(crate::coordinates::integers::IntegerCoordinates::RangeSet(
+                ranges,
+            )) => {
+                assert_eq!(ranges.len(), 2, "Expected 2 ranges, got {:?}", ranges);
+            }
+            other => panic!("Expected IntegerCoordinates::RangeSet with 2 ranges, got {:?}", other),
+        }
+    }
+
+    // ---------------- Tree JSON tests ----------------
+
+    fn simple_qube() -> Qube {
+        Qube::from_json(json!({
+            "class=od": {
+                "expver=0001/0002": {
+                    "param=1/2": {}
+                }
+            },
+            "class=rd": {
+                "expver=0001": { "param=1/2/3": {}
+                }
+            }
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn test_arena_roundtrip_datetime_list() {
+        // GAP 4: DateTimes(List) previously deserialized as empty Mixed via arena JSON
+        use crate::coordinates::datetime::DateTimeCoordinates;
+        use chrono::NaiveDate;
+
+        let mut qube = Qube::new();
+        let root = qube.root();
+        let mut dts = DateTimeCoordinates::default();
+        for day in 1u32..=5 {
+            dts.append(
+                NaiveDate::from_ymd_opt(2020, 1, day).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+            );
+        }
+        let coords = Coordinates::DateTimes(dts);
+        qube.get_or_create_child("date", root, Some(coords.clone())).unwrap();
+
+        let arena = qube.to_arena_json();
+        let reconstructed = Qube::from_arena_json(arena).expect("from_arena_json");
+
+        // Verify the reconstructed node has DateTimes, not empty Mixed
+        let child =
+            reconstructed.node(reconstructed.root()).unwrap().all_children().next().unwrap();
+        let child_coords = reconstructed.node(child).unwrap().coordinates().clone();
+        assert!(
+            matches!(child_coords, Coordinates::DateTimes(_)),
+            "Expected DateTimes, got: {:?}",
+            child_coords
+        );
+        assert_eq!(child_coords.len(), 5, "Expected 5 dates, got {}", child_coords.len());
+    }
+
+    #[test]
+    fn test_tree_json_roundtrip_datetime_rangeset() {
+        // GAP 3: DateTimes(RangeSet) previously serialized into array wrapping a string,
+        // causing deserialization as Coordinates::Strings instead of DateTimes(RangeSet)
+        use crate::coordinates::datetime::{DateTimeCoordinates, DateTimeRange};
+        use chrono::NaiveDate;
+        use tiny_vec::TinyVec;
+
+        let mut qube = Qube::new();
+        let root = qube.root();
+        let d_start = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let d_end = NaiveDate::from_ymd_opt(2020, 1, 10).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let mut ranges: TinyVec<DateTimeRange, 2> = TinyVec::new();
+        ranges.push(DateTimeRange::daily(d_start, d_end));
+        let coords = Coordinates::DateTimes(DateTimeCoordinates::RangeSet(ranges));
+        qube.get_or_create_child("date", root, Some(coords)).unwrap();
+
+        let tree_json = qube.to_tree_json();
+        let reconstructed = Qube::from_tree_json(tree_json).expect("from_tree_json");
+
+        let child =
+            reconstructed.node(reconstructed.root()).unwrap().all_children().next().unwrap();
+        let child_coords = reconstructed.node(child).unwrap().coordinates().clone();
+        assert!(
+            matches!(child_coords, Coordinates::DateTimes(_)),
+            "Expected DateTimes after tree JSON roundtrip, got: {:?}",
+            child_coords
+        );
+        assert_eq!(child_coords.len(), 10);
+    }
+
+    #[test]
+    fn test_tree_json_envelope_has_version_and_tree_keys() {
+        let qube = simple_qube();
+        let out = qube.to_tree_json();
+        assert!(out.is_object(), "output should be a JSON object");
+        assert_eq!(
+            out.get("version").and_then(|v| v.as_str()),
+            Some("1"),
+            "envelope must have version = '1'"
+        );
+        assert!(out.get("tree").is_some(), "envelope must have a 'tree' key");
+    }
+
+    #[test]
+    fn test_tree_json_root_node_shape() {
+        let qube = simple_qube();
+        let out = qube.to_tree_json();
+        let root = out.get("tree").unwrap();
+        assert_eq!(root.get("key").and_then(|v| v.as_str()), Some("root"));
+        assert!(root.get("values").is_some());
+        assert!(root.get("metadata").is_some());
+        let children = root.get("children").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(children.len(), 2, "root should have two children (od, rd)");
+    }
+
+    #[test]
+    fn test_tree_json_child_node_has_dtype() {
+        let qube = simple_qube();
+        let out = qube.to_tree_json();
+        let first_child = &out["tree"]["children"][0];
+        let values_obj = first_child.get("values").and_then(|v| v.as_object()).unwrap();
+        assert!(values_obj.contains_key("dtype"), "child values must include dtype");
+        assert_eq!(values_obj.get("type").and_then(|v| v.as_str()), Some("enum"));
+    }
+
+    #[test]
+    fn test_tree_json_roundtrip() {
+        let qube = simple_qube();
+        let encoded = qube.to_tree_json();
+        let decoded = Qube::from_tree_json(encoded).expect("from_tree_json");
+        assert_eq!(qube.to_json(), decoded.to_json());
+    }
+
+    #[test]
+    fn test_tree_json_rejects_unknown_version() {
+        let bad = json!({"version": "99", "tree": {}});
+        let result = Qube::from_tree_json(bad);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported tree JSON version"));
+    }
+
+    #[test]
+    fn test_tree_json_rejects_missing_version() {
+        let bad = json!({"tree": {}});
+        let result = Qube::from_tree_json(bad);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Missing 'version'"));
+    }
+
+    #[test]
+    fn test_tree_json_rejects_missing_tree_key() {
+        let bad = json!({"version": "1"});
+        let result = Qube::from_tree_json(bad);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Missing 'tree'"));
     }
 }

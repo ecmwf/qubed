@@ -68,6 +68,7 @@ let q = Qube::from_json(json!({
 | `append_datacube` | `fn append_datacube(&mut self, dc: Datacube, order: Option<&[String]>, accept_existing_order: bool)` | Append a single Datacube |
 | `drop` | `fn drop<I>(&mut self, to_drop: I) -> Result<(), String>` | Remove one or more dimensions, re-parenting their children, then compress |
 | `squeeze` | `fn squeeze(&mut self) -> Result<(), String>` | Drop every dimension whose union of values has length 1 |
+| `expand` | `fn expand(&mut self, key: &str, values: Coordinates) -> Result<(), String>` | Wrap the entire tree under a new outer dimension |
 
 **Example — building programmatically:**
 ```rust
@@ -139,6 +140,44 @@ q.squeeze().unwrap();
 // class=1 is the only value for that dimension, so it is dropped
 ```
 
+**Example — expand:**
+```rust
+use qubed::{Qube, Coordinates};
+
+let mut q = Qube::from_ascii("root\n└── param=2t/tp\n    └── time=0/1/2").unwrap();
+q.expand("ensemble", Coordinates::from_string("ens1/ens2")).unwrap();
+
+// Tree is now:
+// root
+// └── ensemble=ens1/ens2
+//     └── param=2t/tp
+//         └── time=0/1/2
+
+let dims = q.dimensions();
+assert!(dims.contains("ensemble"));
+assert!(dims.contains("param"));
+assert!(dims.contains("time"));
+```
+
+**Example — common_dimensions:**
+```rust
+use qubed::{Qube, Datacube, Coordinates};
+
+let mut dc1 = Datacube::new();
+dc1.add_coordinate("param", Coordinates::from_string("2t/tp"));
+dc1.add_coordinate("time",  Coordinates::from_string("0/1/2"));
+let mut q = Qube::from_datacube(&dc1, Some(&["param".to_string(), "time".to_string()]));
+
+let mut dc2 = Datacube::new();
+dc2.add_coordinate("param", Coordinates::from_string("msl"));
+let mut other = Qube::from_datacube(&dc2, None);
+q.append(&mut other);
+
+let common = q.common_dimensions();
+assert!(common.contains("param"));
+assert!(!common.contains("time")); // "time" absent in the second branch
+```
+
 ### Compression
 
 ```rust
@@ -171,6 +210,14 @@ Remove branches that don't contain **all** of the specified dimensions.
 **SelectMode:**
 - `Default` — keep branches with at least one matching value per constrained dimension.
 - `Prune` — additionally remove branches missing any selected dimension entirely.
+- `Strict` — same result as `Default`, but returns `Err` unless every requested value is found in at least one branch that the selection reaches. A value doesn't have to appear in every branch: selecting `param=3` succeeds even if only one subtree contains it. It fails if a value or dimension doesn't exist at all, or if it only exists under branches excluded by another constraint (e.g. `class=1, param=3` when `param=3` only occurs under `class=2`). The error message lists all missing `dimension=values`.
+
+```rust
+// Ok: param=3 only exists under class=2, which is enough.
+q.select(&[("param", &[3][..])], SelectMode::Strict)?;
+// Err: class=9 does not exist anywhere.
+assert!(q.select(&[("class", &[1, 9][..])], SelectMode::Strict).is_err());
+```
 
 ### Serialization
 
@@ -192,7 +239,9 @@ Remove branches that don't contain **all** of the specified dimensions.
 | `to_datacubes` | `fn to_datacubes(&self) -> Vec<Datacube>` | Decompose into leaf-path datacubes |
 | `datacube_count` | `fn datacube_count(&self) -> usize` | Count leaf identifiers without expansion |
 | `is_empty` | `fn is_empty(&self) -> bool` | True if root has no children and no coordinates |
-| `all_unique_dim_coords` | `fn all_unique_dim_coords(&mut self) -> BTreeMap<String, Coordinates>` | Union of all coordinates per dimension |
+| `all_unique_dim_coords` | `fn all_unique_dim_coords(&self) -> BTreeMap<String, Coordinates>` | Union of all coordinates per dimension |
+| `dimensions` | `fn dimensions(&self) -> HashSet<String>` | Set of all dimension names present in the Qube |
+| `common_dimensions` | `fn common_dimensions(&self) -> HashSet<String>` | Dimension names present in **every** leaf path |
 | `root` | `fn root(&self) -> NodeIdx` | Root node index |
 | `node` | `fn node(&self, id: NodeIdx) -> Option<NodeRef>` | Read-only reference to a node |
 | `dimension` | `fn dimension(&self, s: &str) -> Option<Dimension>` | Look up dimension by name |
@@ -293,5 +342,5 @@ A flat `HashMap<String, Coordinates>` representing one dense datacube.
 | `NodeIdx` | SlotMap key for node identity |
 | `Dimension` | Interned string key (`MiniSpur` from `lasso`) |
 | `IntersectionResult<T>` | `{ intersection, only_a, only_b }` |
-| `SelectMode` | `Default` or `Prune` |
+| `SelectMode` | `Default`, `Prune` or `Strict` |
 | `CoordinateTypes` | `Integer(i32)`, `Float(f64)`, `String(String)` |

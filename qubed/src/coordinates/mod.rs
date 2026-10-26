@@ -51,8 +51,68 @@ impl Coordinates {
         if s.is_empty() {
             return Coordinates::Empty;
         }
+
+        // ── Range notations (checked before the generic '/' split) ──────────
+
+        // ASCII range notation: `start/to/end[/by/step]` for integers/datetimes,
+        // or multiple such ranges joined by `|`.
+        // The presence of `/to/` is the distinguishing marker.
+        if s.contains("/to/") || s.contains('|') {
+            if let Some(coords) = parse_ascii_range_notation(s) {
+                return coords;
+            }
+        }
+
+        // Machine range notation for datetime RangeSets
+        // (format: "start:<secs>s:end/..." — contains 's:' after digits).
+        if let Some(dt_ranges) = datetime::DateTimeCoordinates::parse_range_from_str(s) {
+            return Coordinates::DateTimes(dt_ranges);
+        }
+
+        // Machine range notation for integer RangeSets ("start:step:end/...").
+        if looks_like_integer_rangeset(s) {
+            if let Some(coords) = parse_integer_rangeset_str(s) {
+                return coords;
+            }
+        }
+
+        // ── Generic '/' separated values ────────────────────────────────────
         let mut coords = Coordinates::Empty;
         let split: Vec<&str> = s.split('/').collect();
+
+        // When multiple values are present, ensure consistent typing:
+        // if all parse as integers but some have leading zeros, keep all as strings.
+        let all_int = split.iter().all(|p| p.parse::<i32>().is_ok());
+        let any_leading_zero = split.iter().any(|p| {
+            p.len() > 1
+                && p.starts_with('0')
+                && p.chars().nth(1).map_or(false, |c| c.is_ascii_digit())
+        });
+        let force_strings = all_int && any_leading_zero;
+
+        // ── Date auto-detection ──────────────────────────────────────────────
+        // If every token looks like a date/datetime string, parse the whole list
+        // as DateTimeCoordinates rather than falling through to integers/strings.
+        // Common ECMWF patterns handled:
+        //   "20200101"          → YYYYMMDD (8 digits, valid calendar date)
+        //   "2020-01-01"        → ISO date
+        //   "20200101T0000"     → compact datetime (13 chars, 'T' at pos 8)
+        //   "2020-01-01T00:00"  → ISO datetime
+        if split.iter().all(|p| looks_like_date_or_datetime(p)) {
+            let mut dts = datetime::DateTimeCoordinates::default();
+            let mut all_parsed = true;
+            for part in &split {
+                if let Some(dt) = datetime::DateTimeCoordinates::parse_from_str(part) {
+                    dts.append(dt);
+                } else {
+                    all_parsed = false;
+                    break;
+                }
+            }
+            if all_parsed && dts.len() > 0 {
+                return Coordinates::DateTimes(dts);
+            }
+        }
 
         // When multiple values are present, ensure consistent typing:
         // if all parse as integers but some have leading zeros, keep all as strings.
@@ -108,6 +168,19 @@ impl Coordinates {
         }
     }
 
+    /// Serialize to a human-readable string for ASCII tree output.
+    ///
+    /// Ranges are written in the `start/to/end` (step-1 or daily) or
+    /// `start/to/end/by/step` notation.  Multiple ranges are joined by `|`.
+    /// All other variants fall back to `to_string()`.
+    pub fn to_ascii_string(&self) -> String {
+        match self {
+            Coordinates::Integers(ints) => ints.to_ascii_string(),
+            Coordinates::DateTimes(dts) => dts.to_ascii_string(),
+            other => other.to_string(),
+        }
+    }
+
     pub fn len(&self) -> usize {
         match self {
             Coordinates::Empty => 0,
@@ -126,6 +199,20 @@ impl Coordinates {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Attempt to compress coordinate values into a more compact range representation.
+    ///
+    /// - `Integers(Set)` or `Integers(RangeSet)` → may become `RangeSet` if
+    ///   consecutive runs are found that reduce the total number of stored items.
+    /// - `DateTimes(List)` or `DateTimes(RangeSet)` → same treatment.
+    /// - All other variants are unchanged.
+    pub fn try_compress(&mut self) {
+        match self {
+            Coordinates::Integers(ints) => ints.try_compress_to_ranges(),
+            Coordinates::DateTimes(dts) => dts.try_compress_to_ranges(),
+            _ => {}
+        }
     }
 
     pub fn contains<T>(&self, value: T) -> bool
@@ -189,40 +276,189 @@ impl Coordinates {
         }
     }
 
-    pub fn intersect(&self, _other: &Coordinates) -> IntersectionResult<Coordinates> {
-        match (self, _other) {
-            (Coordinates::Integers(ints_a), Coordinates::Integers(ints_b)) => {
-                let result = ints_a.intersect(ints_b);
-                IntersectionResult {
-                    intersection: wrap_ints(result.intersection),
-                    only_a: wrap_ints(result.only_a),
-                    only_b: wrap_ints(result.only_b),
-                }
-            }
-            (Coordinates::Strings(strs_a), Coordinates::Strings(strs_b)) => {
-                let result = strs_a.intersect(strs_b);
-                IntersectionResult {
-                    intersection: wrap_strs(result.intersection),
-                    only_a: wrap_strs(result.only_a),
-                    only_b: wrap_strs(result.only_b),
-                }
-            }
-            // Empty on either side: intersection is empty; the non-empty side goes to its slot.
+    pub fn intersect(&self, other: &Coordinates) -> IntersectionResult<Coordinates> {
+        match (self, other) {
+            // Empty
             (Coordinates::Empty, _) => IntersectionResult {
                 intersection: Coordinates::Empty,
                 only_a: Coordinates::Empty,
-                only_b: _other.clone(),
+                only_b: other.clone(),
             },
             (_, Coordinates::Empty) => IntersectionResult {
                 intersection: Coordinates::Empty,
                 only_a: self.clone(),
                 only_b: Coordinates::Empty,
             },
+            // Same-type
+            (Coordinates::Integers(a), Coordinates::Integers(b)) => {
+                let r = a.intersect(b);
+                IntersectionResult {
+                    intersection: wrap_ints(r.intersection),
+                    only_a: wrap_ints(r.only_a),
+                    only_b: wrap_ints(r.only_b),
+                }
+            }
+            (Coordinates::Floats(a), Coordinates::Floats(b)) => {
+                let r = a.intersect(b);
+                IntersectionResult {
+                    intersection: wrap_floats(r.intersection),
+                    only_a: wrap_floats(r.only_a),
+                    only_b: wrap_floats(r.only_b),
+                }
+            }
+            (Coordinates::DateTimes(a), Coordinates::DateTimes(b)) => {
+                let r = a.intersect(b);
+                IntersectionResult {
+                    intersection: wrap_dts(r.intersection),
+                    only_a: wrap_dts(r.only_a),
+                    only_b: wrap_dts(r.only_b),
+                }
+            }
+            (Coordinates::Strings(a), Coordinates::Strings(b)) => {
+                let r = a.intersect(b);
+                IntersectionResult {
+                    intersection: wrap_strs(r.intersection),
+                    only_a: wrap_strs(r.only_a),
+                    only_b: wrap_strs(r.only_b),
+                }
+            }
+            // Mixed on the left
+            (Coordinates::Mixed(mixed), Coordinates::Strings(b)) => {
+                let r = mixed.strings.intersect(b);
+                IntersectionResult {
+                    intersection: wrap_strs(r.intersection),
+                    only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: mixed.integers.clone(),
+                        floats: mixed.floats.clone(),
+                        strings: r.only_a,
+                        datetimes: mixed.datetimes.clone(),
+                    })),
+                    only_b: wrap_strs(r.only_b),
+                }
+            }
+            (Coordinates::Mixed(mixed), Coordinates::Integers(b)) => {
+                let r = mixed.integers.intersect(b);
+                IntersectionResult {
+                    intersection: wrap_ints(r.intersection),
+                    only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: r.only_a,
+                        floats: mixed.floats.clone(),
+                        strings: mixed.strings.clone(),
+                        datetimes: mixed.datetimes.clone(),
+                    })),
+                    only_b: wrap_ints(r.only_b),
+                }
+            }
+            (Coordinates::Mixed(mixed), Coordinates::Floats(b)) => {
+                let r = mixed.floats.intersect(b);
+                IntersectionResult {
+                    intersection: wrap_floats(r.intersection),
+                    only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: mixed.integers.clone(),
+                        floats: r.only_a,
+                        strings: mixed.strings.clone(),
+                        datetimes: mixed.datetimes.clone(),
+                    })),
+                    only_b: wrap_floats(r.only_b),
+                }
+            }
+            (Coordinates::Mixed(mixed), Coordinates::DateTimes(b)) => {
+                let r = mixed.datetimes.intersect(b);
+                IntersectionResult {
+                    intersection: wrap_dts(r.intersection),
+                    only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: mixed.integers.clone(),
+                        floats: mixed.floats.clone(),
+                        strings: mixed.strings.clone(),
+                        datetimes: r.only_a,
+                    })),
+                    only_b: wrap_dts(r.only_b),
+                }
+            }
+            (Coordinates::Mixed(a), Coordinates::Mixed(b)) => {
+                let r_ints = a.integers.intersect(&b.integers);
+                let r_floats = a.floats.intersect(&b.floats);
+                let r_strs = a.strings.intersect(&b.strings);
+                let r_dts = a.datetimes.intersect(&b.datetimes);
+                IntersectionResult {
+                    intersection: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: r_ints.intersection,
+                        floats: r_floats.intersection,
+                        strings: r_strs.intersection,
+                        datetimes: r_dts.intersection,
+                    })),
+                    only_a: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: r_ints.only_a,
+                        floats: r_floats.only_a,
+                        strings: r_strs.only_a,
+                        datetimes: r_dts.only_a,
+                    })),
+                    only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: r_ints.only_b,
+                        floats: r_floats.only_b,
+                        strings: r_strs.only_b,
+                        datetimes: r_dts.only_b,
+                    })),
+                }
+            }
+            // Mixed on the right
+            (Coordinates::Strings(a), Coordinates::Mixed(mixed)) => {
+                let r = a.intersect(&mixed.strings);
+                IntersectionResult {
+                    intersection: wrap_strs(r.intersection),
+                    only_a: wrap_strs(r.only_a),
+                    only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: mixed.integers.clone(),
+                        floats: mixed.floats.clone(),
+                        strings: r.only_b,
+                        datetimes: mixed.datetimes.clone(),
+                    })),
+                }
+            }
+            (Coordinates::Integers(a), Coordinates::Mixed(mixed)) => {
+                let r = a.intersect(&mixed.integers);
+                IntersectionResult {
+                    intersection: wrap_ints(r.intersection),
+                    only_a: wrap_ints(r.only_a),
+                    only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: r.only_b,
+                        floats: mixed.floats.clone(),
+                        strings: mixed.strings.clone(),
+                        datetimes: mixed.datetimes.clone(),
+                    })),
+                }
+            }
+            (Coordinates::Floats(a), Coordinates::Mixed(mixed)) => {
+                let r = a.intersect(&mixed.floats);
+                IntersectionResult {
+                    intersection: wrap_floats(r.intersection),
+                    only_a: wrap_floats(r.only_a),
+                    only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: mixed.integers.clone(),
+                        floats: r.only_b,
+                        strings: mixed.strings.clone(),
+                        datetimes: mixed.datetimes.clone(),
+                    })),
+                }
+            }
+            (Coordinates::DateTimes(a), Coordinates::Mixed(mixed)) => {
+                let r = a.intersect(&mixed.datetimes);
+                IntersectionResult {
+                    intersection: wrap_dts(r.intersection),
+                    only_a: wrap_dts(r.only_a),
+                    only_b: Coordinates::Mixed(Box::new(MixedCoordinates {
+                        integers: mixed.integers.clone(),
+                        floats: mixed.floats.clone(),
+                        strings: mixed.strings.clone(),
+                        datetimes: r.only_b,
+                    })),
+                }
+            }
             // Cross-type: no values can be shared, so intersection is empty.
             _ => IntersectionResult {
                 intersection: Coordinates::Empty,
                 only_a: self.clone(),
-                only_b: _other.clone(),
+                only_b: other.clone(),
             },
         }
     }
@@ -262,6 +498,216 @@ impl Default for Coordinates {
     }
 }
 
+/// Parse the human-readable ASCII range notation produced by `to_ascii_string`.
+///
+/// Supported forms (one or more items joined by `|`):
+/// - Integer singleton:               `7`
+/// - Integer step-1 range:            `1/to/10`
+/// - Integer stepped range:           `0/to/10/by/2`
+/// - DateTime singleton:              `2020-01-01T00:00:00`
+/// - DateTime daily range:            `2020-01-01T00:00:00/to/2020-01-10T00:00:00`
+/// - DateTime range with step:        `2020-01-01T00:00:00/to/2020-01-10T00:00:00/by/3600s`
+///
+/// Returns `None` if the input doesn't match this grammar at all (so the
+/// caller can fall through to other parsers).
+fn parse_ascii_range_notation(s: &str) -> Option<Coordinates> {
+    use chrono::Duration;
+    use datetime::{DateTimeCoordinates, DateTimeRange};
+    use integers::{IntegerCoordinates, IntegerRange};
+    use tiny_vec::TinyVec;
+
+    // Each `|`-separated segment is one range or singleton.
+    let segments: Vec<&str> = s.split('|').collect();
+
+    enum Item {
+        Int(IntegerRange),
+        Dt(DateTimeRange),
+    }
+
+    let mut items: Vec<Item> = Vec::new();
+
+    for seg in &segments {
+        // Does this segment contain `/to/`?
+        if let Some(to_pos) = seg.find("/to/") {
+            let start_str = &seg[..to_pos];
+            let rest = &seg[to_pos + 4..]; // after "/to/"
+
+            // Check for optional `/by/<step>` suffix
+            let (end_str, step_str) = if let Some(by_pos) = rest.find("/by/") {
+                (&rest[..by_pos], Some(&rest[by_pos + 4..]))
+            } else {
+                (rest, None)
+            };
+
+            // Try integer range
+            if let (Ok(start), Ok(end)) = (start_str.parse::<i32>(), end_str.parse::<i32>()) {
+                let step: i32 = if let Some(ss) = step_str { ss.parse().ok()? } else { 1 };
+                if step <= 0 || step > u16::MAX as i32 || start > end {
+                    return None;
+                }
+                items.push(Item::Int(IntegerRange::new(start, end, step as u16)));
+                continue;
+            }
+
+            // Try datetime range
+            let start_dt = DateTimeCoordinates::parse_from_str(start_str)?;
+            let end_dt = DateTimeCoordinates::parse_from_str(end_str)?;
+            let step_dur = if let Some(ss) = step_str {
+                parse_duration_str(ss)?
+            } else {
+                Duration::days(1) // default step for datetime ranges
+            };
+            if start_dt > end_dt || step_dur <= Duration::zero() {
+                return None;
+            }
+            items.push(Item::Dt(DateTimeRange::new(start_dt, end_dt, step_dur)));
+        } else {
+            // No `/to/` — must be a singleton.
+            // Try integer first
+            if let Ok(v) = seg.parse::<i32>() {
+                items.push(Item::Int(IntegerRange::new_step1(v, v)));
+                continue;
+            }
+            // Try datetime
+            if let Some(dt) = DateTimeCoordinates::parse_from_str(seg) {
+                items.push(Item::Dt(DateTimeRange::new(dt, dt, Duration::seconds(1))));
+                continue;
+            }
+            // Unknown token — fall through to generic parser
+            return None;
+        }
+    }
+
+    if items.is_empty() {
+        return None;
+    }
+
+    // All items must be the same type (Int or Dt).
+    let all_int = items.iter().all(|it| matches!(it, Item::Int(_)));
+    let all_dt = items.iter().all(|it| matches!(it, Item::Dt(_)));
+
+    if all_int {
+        let mut ranges: TinyVec<IntegerRange, 2> = TinyVec::new();
+        for it in items {
+            if let Item::Int(r) = it {
+                ranges.push(r);
+            }
+        }
+        Some(Coordinates::Integers(IntegerCoordinates::RangeSet(ranges)))
+    } else if all_dt {
+        let mut ranges: TinyVec<DateTimeRange, 2> = TinyVec::new();
+        for it in items {
+            if let Item::Dt(r) = it {
+                ranges.push(r);
+            }
+        }
+        Some(Coordinates::DateTimes(DateTimeCoordinates::RangeSet(ranges)))
+    } else {
+        // Mixed int/datetime — shouldn't occur in practice; fall through.
+        None
+    }
+}
+
+/// Parse a duration string of the form `<secs>s` (e.g. `"86400s"`, `"3600s"`).
+fn parse_duration_str(s: &str) -> Option<chrono::Duration> {
+    let s = s.trim();
+    if let Some(num) = s.strip_suffix('s') {
+        let secs: i64 = num.parse().ok()?;
+        Some(chrono::Duration::seconds(secs))
+    } else {
+        None
+    }
+}
+fn looks_like_integer_rangeset(s: &str) -> bool {
+    s.split('/').all(|part| {
+        let segs: Vec<&str> = part.splitn(3, ':').collect();
+        segs.len() == 3 && segs.iter().all(|seg| seg.parse::<i32>().is_ok())
+    })
+}
+
+/// Returns `true` if the token looks like a date or datetime string that should
+/// be parsed as `DateTimeCoordinates` rather than as a plain integer or string.
+///
+/// Recognised patterns (conservative — avoids false positives on step values,
+/// param codes, etc.):
+///
+/// | Pattern                  | Example              | Criterion                                    |
+/// |--------------------------|----------------------|----------------------------------------------|
+/// | `YYYYMMDD` (8 digits)    | `"20200101"`         | Valid calendar date; year 1900–2100           |
+/// | `YYYY-MM-DD`             | `"2020-01-01"`       | Dashes at positions 4 and 7                  |
+/// | `YYYYMMDDTHHmm` (13)     | `"20200101T0000"`    | `T` at position 8, all else alphanumeric     |
+/// | ISO datetime `YYYY-MM-DDTHH:MM` | `"2020-01-01T00:00"` | Dash at 4, `T` at 10              |
+fn looks_like_date_or_datetime(s: &str) -> bool {
+    let b = s.as_bytes();
+    let len = b.len();
+
+    // YYYYMMDD — 8 ASCII digits, must be a plausible calendar date
+    if len == 8 && b.iter().all(|c| c.is_ascii_digit()) {
+        if let Ok(v) = s.parse::<i32>() {
+            let year = v / 10000;
+            let month = (v % 10000) / 100;
+            let day = v % 100;
+            return year >= 1900
+                && year <= 2100
+                && month >= 1
+                && month <= 12
+                && day >= 1
+                && day <= 31;
+        }
+    }
+
+    // YYYY-MM-DD... (ISO date or datetime with dashes)
+    if len >= 10 && b[4] == b'-' && b[7] == b'-' {
+        return true;
+    }
+
+    // YYYYMMDDTHHmm (13 chars, T at position 8)
+    if len == 13
+        && b[8] == b'T'
+        && b[..8].iter().all(|c| c.is_ascii_digit())
+        && b[9..].iter().all(|c| c.is_ascii_digit())
+    {
+        return true;
+    }
+
+    // YYYYMMDDTHHmmSS (15 chars, T at position 8)
+    if len == 15
+        && b[8] == b'T'
+        && b[..8].iter().all(|c| c.is_ascii_digit())
+        && b[9..].iter().all(|c| c.is_ascii_digit())
+    {
+        return true;
+    }
+
+    false
+}
+
+/// Parse a string of the form `"start:step:end/start:step:end/..."` into
+/// `Coordinates::Integers(RangeSet(...))`.
+fn parse_integer_rangeset_str(s: &str) -> Option<Coordinates> {
+    use integers::IntegerRange;
+    use tiny_vec::TinyVec;
+
+    let mut ranges: TinyVec<IntegerRange, 2> = TinyVec::new();
+    for part in s.split('/') {
+        let segs: Vec<&str> = part.splitn(3, ':').collect();
+        if segs.len() != 3 {
+            return None;
+        }
+        let start: i32 = segs[0].parse().ok()?;
+        let step: i32 = segs[1].parse().ok()?;
+        let end: i32 = segs[2].parse().ok()?;
+        if step <= 0 || step > u16::MAX as i32 || start > end {
+            return None;
+        }
+        ranges.push(IntegerRange::new(start, end, step as u16));
+    }
+    if ranges.is_empty() {
+        return None;
+    }
+    Some(Coordinates::Integers(integers::IntegerCoordinates::RangeSet(ranges)))
+}
+
 // ------------- Intersection ------------------
 
 fn wrap_ints(c: integers::IntegerCoordinates) -> Coordinates {
@@ -270,6 +716,14 @@ fn wrap_ints(c: integers::IntegerCoordinates) -> Coordinates {
 
 fn wrap_strs(c: strings::StringCoordinates) -> Coordinates {
     if c.len() == 0 { Coordinates::Empty } else { Coordinates::Strings(c) }
+}
+
+fn wrap_dts(c: datetime::DateTimeCoordinates) -> Coordinates {
+    if c.len() == 0 { Coordinates::Empty } else { Coordinates::DateTimes(c) }
+}
+
+fn wrap_floats(c: floats::FloatCoordinates) -> Coordinates {
+    if c.len() == 0 { Coordinates::Empty } else { Coordinates::Floats(c) }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -335,6 +789,76 @@ impl Coordinates {
     pub fn merge_coords(&mut self, other_coords: &Coordinates) -> Coordinates {
         let intersection_result = self.intersect(other_coords);
         Coordinates::from_intersection(intersection_result)
+    }
+
+    /// Return every individual coordinate value as a `String`, in sorted ascending order.
+    ///
+    /// For `Integers`, values are formatted as decimal strings.
+    /// For `Strings`, values are returned as-is.
+    /// `Empty` and `Mixed` return an empty `Vec` (Mixed is not supported for per-coord mapping).
+    pub fn iter_sorted_strings(&self) -> Vec<String> {
+        match self {
+            Coordinates::Empty => vec![],
+            Coordinates::Integers(ints) => match ints {
+                integers::IntegerCoordinates::Set(set) => {
+                    set.iter().map(|v| v.to_string()).collect()
+                }
+                integers::IntegerCoordinates::RangeSet(_) => vec![],
+            },
+            Coordinates::Strings(strings) => match strings {
+                strings::StringCoordinates::Set(set) => set.iter().map(|v| v.to_string()).collect(),
+            },
+            Coordinates::Floats(floats) => match floats {
+                floats::FloatCoordinates::List(list) => {
+                    list.iter().map(|v| v.to_string()).collect()
+                }
+            },
+            Coordinates::DateTimes(dts) => match dts {
+                datetime::DateTimeCoordinates::List(list) => {
+                    list.iter().map(|v| v.format("%Y%m%dT%H%M").to_string()).collect()
+                }
+                datetime::DateTimeCoordinates::RangeSet(ranges) => ranges
+                    .iter()
+                    .flat_map(|r| r.iter())
+                    .map(|v| v.format("%Y%m%dT%H%M").to_string())
+                    .collect(),
+            },
+            Coordinates::Mixed(_) => vec![],
+        }
+    }
+
+    /// Return the 0-based sorted position of the coordinate whose string representation
+    /// equals `value_str`, or `None` if not found.
+    pub fn coord_index_of(&self, value_str: &str) -> Option<usize> {
+        self.iter_sorted_strings().iter().position(|v| v == value_str)
+    }
+
+    /// Split this `Coordinates` into a `Vec` of single-value `Coordinates`, one per
+    /// element in sorted coordinate order.
+    ///
+    /// Only fully-enumerable variants are supported: `Integers(Set)`, `Strings(Set)`.
+    /// For `RangeSet`, `Mixed`, `DateTime`, `Floats`, and `Empty`, returns an empty `Vec`.
+    ///
+    /// Used by `partition_by_metadata` to align per-coordinate metadata values with
+    /// the individual coordinates of a merged node.
+    pub fn split_into_singles(&self) -> Vec<Coordinates> {
+        match self {
+            Coordinates::Strings(_) => self
+                .iter_sorted_strings()
+                .into_iter()
+                .map(|s| Coordinates::from(s.as_str()))
+                .collect(),
+            Coordinates::Integers(integers::IntegerCoordinates::Set(_)) => self
+                .iter_sorted_strings()
+                .into_iter()
+                .filter_map(|s| s.parse::<i32>().ok())
+                .map(Coordinates::from)
+                .collect(),
+            Coordinates::DateTimes(datetime::DateTimeCoordinates::List(list)) => {
+                list.iter().copied().map(Coordinates::from).collect()
+            }
+            _ => vec![],
+        }
     }
 
     /// Serialize coordinates into a serde_json::Value using native JSON types
@@ -428,6 +952,15 @@ impl Coordinates {
                             map.insert("datetimes".to_string(), Value::Array(vals));
                         }
                     }
+                    datetime::DateTimeCoordinates::RangeSet(_) => {
+                        // fallback to textual form
+                        if boxed.datetimes.len() > 0 {
+                            map.insert(
+                                "datetimes".to_string(),
+                                Value::String(boxed.datetimes.to_string()),
+                            );
+                        }
+                    }
                 }
 
                 Value::Object(map)
@@ -442,6 +975,7 @@ impl Coordinates {
                         .collect();
                     Value::Array(vals)
                 }
+                datetime::DateTimeCoordinates::RangeSet(_) => Value::String(coords.to_string()),
             },
         }
     }
@@ -505,6 +1039,20 @@ impl Coordinates {
                 }
 
                 if all_string {
+                    // Try datetime first: if every string parses as a NaiveDateTime,
+                    // return DateTimes(List) instead of Strings.
+                    let strs: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
+                    if !strs.is_empty()
+                        && strs
+                            .iter()
+                            .all(|s| datetime::DateTimeCoordinates::parse_from_str(s).is_some())
+                    {
+                        let mut dts = datetime::DateTimeCoordinates::default();
+                        for s in &strs {
+                            dts.append(datetime::DateTimeCoordinates::parse_from_str(s).unwrap());
+                        }
+                        return Ok(Coordinates::DateTimes(dts));
+                    }
                     let mut sc = strings::StringCoordinates::default();
                     for v in arr.iter() {
                         if let Value::String(s) = v {

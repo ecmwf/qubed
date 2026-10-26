@@ -1,4 +1,5 @@
 use crate::coordinates::Coordinates;
+use crate::metadata::{Metadata, MetadataValues};
 use crate::qube::{Dimension, NodeIdx, Qube};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -48,6 +49,10 @@ impl Qube {
         for kids in parent.children_mut().values_mut() {
             kids.retain(|id| keep.contains(id));
         }
+        // Remove dimension entries whose child list became empty after pruning.
+        // Without this, BTreeMap::is_empty() would return false even when no
+        // real children remain, causing Qube::is_empty() to mis-report.
+        parent.children_mut().retain(|_, kids| !kids.is_empty());
     }
 
     /// Invalidates the cached structural hash of a node.
@@ -56,7 +61,152 @@ impl Qube {
         node.structural_hash().store(0, Ordering::Release);
     }
 
+    /// Given a group of node IDs, partition their metadata into two buckets:
+    ///
+    /// - `meta_for_node`: keys where all nodes agree (same value) **or** where every node
+    ///   has a single-valued `Strings` entry and we can map each coordinate to its source
+    ///   value as a `PerCoordStrings` vector.
+    /// - `meta_for_children`: keys where nodes disagree and the per-coord condition is not
+    ///   met.  The union of all values is stored here; the caller distributes it to the
+    ///   children (or to the node itself when it has no children).
+    ///
+    /// `original_coords[i]` must be the coordinates of `group[i]` **before** any merging.
+    /// `merged_coords` is the union of all original coordinates.
+    fn compute_merged_metadata(
+        &self,
+        group: &[NodeIdx],
+        original_coords: &[Coordinates],
+        merged_coords: &Coordinates,
+    ) -> (Metadata, Metadata) {
+        let all_keys: std::collections::HashSet<String> = group
+            .iter()
+            .flat_map(|&id| self.node_ref(id).unwrap().metadata().keys().cloned())
+            .collect();
+
+        let mut meta_for_node = Metadata::new();
+        let mut meta_for_children = Metadata::new();
+
+        // Pre-compute per-coord enumerability once (not per-key).
+        let merged_strings = merged_coords.iter_sorted_strings();
+        let merged_enumerable =
+            !merged_strings.is_empty() && merged_strings.len() == merged_coords.len();
+        let orig_enumerable =
+            original_coords.iter().all(|c| c.len() > 0 && c.iter_sorted_strings().len() == c.len());
+
+        for key in &all_keys {
+            let values: Vec<Option<MetadataValues>> = group
+                .iter()
+                .map(|&id| self.node_ref(id).unwrap().metadata().get(key).cloned())
+                .collect();
+
+            let first = values[0].as_ref();
+            let all_same = values.iter().all(|v| v.as_ref() == first);
+
+            if all_same {
+                // All nodes carry the same value (including "no value") — promote to node.
+                if let Some(v) = first {
+                    meta_for_node.set(key.clone(), v.clone());
+                }
+            } else {
+                // Values differ.  Try to produce a PerCoordStrings vector when:
+                //   1. Every group member has this key (no None),
+                //   2. Every value is a `Strings` set (any number of values),
+                //   3. Both the merged coords and every original coords set are
+                //      fully enumerable (no RangeSet / Mixed).
+                let can_use_per_coord = merged_enumerable
+                    && orig_enumerable
+                    && values.iter().all(|v| {
+                        v.as_ref().map_or(false, |mv| matches!(mv, MetadataValues::Strings(_)))
+                    });
+
+                if can_use_per_coord {
+                    // Build per-coord string-set vector aligned with merged sorted order.
+                    // Each merged coord belongs to exactly one group member; look up that
+                    // member's full Strings set and store it as the inner Vec.
+                    let per_coord: Vec<Vec<String>> = merged_strings
+                        .iter()
+                        .map(|coord_str| {
+                            original_coords
+                                .iter()
+                                .enumerate()
+                                .find(|(_, orig)| {
+                                    orig.iter_sorted_strings().iter().any(|s| s == coord_str)
+                                })
+                                .and_then(|(mi, _)| {
+                                    values.get(mi)?.as_ref().map(|mv| {
+                                        let mut v = mv.as_string_vec();
+                                        v.sort();
+                                        v
+                                    })
+                                })
+                                .unwrap_or_default()
+                        })
+                        .collect();
+
+                    // Guard: every coord must have resolved to a non-empty inner set.
+                    if per_coord.iter().all(|inner| !inner.is_empty()) {
+                        meta_for_node.set(key.clone(), MetadataValues::PerCoordStrings(per_coord));
+                        continue; // skip the union / meta_for_children path
+                    }
+                }
+
+                // Fallback: compute union of all non-empty values → push to children.
+                let union_val = values
+                    .iter()
+                    .filter_map(|v| v.as_ref())
+                    .cloned()
+                    .reduce(|acc, v| acc.merge_with(&v))
+                    .unwrap_or(MetadataValues::Empty);
+
+                if !union_val.is_empty() {
+                    meta_for_children.set(key.clone(), union_val);
+                }
+            }
+        }
+
+        (meta_for_node, meta_for_children)
+    }
+
+    /// Apply the two-bucket metadata result to a node:
+    ///
+    /// - `meta_for_node` is written directly onto `node_id`.
+    /// - `meta_for_children` is merged into each direct child of `node_id`.
+    ///   If `node_id` is a leaf (no children), `meta_for_children` is merged
+    ///   onto `node_id` itself instead — there is nowhere lower to push it.
+    fn apply_node_metadata(
+        &mut self,
+        node_id: NodeIdx,
+        meta_for_node: Metadata,
+        meta_for_children: Metadata,
+    ) {
+        *self.node_mut(node_id).unwrap().metadata_mut() = meta_for_node;
+
+        if meta_for_children.is_empty() {
+            return;
+        }
+
+        let children: Vec<NodeIdx> = {
+            let node = self.node_ref(node_id).unwrap();
+            node.children().values().flat_map(|v| v.iter().copied()).collect()
+        };
+
+        if children.is_empty() {
+            // Leaf: merge the disagreed values onto the node itself.
+            let existing = self.node_ref(node_id).unwrap().metadata().clone();
+            *self.node_mut(node_id).unwrap().metadata_mut() =
+                existing.merge_with(&meta_for_children);
+        } else {
+            // Inner node: push the disagreed values down to every child.
+            for child_id in children {
+                let existing = self.node_ref(child_id).unwrap().metadata().clone();
+                let new_meta = existing.merge_with(&meta_for_children);
+                *self.node_mut(child_id).unwrap().metadata_mut() = new_meta;
+            }
+        }
+    }
+
     /// Deduplicates the children of a node by merging nodes with identical structural hashes.
+    /// Metadata from dropped duplicates is merged into the kept node's metadata.
     fn dedup_children_locally(&mut self, parent: NodeIdx) {
         let snapshot = {
             let node = self.node_ref(parent).unwrap();
@@ -69,8 +219,29 @@ impl Qube {
 
             for &child in &kids {
                 let h = self.compute_structural_hash(child);
+                // Copy the kept-node ID (NodeIdx: Copy) so we release the borrow on `seen`.
+                let existing = seen.get(&h).copied();
 
-                if seen.insert(h, child).is_none() {
+                if let Some(kept_id) = existing {
+                    // The structural hash of an inner node covers its dimension and
+                    // its subtree but NOT its own coords, so two siblings such as
+                    // `dim_0=0 -> dim_1=0/1` and `dim_0=1 -> dim_1=0/1` collide.
+                    // They describe different data, so union their coords onto the
+                    // kept node rather than discarding the duplicate's values.
+                    let dup_coords = self.node_ref(child).unwrap().coords().clone();
+                    if *self.node_ref(kept_id).unwrap().coords() != dup_coords {
+                        self.node_mut(kept_id).unwrap().coords_mut().extend(&dup_coords);
+                    }
+
+                    // Merge this duplicate's metadata into the kept node.
+                    let dup_meta = self.node_ref(child).unwrap().metadata().clone();
+                    if !dup_meta.is_empty() {
+                        let kept_meta = self.node_ref(kept_id).unwrap().metadata().clone();
+                        let merged = kept_meta.merge_with(&dup_meta);
+                        *self.node_mut(kept_id).unwrap().metadata_mut() = merged;
+                    }
+                } else {
+                    seen.insert(h, child);
                     unique.push(child);
                 }
             }
@@ -135,16 +306,60 @@ impl Qube {
     }
 
     /// Compresses the tree by merging nodes, pruning empty nodes, and deduplicating nodes.
-    pub fn compress(&mut self) {
-        // This method performs the following steps:
-        // 1. Compresses nodes recursively.
-        // 2. Prunes empty nodes from the tree.
-        // 3. Deduplicates nodes that may have become identical after compression.
+    /// Step-by-step version of [`compress`] that calls a callback after each
+    /// internal pass, so callers can measure the effect of each step.
+    /// Callback receives a label and the Qube at that point.
+    pub fn compress_instrumented<F: FnMut(&str, &Qube)>(&mut self, mut cb: F) {
+        let root = self.root();
+        self.compress_recursively(root);
+        cb("after compress_recursively", self);
+        self.prune_empty_nodes_recursively(root);
+        cb("after prune_empty_nodes", self);
+        self.dedup_recursively(root);
+        cb("after dedup_recursively", self);
+        self.consolidate_all_metadata(root);
+        cb("after consolidate_metadata", self);
+    }
 
+    /// After all structural operations, runs a bottom-up metadata consolidation pass so
+    /// that uniform metadata is bubbled up to the highest node where it applies.
+    pub fn compress(&mut self) {
         let root = self.root();
         self.compress_recursively(root);
         self.prune_empty_nodes_recursively(root);
         self.dedup_recursively(root);
+        // Bubble up consistent metadata after all structural merging is done.
+        self.consolidate_all_metadata(root);
+    }
+
+    /// Run only the `try_compress` range-encoding step on every node, without
+    /// the preceding structural `compress()` pass.  Useful for isolating whether
+    /// data loss comes from structural merging or from range compression.
+    pub fn try_compress_all_nodes(&mut self) {
+        let ids: Vec<NodeIdx> = self.all_node_ids();
+        for id in ids {
+            if let Some(node) = self.node_mut(id) {
+                node.coords_mut().try_compress();
+            }
+        }
+    }
+
+    /// Like [`compress`] but also compresses runs of consecutive integers or
+    /// datetimes on every node into compact `RangeSet` form.
+    ///
+    /// Call this instead of `compress()` when you want human-readable range
+    /// notation (e.g. `step=0/to/24/by/6`, `date=2020-01-01/to/2020-01-31`)
+    /// in the output.  Use plain `compress()` when you need individual values
+    /// to remain explicit (e.g. for downstream set-arithmetic or exact matching).
+    pub fn compress_to_ranges(&mut self) {
+        self.compress();
+        // Walk every node and attempt to compact its coordinate set into ranges.
+        let ids: Vec<NodeIdx> = self.all_node_ids();
+        for id in ids {
+            if let Some(node) = self.node_mut(id) {
+                node.coords_mut().try_compress();
+            }
+        }
     }
 
     /// Recursively compresses the tree, merging coordinates of child nodes where possible.
@@ -161,7 +376,11 @@ impl Qube {
         let all_children_are_leaves = children.iter().all(|&id| self.is_leaf(id));
 
         if all_children_are_leaves {
-            // group by dimension
+            // Group by (dimension, metadata): only merge leaves that share both
+            // the same dimension AND identical direct metadata.  Leaves with
+            // different provenance metadata (e.g. location=lumi vs location=mn5)
+            // must NOT be merged together, as that would create spurious multi-
+            // valued provenance and lose per-leaf source information.
             let mut by_dim: HashMap<Dimension, Vec<NodeIdx>> = HashMap::new();
 
             for &child in &children {
@@ -169,12 +388,35 @@ impl Qube {
                 by_dim.entry(dim).or_default().push(child);
             }
 
-            for group in by_dim.values() {
-                if group.len() > 1 {
-                    self.merge_coords(group.to_vec());
+            for dim_group in by_dim.values() {
+                // Further partition by metadata equality.
+                // Metadata does not implement Hash so we use a linear scan.
+                // Groups are small (usually 1-10 nodes), so O(n²) is fine.
+                let mut meta_groups: Vec<(crate::metadata::Metadata, Vec<NodeIdx>)> = Vec::new();
+
+                for &child_id in dim_group {
+                    let meta = self.node_ref(child_id).unwrap().metadata().clone();
+                    let mut placed = false;
+                    for (group_meta, group_nodes) in &mut meta_groups {
+                        if *group_meta == meta {
+                            group_nodes.push(child_id);
+                            placed = true;
+                            break;
+                        }
+                    }
+                    if !placed {
+                        meta_groups.push((meta, vec![child_id]));
+                    }
+                }
+
+                for (_, group) in meta_groups {
+                    if group.len() > 1 {
+                        self.merge_coords(group);
+                    }
                 }
             }
 
+            self.remove_empty_children(node_id);
             return;
         }
 
@@ -198,29 +440,298 @@ impl Qube {
 
             self.merge_coords(group.clone());
         }
+
+        self.remove_empty_children(node_id);
     }
 
-    /// Merges the coordinates of a group of nodes into the first node in the group.
-    fn merge_coords(&mut self, group: Vec<NodeIdx>) {
-        // The coordinates of all other nodes in the group are set to `Coordinates::Empty`.
+    /// Drop direct children whose coords were emptied by `merge_coords`.
+    ///
+    /// Without this, the emptied placeholders remain until the later
+    /// `prune_empty_nodes_recursively` pass, and they are included in this node's
+    /// structural hash in the meantime. Two siblings that are really identical
+    /// then hash differently, so the parent fails to merge them.
+    fn remove_empty_children(&mut self, node_id: NodeIdx) {
+        let empty: std::collections::HashSet<NodeIdx> = {
+            let node = self.node_ref(node_id).unwrap();
+            node.children()
+                .values()
+                .flat_map(|v| v.iter().copied())
+                .filter(|&c| matches!(self.node_ref(c).unwrap().coords(), Coordinates::Empty))
+                .collect()
+        };
+        if empty.is_empty() {
+            return;
+        }
+        let node = self.node_mut(node_id).unwrap();
+        for kids in node.children_mut().values_mut() {
+            kids.retain(|id| !empty.contains(id));
+        }
+        node.children_mut().retain(|_, kids| !kids.is_empty());
+        self.invalidate_structural_hash(node_id);
+    }
 
+    /// Merges the coordinates of a group of nodes into the first node in the group,
+    /// then attempts to compress the merged coordinates into a tighter range representation.
+    fn merge_coords(&mut self, group: Vec<NodeIdx>) {
         assert!(!group.is_empty());
 
-        let mut merged: Coordinates = { self.node_ref(group[0]).unwrap().coords().clone() };
+        // 1. Snapshot each group member's original coordinates BEFORE any merging.
+        //    `compute_merged_metadata` needs these to build the per-coord mapping.
+        let original_coords: Vec<Coordinates> =
+            group.iter().map(|&id| self.node_ref(id).unwrap().coords().clone()).collect();
 
-        for &id in group.iter().skip(1) {
-            let coords = self.node_ref(id).unwrap().coords();
+        // 2. Build the merged coordinate set (union of all originals).
+        let mut merged: Coordinates = original_coords[0].clone();
+        for coords in &original_coords[1..] {
             merged.extend(coords);
         }
 
+        // 3. Write merged coords onto group[0].
         {
             let node = self.node_mut(group[0]).unwrap();
-            *node.coords_mut() = merged;
+            *node.coords_mut() = merged.clone();
         }
 
+        // 4. Compute the two-bucket metadata split using the pre-merge snapshots.
+        let (meta_for_node, meta_for_children) =
+            self.compute_merged_metadata(&group, &original_coords, &merged);
+
+        // 5. Apply: agreed / per-coord metadata on the node, disagreed pushed to children.
+        self.apply_node_metadata(group[0], meta_for_node, meta_for_children);
+
+        // 6. Transfer children from each duplicate node to group[0], then empty the duplicate.
+        //
+        //    When two inner nodes are merged (same structural hash → same subtree structure)
+        //    their children must be combined in group[0] so that the subsequent
+        //    `dedup_recursively` pass can merge structurally-identical children and union
+        //    their metadata.  Without this transfer, children of the duplicate nodes are
+        //    orphaned when the duplicate's coords are set to Empty and the node is pruned,
+        //    and any metadata they carry (e.g. provenance src=B) is silently lost.
+        //
+        //    Example:
+        //      class=1 (→ param=1 {src:A}) and class=2 (→ param=1 {src:B}) are merged to
+        //      class=1/2.  We transfer param=1 {src:B} to class=1/2's children; dedup then
+        //      merges it with param=1 {src:A} → param=1 {src:[A,B]}.
         for &id in group.iter().skip(1) {
+            // Collect dim→kids from the duplicate node before we clear it.
+            let dup_children: Vec<(Dimension, Vec<NodeIdx>)> = self
+                .node_ref(id)
+                .map(|n| {
+                    n.children()
+                        .iter()
+                        .map(|(&d, kids)| (d, kids.iter().copied().collect()))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            for (dim, kid_ids) in dup_children {
+                for &kid_id in &kid_ids {
+                    // Reparent the transferred child to group[0].
+                    if let Some(kid) = self.node_mut(kid_id) {
+                        *kid.parent_mut() = Some(group[0]);
+                    }
+                }
+                // Append the transferred kids to group[0]'s children list for this dim.
+                if let Some(kept) = self.node_mut(group[0]) {
+                    let entry = kept.children_mut().entry(dim).or_insert_with(TinyVec::new);
+                    for kid_id in kid_ids {
+                        entry.push(kid_id);
+                    }
+                }
+            }
+
+            // Clear the duplicate's children (already transferred) and empty its coords.
+            if let Some(dup) = self.node_mut(id) {
+                dup.children_mut().clear();
+            }
             let node = self.node_mut(id).unwrap();
             *node.coords_mut() = Coordinates::Empty;
         }
+
+        // Invalidate group[0]'s cached structural hash: its children list changed.
+        self.invalidate_structural_hash(group[0]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Coordinates;
+    use crate::datacube::Datacube;
+    use crate::qube::Qube;
+    use crate::select::SelectMode;
+
+    /// Count the total number of individual data points in a Qube by summing
+    /// the product of coordinate lengths across all leaf datacubes.
+    ///
+    /// Empty coordinates (including the virtual root node) are excluded from
+    /// each datacube's product so they don't zero it out.
+    fn total_data_points(qube: &Qube) -> usize {
+        qube.to_datacubes()
+            .iter()
+            .map(|dc| {
+                let non_empty: Vec<usize> =
+                    dc.coordinates().values().filter(|c| !c.is_empty()).map(|c| c.len()).collect();
+                if non_empty.is_empty() { 0 } else { non_empty.into_iter().product() }
+            })
+            .sum()
+    }
+
+    fn make_qube(datacubes: &[&[(&str, &str)]]) -> Qube {
+        let mut qube = Qube::new();
+        for &pairs in datacubes {
+            let mut dc = Datacube::new();
+            for &(k, v) in pairs {
+                dc.add_coordinate(k, Coordinates::from_string(v));
+            }
+            let mut part = Qube::from_datacube(&dc, None);
+            qube.append(&mut part);
+        }
+        qube
+    }
+
+    /// Verify that `compress_to_ranges` does not change the total number of
+    /// individual data points represented by the Qube.
+    #[test]
+    fn compress_to_ranges_preserves_data_point_count() {
+        // Build a Qube from several datacubes with consecutive integer steps
+        // so that try_compress() will actually merge them into RangeSet form.
+        let mut qube = make_qube(&[
+            &[("class", "od"), ("stream", "oper"), ("step", "0"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "6"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "12"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "18"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "24"), ("param", "t/u")],
+            // A second stream with a different (non-contiguous) step set so we
+            // exercise both merged and non-merged paths.
+            &[("class", "od"), ("stream", "enfo"), ("step", "0"), ("param", "z")],
+            &[("class", "od"), ("stream", "enfo"), ("step", "120"), ("param", "z")],
+            &[("class", "od"), ("stream", "enfo"), ("step", "240"), ("param", "z")],
+        ]);
+
+        let before = total_data_points(&qube);
+        assert!(before > 0, "test Qube must be non-empty before compression");
+
+        qube.compress_to_ranges();
+
+        let after = total_data_points(&qube);
+        assert_eq!(
+            before, after,
+            "compress_to_ranges changed the data-point count: {} → {}",
+            before, after
+        );
+    }
+
+    /// Verify that a Qube with a single datacube round-trips through
+    /// `compress_to_ranges` without losing any data points.
+    #[test]
+    fn compress_to_ranges_single_datacube_is_identity() {
+        let mut qube = make_qube(&[&[
+            ("date", "20200101/20200102/20200103/20200104/20200105"),
+            ("time", "0000/1200"),
+            ("step", "0/6/12/18/24"),
+            ("param", "t/u/v"),
+        ]]);
+
+        let before = total_data_points(&qube);
+        qube.compress_to_ranges();
+        let after = total_data_points(&qube);
+
+        assert_eq!(
+            before, after,
+            "single-datacube compress_to_ranges changed count: {} → {}",
+            before, after
+        );
+    }
+
+    /// After `compress_to_ranges` folds steps into a RangeSet, selecting an
+    /// individual step value that was part of the range must return a non-empty
+    /// Qube containing exactly the right data points.
+    #[test]
+    fn select_individual_value_from_range_compressed_qube() {
+        let mut qube = make_qube(&[
+            &[("class", "od"), ("stream", "oper"), ("step", "0"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "6"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "12"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "18"), ("param", "t/u")],
+            &[("class", "od"), ("stream", "oper"), ("step", "24"), ("param", "t/u")],
+        ]);
+        qube.compress_to_ranges();
+
+        // Select step=6 out of the range-compressed qube.
+        let result = qube
+            .select(&[("step", Coordinates::from_string("6"))], SelectMode::Default)
+            .expect("select should succeed");
+
+        let dcs = result.to_datacubes();
+        assert!(!dcs.is_empty(), "select(step=6) returned empty qube");
+
+        // Every returned datacube must contain step=6.
+        for dc in &dcs {
+            let steps = dc
+                .coordinates()
+                .get("step")
+                .expect("step dimension must be present")
+                .iter_sorted_strings();
+            assert!(
+                steps.iter().any(|s| s == "6"),
+                "returned datacube does not contain step=6: {steps:?}"
+            );
+        }
+
+        // Total data points must equal the single-step slice (param=t/u → 2).
+        assert_eq!(
+            total_data_points(&result),
+            2,
+            "select(step=6) should yield exactly 2 data points (param t and u)"
+        );
+    }
+
+    /// Two independently range-compressed Qubes can be appended and
+    /// re-compressed without data loss or explosion.
+    #[test]
+    fn append_and_recompress_two_range_compressed_qubes() {
+        // First half: steps 0..24 for stream=oper.
+        let mut qube_a = make_qube(&[
+            &[("class", "od"), ("stream", "oper"), ("step", "0"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "6"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "12"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "18"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "24"), ("param", "t")],
+        ]);
+        qube_a.compress_to_ranges();
+        let pts_a = total_data_points(&qube_a);
+
+        // Second half: steps 30..54 for stream=oper (different range, same dim layout).
+        let mut qube_b = make_qube(&[
+            &[("class", "od"), ("stream", "oper"), ("step", "30"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "36"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "42"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "48"), ("param", "t")],
+            &[("class", "od"), ("stream", "oper"), ("step", "54"), ("param", "t")],
+        ]);
+        qube_b.compress_to_ranges();
+        let pts_b = total_data_points(&qube_b);
+
+        // Merge and re-compress.
+        qube_a.append(&mut qube_b);
+        qube_a.compress_to_ranges();
+        let pts_merged = total_data_points(&qube_a);
+
+        assert_eq!(
+            pts_merged,
+            pts_a + pts_b,
+            "merged+recompressed qube should contain exactly pts_a({pts_a}) + pts_b({pts_b}) = {} points, got {pts_merged}",
+            pts_a + pts_b,
+        );
+
+        // The merged qube must still answer selects correctly.
+        let result = qube_a
+            .select(&[("step", Coordinates::from_string("30"))], SelectMode::Default)
+            .expect("select on merged qube should succeed");
+        assert_eq!(
+            total_data_points(&result),
+            1,
+            "select(step=30) from merged qube should yield 1 data point"
+        );
     }
 }

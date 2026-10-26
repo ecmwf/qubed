@@ -39,4 +39,3 @@ root
 ```
 
 Qubed provides all the algorithms on this data structure you would expect, such as unions, compression, search, filtering etc.
-

@@ -104,6 +104,7 @@ impl Coordinates {
                     self_mixed.integers.extend(&mixed.integers);
                     self_mixed.floats.extend(&mixed.floats);
                     self_mixed.strings.extend(&mixed.strings);
+                    self_mixed.datetimes.extend(&mixed.datetimes);
                 }
                 _ => {
                     self.convert_to_mixed().extend(new_coords);

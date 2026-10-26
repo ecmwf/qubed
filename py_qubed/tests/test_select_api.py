@@ -139,13 +139,13 @@ def test_all_unique_dim_coords():
     assert isinstance(dim_coords["param"], list)
 
     # Check that coordinates contain expected values
-    assert "1" in dim_coords["class"]
-    assert "2" in dim_coords["class"]
+    assert 1 in dim_coords["class"]
+    assert 2 in dim_coords["class"]
     assert "0001" in dim_coords["expver"]
     assert "0002" in dim_coords["expver"]
-    assert "1" in dim_coords["param"]
-    assert "2" in dim_coords["param"]
-    assert "3" in dim_coords["param"]
+    assert 1 in dim_coords["param"]
+    assert 2 in dim_coords["param"]
+    assert 3 in dim_coords["param"]
 
 
 def test_compress():
@@ -283,8 +283,7 @@ def test_default():
         └── param=2"""
 
     assert (
-        default_result.to_ascii()
-        == qubed.Qube.from_ascii(default_expected).to_ascii()
+        default_result.to_ascii() == qubed.Qube.from_ascii(default_expected).to_ascii()
     )
 
 
@@ -299,7 +298,7 @@ def test_drop():
         └── param=2"""
 
     q = qubed.Qube.from_ascii(input_qube)
-    q.drop(["expver"])
+    q = q.drop(["expver"])
 
     expected = r"""root
 └── class=1
@@ -319,7 +318,7 @@ def test_squeeze():
         └── param=2"""
 
     q = qubed.Qube.from_ascii(input_qube)
-    q.squeeze()
+    q = q.squeeze()
 
     # class has only one value (1), so it gets squeezed out
     expected = r"""root
@@ -377,3 +376,79 @@ def test_select_deep_key_multi_level_unselected_prefix():
     assert selected.to_ascii() == qubed.Qube.from_ascii(expected).to_ascii(), (
         "only class=1/expver=0001 contains param=1; all other branches must be pruned"
     )
+
+
+# ---------------------------------------------------------------------------
+# Strict mode
+# ---------------------------------------------------------------------------
+
+import pytest  # noqa: E402
+
+BRANCHY = r"""root
+├── class=1
+│   ├── expver=0001
+│   │   ├── param=1
+│   │   └── param=2
+│   └── expver=0002
+│       ├── param=1
+│       └── param=2
+└── class=2
+    ├── expver=0001
+    │   ├── param=1
+    │   ├── param=2
+    │   └── param=3
+    └── expver=0002
+        ├── param=1
+        └── param=2"""
+
+
+def test_select_strict_all_values_present():
+    q = qubed.Qube.from_ascii(BRANCHY)
+    strict = q.select({"class": [1], "param": [1]}, "strict")
+    default = q.select({"class": [1], "param": [1]})
+    assert strict.to_ascii() == default.to_ascii()
+
+
+def test_select_strict_value_only_in_one_branch():
+    """param=3 exists only under class=2/expver=0001; other branches lacking it are fine."""
+    q = qubed.Qube.from_ascii(BRANCHY)
+    selected = q.select({"param": [3]}, "strict")
+    expected = r"""root
+└── class=2
+    └── expver=0001
+        └── param=3"""
+    assert selected.to_ascii() == qubed.Qube.from_ascii(expected).to_ascii()
+
+
+def test_select_strict_values_split_across_branches():
+    q = qubed.Qube.from_ascii(BRANCHY)
+    request = {"class": [1, 2], "param": [1, 3]}
+    assert q.select(request, "strict").to_ascii() == q.select(request).to_ascii()
+
+
+def test_select_strict_missing_value_raises():
+    q = qubed.Qube.from_ascii(BRANCHY)
+    with pytest.raises(ValueError, match="class=9"):
+        q.select({"class": [1, 9], "param": [1]}, "strict")
+    # Default mode just ignores the missing value.
+    q.select({"class": [1, 9], "param": [1]})
+
+
+def test_select_strict_value_only_in_filtered_out_branch_raises():
+    """param=3 exists only under class=2, which class=1 excludes."""
+    q = qubed.Qube.from_ascii(BRANCHY)
+    with pytest.raises(ValueError, match="param=3"):
+        q.select({"class": [1], "param": [3]}, "strict")
+
+
+def test_select_strict_unknown_dimension_raises():
+    q = qubed.Qube.from_ascii(BRANCHY)
+    with pytest.raises(ValueError, match="levtype"):
+        q.select({"levtype": ["sfc"]}, "strict")
+
+
+def test_select_mode_is_case_insensitive_and_validated():
+    q = qubed.Qube.from_ascii(BRANCHY)
+    q.select({"param": [1]}, "STRICT")
+    with pytest.raises(ValueError, match="unknown select mode"):
+        q.select({"param": [1]}, "bogus")

@@ -10,7 +10,7 @@ Qubes represent sets of identifiers, so the familiar set operations are all defi
 |---|---|---|
 | **Union** | `a.append(&mut b)` | All identifiers in A or B (or both) |
 | **Intersection** | `select` with intersection logic | Identifiers in both A and B |
-| **Difference** | internal set operation | Identifiers in A but not B |
+| **Difference** | `a.subtract(&b)` | Identifiers in A but not B |
 | **Symmetric difference** | internal set operation | Identifiers in exactly one of A or B |
 
 ### How It Works
