@@ -1523,3 +1523,119 @@ fn partition_by_metadata_strings_split_like_per_coord_strings() {
     assert!(lumi_has_0001, "lumi bucket must contain expver=0001 (first sorted coord)");
     assert!(mn5_has_0002, "mn5 bucket must contain expver=0002 (second sorted coord)");
 }
+
+// ===========================================================================
+//  Metadata merging with differently-interned dimension order (`reordering`)
+// ===========================================================================
+//
+// These tests mirror `leaf_provenance_lumi_mn5_merge` above, but build the two
+// input Qubes so that they intern the shared dimension names ("class", "param")
+// in a different order. Without `reordering=true`, `append`/`append_opts` match
+// dimensions by their raw interner id, so "class" in one Qube can collide with
+// "param" in the other purely because they happen to share the same id. This
+// would misattribute metadata (and coordinates) across unrelated dimensions.
+// With `reordering=true`, a by-name translation map is built first so metadata
+// (and coordinates) are always merged onto the correct dimension regardless of
+// interning order.
+
+/// Build a Qube which interns `first_dim` before `second_dim` by creating and
+/// then removing a throwaway child under `first_dim`. Interning is permanent
+/// (the underlying string interner never forgets a name), so this lets us
+/// control the relative interning order of two dimension names using only the
+/// public API, without relying on any particular tree shape surviving.
+fn intern_dim_before(qube: &mut Qube, first_dim: &str, second_dim: &str) {
+    let root = qube.root();
+    let throwaway = qube
+        .get_or_create_child(first_dim, root, Some(Coordinates::from_string("__throwaway__")))
+        .unwrap();
+    qube.remove_node(throwaway).unwrap();
+    let _ = second_dim; // second_dim is interned afterwards by the caller's real tree construction
+}
+
+#[test]
+fn append_opts_reordering_true_merges_metadata_by_name_despite_different_interning_order() {
+    // ---- Build "lumi" Qube: interns "class" before "param" (the natural order). ----
+    // root → class=1 → param=100 (lumi-only)
+    //                → param=200 (shared with mn5)
+    let mut qa = Qube::new();
+    let root_a = qa.root();
+    let c1_a = qa.get_or_create_child("class", root_a, Some(1.into())).unwrap();
+    let p100 = qa.get_or_create_child("param", c1_a, Some(100.into())).unwrap();
+    let p200_a = qa.get_or_create_child("param", c1_a, Some(200.into())).unwrap();
+    qa.set_metadata(p100, "location", MetadataValues::single_string("lumi")).unwrap();
+    qa.set_metadata(p200_a, "location", MetadataValues::single_string("lumi")).unwrap();
+
+    // ---- Build "mn5" Qube: force "param" to be interned before "class", so that
+    // `class` in qb shares a raw interner id with `param` in qa. ----
+    // root → class=1 → param=200 (shared with lumi)
+    //                → param=300 (mn5-only)
+    let mut qb = Qube::new();
+    intern_dim_before(&mut qb, "param", "class");
+    let root_b = qb.root();
+    let c1_b = qb.get_or_create_child("class", root_b, Some(1.into())).unwrap();
+    let p200_b = qb.get_or_create_child("param", c1_b, Some(200.into())).unwrap();
+    let p300 = qb.get_or_create_child("param", c1_b, Some(300.into())).unwrap();
+    qb.set_metadata(p200_b, "location", MetadataValues::single_string("mn5")).unwrap();
+    qb.set_metadata(p300, "location", MetadataValues::single_string("mn5")).unwrap();
+
+    // ---- Merge with reordering=true: dimensions must be matched by name. ----
+    qa.append_opts(&mut qb, true);
+
+    let class_node = find_child(&qa, qa.root(), "class", "1");
+    let param100 = find_child(&qa, class_node, "param", "100");
+    let param200 = find_child(&qa, class_node, "param", "200");
+    let param300 = find_child(&qa, class_node, "param", "300");
+
+    let loc100 = qa
+        .resolve_all_metadata(param100, &Default::default())
+        .get("location")
+        .cloned()
+        .expect("param=100 must have a resolved location");
+    let loc200 = qa
+        .resolve_all_metadata(param200, &Default::default())
+        .get("location")
+        .cloned()
+        .expect("param=200 must have a resolved location");
+    let loc300 = qa
+        .resolve_all_metadata(param300, &Default::default())
+        .get("location")
+        .cloned()
+        .expect("param=300 must have a resolved location");
+
+    assert!(loc100.contains_string("lumi"), "param=100 must include lumi; got {:?}", loc100);
+    assert!(!loc100.contains_string("mn5"), "param=100 must NOT include mn5; got {:?}", loc100);
+    assert_eq!(loc100.len(), 1, "param=100 must have exactly 1 location; got {:?}", loc100);
+
+    assert!(loc300.contains_string("mn5"), "param=300 must include mn5; got {:?}", loc300);
+    assert!(!loc300.contains_string("lumi"), "param=300 must NOT include lumi; got {:?}", loc300);
+    assert_eq!(loc300.len(), 1, "param=300 must have exactly 1 location; got {:?}", loc300);
+
+    assert!(loc200.contains_string("lumi"), "param=200 must include lumi; got {:?}", loc200);
+    assert!(loc200.contains_string("mn5"), "param=200 must include mn5; got {:?}", loc200);
+    assert_eq!(loc200.len(), 2, "param=200 must have exactly 2 locations; got {:?}", loc200);
+}
+
+/// Without `reordering`, the default `append` matches dimensions by raw interner id.
+/// When the two input Qubes intern "class"/"param" in a different order (as set up by
+/// `intern_dim_before`), the merge must not panic, but it can no longer guarantee that
+/// metadata (or coordinates) end up attributed to the correctly-named dimension — this
+/// documents why `reordering=true` must be used for Qubes built independently (e.g. from
+/// different data sources) that are not guaranteed to share a dimension interning order.
+#[test]
+fn append_default_reordering_false_does_not_guarantee_correct_metadata_merge_order() {
+    let mut qa = Qube::new();
+    let root_a = qa.root();
+    let c1_a = qa.get_or_create_child("class", root_a, Some(1.into())).unwrap();
+    let p100 = qa.get_or_create_child("param", c1_a, Some(100.into())).unwrap();
+    qa.set_metadata(p100, "location", MetadataValues::single_string("lumi")).unwrap();
+
+    let mut qb = Qube::new();
+    intern_dim_before(&mut qb, "param", "class");
+    let root_b = qb.root();
+    let c1_b = qb.get_or_create_child("class", root_b, Some(1.into())).unwrap();
+    let p300 = qb.get_or_create_child("param", c1_b, Some(300.into())).unwrap();
+    qb.set_metadata(p300, "location", MetadataValues::single_string("mn5")).unwrap();
+
+    // Must not panic, regardless of the mismatched interning order.
+    qa.append(&mut qb);
+}

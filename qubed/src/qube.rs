@@ -240,6 +240,12 @@ impl Qube {
         map
     }
 
+    /// Alias for `all_unique_dim_coords` — returns every dimension and its
+    /// merged coordinate values across the whole tree.
+    pub fn axes(&mut self) -> BTreeMap<String, Coordinates> {
+        self.all_unique_dim_coords()
+    }
+
     /// Returns the set of all dimension names present anywhere in the Qube.
     ///
     /// This is the set of keys from [`all_unique_dim_coords`].

@@ -106,3 +106,24 @@ When two Qubes are merged via `append`:
 5. After all merging is complete, `compress()` is called to re-compress the result.
 
 The `append_many` method optimizes merging many Qubes by batching: it performs intermediate compression every 500 Qubes to prevent unbounded tree growth.
+
+### The `reordering` Flag and Dimension Translation
+
+Dimension names are interned to integer IDs per-Qube (see the interner in `key_store`). When
+grouping children by dimension during `node_merge`, these integer IDs are compared directly by
+default (`reordering=false`). This is fast, but assumes both Qubes being merged interned their
+dimensions in the same order — if not, two different dimension names could end up sharing the
+same integer ID, causing their coordinates to be incorrectly grouped (or in the worst case,
+intersected against each other) instead of kept separate.
+
+When `reordering=true` is passed to `append_opts`/`append_many_opts`, a translation map
+(`HashMap<Dimension, Dimension>`) is built before merging by interning every dimension name from
+`other` into `self`'s key_store and recording the ID correspondence. During `node_merge`, children
+from `other` are grouped using their *translated* dimension ID, so dimensions are always matched
+by name rather than by incidental integer ID overlap. This also enables correctly handling the
+case where a dimension exists only in `other`: its subtree is copied wholesale into `self` rather
+than silently dropped or merged into the wrong dimension's children.
+
+`reordering=true` has a small up-front cost (interning all of `other`'s dimension names) and
+should be used whenever the two Qubes being merged cannot be guaranteed to share a consistent
+dimension ordering.

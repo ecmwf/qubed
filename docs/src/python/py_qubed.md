@@ -177,7 +177,7 @@ for dc in q.to_datacubes():
 
 ### Merging
 
-#### `append(other: Qube) -> None`
+#### `append(other: Qube, reordering: bool = False) -> None`
 
 Merge another Qube into this one. The result is automatically compressed. `other` becomes empty.
 
@@ -188,7 +188,25 @@ a.append(b)
 print(a)
 ```
 
-#### `append_many(others: list[Qube]) -> None`
+By default (`reordering=False`), dimensions in `self` and `other` are matched by their raw
+internal interner ID. This is fast and correct as long as both Qubes were built with a
+consistent dimension ordering (e.g. the same `order` passed to `from_datacube`/`from_ascii`
+construction).
+
+If the two Qubes may have interned their dimension names in a different order — for example
+because they were built independently from different sources — pass `reordering=True`. This
+builds a name-based translation map before merging so that same-named dimensions are always
+matched correctly, regardless of interning order. This is safer but has a small extra up-front
+cost to build the translation map.
+
+```python
+# a and b both have dimensions "a", "b", "c" but interned in a different order.
+a = Qube.from_datacube({"a": "1", "b": "x", "c": "10"}, ["a", "b", "c"])
+b = Qube.from_datacube({"c": "20", "b": "y", "a": "2"}, ["c", "b", "a"])
+a.append(b, reordering=True)
+```
+
+#### `append_many(others: list[Qube], reordering: bool = False) -> None`
 
 Merge multiple Qubes at once:
 
@@ -198,7 +216,10 @@ qubes = [Qube.from_ascii(f"root\n└── class=c{i}, param=1") for i in range(
 base.append_many(qubes)
 ```
 
-#### `append_datacube(datacube: dict, order: list[str] | None = None, accept_existing_order: bool = False) -> None`
+`reordering` has the same meaning as for `append`: pass `True` if the Qubes being merged may not
+share a consistent dimension interning order.
+
+#### `append_datacube(datacube: dict[str, str], order: list[str] | None = None, accept_existing_order: bool = False) -> None`
 
 Merge a single flat datacube dictionary into this Qube in-place. This is a convenience wrapper around `from_datacube` + `append`: it constructs a temporary single-branch Qube from `datacube` and merges it, then compresses the result.
 
