@@ -80,6 +80,16 @@ impl Coordinates {
         let mut coords = Coordinates::Empty;
         let split: Vec<&str> = s.split('/').collect();
 
+        // When multiple values are present, ensure consistent typing:
+        // if all parse as integers but some have leading zeros, keep all as strings.
+        let all_int = split.iter().all(|p| p.parse::<i32>().is_ok());
+        let any_leading_zero = split.iter().any(|p| {
+            p.len() > 1
+                && p.starts_with('0')
+                && p.chars().nth(1).map_or(false, |c| c.is_ascii_digit())
+        });
+        let force_strings = all_int && any_leading_zero;
+
         // ── Date auto-detection ──────────────────────────────────────────────
         // If every token looks like a date/datetime string, parse the whole list
         // as DateTimeCoordinates rather than falling through to integers/strings.
