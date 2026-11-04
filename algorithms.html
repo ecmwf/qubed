@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-ef4a359b.js";
+            window.path_to_searchindex_js = "searchindex-d41e0693.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-78e66672.js"></script>
@@ -270,6 +270,23 @@
 <li>After all merging is complete, <code>compress()</code> is called to re-compress the result.</li>
 </ol>
 <p>The <code>append_many</code> method optimizes merging many Qubes by batching: it performs intermediate compression every 500 Qubes to prevent unbounded tree growth.</p>
+<h3 id="the-reordering-flag-and-dimension-translation"><a class="header" href="#the-reordering-flag-and-dimension-translation">The <code>reordering</code> Flag and Dimension Translation</a></h3>
+<p>Dimension names are interned to integer IDs per-Qube (see the interner in <code>key_store</code>). When
+grouping children by dimension during <code>node_merge</code>, these integer IDs are compared directly by
+default (<code>reordering=false</code>). This is fast, but assumes both Qubes being merged interned their
+dimensions in the same order — if not, two different dimension names could end up sharing the
+same integer ID, causing their coordinates to be incorrectly grouped (or in the worst case,
+intersected against each other) instead of kept separate.</p>
+<p>When <code>reordering=true</code> is passed to <code>append_opts</code>/<code>append_many_opts</code>, a translation map
+(<code>HashMap&lt;Dimension, Dimension&gt;</code>) is built before merging by interning every dimension name from
+<code>other</code> into <code>self</code>’s key_store and recording the ID correspondence. During <code>node_merge</code>, children
+from <code>other</code> are grouped using their <em>translated</em> dimension ID, so dimensions are always matched
+by name rather than by incidental integer ID overlap. This also enables correctly handling the
+case where a dimension exists only in <code>other</code>: its subtree is copied wholesale into <code>self</code> rather
+than silently dropped or merged into the wrong dimension’s children.</p>
+<p><code>reordering=true</code> has a small up-front cost (interning all of <code>other</code>’s dimension names) and
+should be used whenever the two Qubes being merged cannot be guaranteed to share a consistent
+dimension ordering.</p>
 
                     </main>
 
