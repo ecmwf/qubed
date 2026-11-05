@@ -14,7 +14,8 @@ serde = "1.0.228"
 serde_json = "1.0.145"
 reqwest = { version = "0.12", features = ["blocking", "rustls-tls"], default-features = false, optional = true }
 # Native Rust FDB bindings (ecmwf/fdb/rust) used by the compact FDB scanner.
-fdb = { path = "../../../fdb/rust", optional = true }
+# fdb = { path = "../../../fdb/rust", optional = true }
+fdb = {git= "git = "https://github.com/ecmwf/fdb.git", optional = true}
 eckit = {version="2.5.0", optional = true}
 metkit = {version="1.22.0", optional = true}
 
