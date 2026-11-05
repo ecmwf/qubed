@@ -20,3 +20,7 @@
 
 - [py_qubed — Python Bindings](./python/py_qubed.md)
 - [py_qubed_meteo — Python Adapters](./python/py_qubed_meteo.md)
+
+# JavaScript / WASM API Reference
+
+- [qubed_wasm — WebAssembly Bindings](./js/qubed_wasm.md)

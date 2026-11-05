@@ -1,0 +1,28 @@
+[package]
+name = "qubed_wasm"
+version.workspace = true
+edition = "2024"
+description = "WebAssembly bindings for the qubed data structure"
+license = "Apache-2.0"
+repository = "https://github.com/ecmwf/qubed"
+homepage = "https://github.com/ecmwf/qubed"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+qubed = { path = "../qubed" }
+# preserve_order keeps object key insertion order when parsing datacube JSON,
+# so the default dimension ordering (when `order` isn't given explicitly)
+# matches the order keys appear in the input object, mirroring the Python
+# bindings' behaviour of using dict insertion order.
+serde_json = { version = "1.0.145", features = ["preserve_order"] }
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+console_error_panic_hook = { version = "0.1", optional = true }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[features]
+default = ["console_error_panic_hook"]
