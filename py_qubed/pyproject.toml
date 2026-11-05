@@ -15,4 +15,5 @@ classifiers = [
 
 [tool.maturin]
 manifest-path = "Cargo.toml"
+module-name = "qubed"
 features = []
