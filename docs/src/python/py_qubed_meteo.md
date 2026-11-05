@@ -15,6 +15,21 @@ Then in Python:
 from qubed_meteo import from_mars_list_py, from_fdb_list_py, to_dss_constraints_py
 ```
 
+### Optional features
+
+Some adapters need native libraries at build time and are off by default:
+
+| Feature | Function | Needs |
+|---|---|---|
+| `rsfdb-support` | `from_fdb_list_py` | FDB5 |
+| `mars-server-support` | `from_mars_server_py` | eckit (C++ library, found through `ECKIT_DIR` or `CMAKE_PREFIX_PATH`; built from source if neither is set) |
+
+Enable them when building:
+
+```bash
+maturin develop --release --features mars-server-support
+```
+
 ---
 
 ## Functions
@@ -69,6 +84,21 @@ print(q)
 #     └── expver=0002/0003
 #         └── param=3/4
 ```
+
+---
+
+### `from_mars_server_py(host: str, port: int) -> Qube`
+
+Build a Qube by traversing a live MARS catalogue server. Requires the `mars-server-support` feature (see above). The whole catalogue is walked, one TCP connection per node, so expect this to take a while on a real server. The GIL is released during the traversal.
+
+```python
+from qubed_meteo import from_mars_server_py
+
+qube = from_mars_server_py("mars-catalogue.example", 9000)
+print(qube)
+```
+
+Raises `ValueError` if the server cannot be reached or sends a node type the adapter does not know.
 
 ---
 
