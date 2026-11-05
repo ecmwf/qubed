@@ -61,8 +61,10 @@ let q = Qube::from_json(json!({
 | `get_or_create_child` | `fn get_or_create_child(&mut self, key: &str, parent_id: NodeIdx, coordinates: Option<Coordinates>) -> Result<NodeIdx, String>` | Return the existing child with the given dimension+coordinates, or create a new one. |
 | `check_if_new_child` | `fn check_if_new_child(&mut self, key: &str, parent_id: NodeIdx, coordinates: Option<Coordinates>) -> Result<bool, String>` | Return `true` if no child with the given dimension+coordinates exists yet. |
 | `remove_node` | `fn remove_node(&mut self, id: NodeIdx) -> Result<(), String>` | Remove a node and all its descendants |
-| `append` | `fn append(&mut self, other: &mut Qube)` | Union: merge `other` into `self`, compress, then clear `other` |
-| `append_many` | `fn append_many(&mut self, others: &mut Vec<Qube>)` | Merge many Qubes with periodic compression (every 500) |
+| `append` | `fn append(&mut self, other: &mut Qube)` | Union: merge `other` into `self`, compress, then clear `other`. Equivalent to `append_opts(other, false)`. |
+| `append_opts` | `fn append_opts(&mut self, other: &mut Qube, reordering: bool)` | Like `append`, but with explicit control over `reordering`. See below. |
+| `append_many` | `fn append_many(&mut self, others: &mut Vec<Qube>)` | Merge many Qubes with periodic compression (every 500). Equivalent to `append_many_opts(others, false)`. |
+| `append_many_opts` | `fn append_many_opts(&mut self, others: &mut Vec<Qube>, reordering: bool)` | Like `append_many`, but with explicit control over `reordering`. |
 | `append_datacube` | `fn append_datacube(&mut self, dc: Datacube, order: Option<&[String]>, accept_existing_order: bool)` | Append a single Datacube |
 | `drop` | `fn drop<I>(&mut self, to_drop: I) -> Result<(), String>` | Remove one or more dimensions, re-parenting their children, then compress |
 | `squeeze` | `fn squeeze(&mut self) -> Result<(), String>` | Drop every dimension whose union of values has length 1 |
@@ -89,6 +91,27 @@ let mut a = Qube::from_ascii("root\n└── class=od, param=1").unwrap();
 let mut b = Qube::from_ascii("root\n└── class=rd, param=2").unwrap();
 a.append(&mut b);
 // a now contains both branches, compressed; b is empty
+```
+
+**The `reordering` flag:**
+
+`append`/`append_many` match dimensions between the two Qubes purely by their raw interner ID
+(`reordering=false`, the default/fast path). This is correct and efficient as long as both Qubes
+were built with the same dimension ordering (e.g. constructed with the same `order` passed to
+`from_datacube`), but it can silently fail to unify same-named dimensions — or in pathological
+cases cross-match unrelated dimensions that happen to share the same interner ID — if the two
+Qubes interned their dimension names in a different order.
+
+Use `append_opts`/`append_many_opts` with `reordering=true` to opt in to safe, name-based
+dimension matching: a translation map from `other`'s dimension IDs to `self`'s dimension IDs
+(matched by name) is built before merging, at a small extra up-front cost.
+
+```rust
+let mut a = Qube::from_datacube(&dc_a, Some(&["a".into(), "b".into(), "c".into()]));
+let mut b = Qube::from_datacube(&dc_b, Some(&["c".into(), "b".into(), "a".into()]));
+// a and b interned their dimensions in different orders, so use reordering=true
+// to guarantee dimensions are matched by name rather than by raw interner id.
+a.append_opts(&mut b, true);
 ```
 
 **Example — drop:**

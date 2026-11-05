@@ -135,19 +135,34 @@ jobs:
       - name: Show wheels
         run: find dist -name '*.whl' | sort
 
+      # Create a dedicated venv and immediately harden pip + certifi inside it
+      # before installing anything else. This protects against the compromised
+      # eMudhra (emSign) intermediate CAs: several of their private keys were
+      # found to be weak, and an attacker could use them to impersonate trusted
+      # sites such as pypi.org/python.org, tricking tools that still trust
+      # those certificates (pip, certifi, uv, ...) into installing malicious
+      # packages. Pinning pip to a known-good release (by hash) and upgrading
+      # certifi to a version with the emSign root removed closes that gap
+      # before any wheel is installed from this run's artifacts.
+      - name: Set up hardened Python venv
+        run: |
+          python3 -m venv .ci-venv
+          .ci-venv/bin/python -m pip install "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+          .ci-venv/bin/python -m pip install --upgrade "certifi>=2026.10.19"
+
       - name: Install and test py_qubed
         run: |
           WHEEL=$(find dist -name 'qubed-*.whl' | grep manylinux | grep x86_64 | head -n1)
           echo "Installing $WHEEL"
-          pip install "$WHEEL"
-          python -c "import qubed; print('qubed OK')"
+          .ci-venv/bin/python -m pip install "$WHEEL"
+          .ci-venv/bin/python -c "import qubed; print('qubed OK')"
 
       - name: Install and test py_qubed_meteo
         run: |
           WHEEL=$(find dist -name 'qubed_meteo-*.whl' | grep manylinux | grep x86_64 | head -n1)
           echo "Installing $WHEEL"
-          pip install "$WHEEL"
-          python -c "import qubed_meteo; print('qubed_meteo OK')"
+          .ci-venv/bin/python -m pip install "$WHEEL"
+          .ci-venv/bin/python -c "import qubed_meteo; print('qubed_meteo OK')"
 
   test-wheels-macos:
     name: Test macOS wheels
@@ -175,6 +190,14 @@ jobs:
       - name: Show wheels
         run: find dist -name '*.whl' | sort
 
+      # See the matching step in test-wheels-linux for why this hardening is
+      # necessary (compromised eMudhra/emSign intermediate CAs).
+      - name: Set up hardened Python venv
+        run: |
+          python3 -m venv .ci-venv
+          .ci-venv/bin/python -m pip install "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+          .ci-venv/bin/python -m pip install --upgrade "certifi>=2026.10.19"
+
       - name: Install wheel
         run: |
           if [ "${{ matrix.package }}" = "py_qubed" ]; then
@@ -184,11 +207,11 @@ jobs:
           fi
 
           echo "Installing $WHEEL"
-          pip install "$WHEEL"
+          .ci-venv/bin/python -m pip install "$WHEEL"
 
       - name: Run import test
         run: |
-          python -c "import ${{ matrix.module }}; print('${{ matrix.module }} OK')"
+          .ci-venv/bin/python -c "import ${{ matrix.module }}; print('${{ matrix.module }} OK')"
 
   publish:
     name: Publish to PyPI
@@ -204,14 +227,23 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      # See test-wheels-linux for why this hardening is necessary (compromised
+      # eMudhra/emSign intermediate CAs). This is especially important here
+      # since this job uploads release artifacts to PyPI using a real token.
+      - name: Set up hardened Python venv
+        run: |
+          python3 -m venv .ci-venv
+          .ci-venv/bin/python -m pip install "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+          .ci-venv/bin/python -m pip install --upgrade "certifi>=2026.10.19"
+
       - name: Install maturin
-        run: pip install maturin
+        run: .ci-venv/bin/python -m pip install maturin
 
       - name: List wheels
         run: find dist -name '*.whl' | sort
       
       - name: Install twine
-        run: pip install twine
+        run: .ci-venv/bin/python -m pip install twine
 
       - name: Publish to PyPI
         env:
@@ -219,4 +251,4 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           find dist -type f \( -name '*.whl' -o -name '*.tar.gz' \) -print0 |
-            xargs -0 twine upload
+            xargs -0 .ci-venv/bin/twine upload

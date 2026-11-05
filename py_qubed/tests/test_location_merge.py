@@ -48,7 +48,10 @@ def merged() -> Qube:
     """Load lumi and mn5 Qubes and merge them once for the whole module."""
     lumi = Qube.from_arena_json(_LUMI_JSON.read_text())
     mn5  = Qube.from_arena_json(_MN5_JSON.read_text())
-    lumi.append(mn5)  # in-place; returns None
+    # lumi and mn5 are loaded independently from JSON, so their dimensions may have
+    # been interned in a different order — reordering=True ensures dimensions are
+    # matched by name rather than by raw (possibly coincidentally-shared) interner id.
+    lumi.append(mn5, reordering=True)  # in-place; returns None
     return lumi
 
 
@@ -283,7 +286,8 @@ def merged_lumi_leonardo() -> Qube:
     """
     lumi = Qube.from_arena_json(_LUMI_JSON.read_text())
     leonardo = Qube.from_arena_json(_LEONARDO_JSON.read_text())
-    lumi.append(leonardo)
+    # Same rationale as the `merged` fixture: these are independently loaded Qubes.
+    lumi.append(leonardo, reordering=True)
     return lumi
 
 
