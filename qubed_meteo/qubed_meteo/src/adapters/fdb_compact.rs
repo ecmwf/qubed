@@ -10,6 +10,7 @@
 use qubed::{Coordinates, Datacube, Qube};
 use serde_json::Value as JsonValue;
 
+#[cfg(feature = "rsfdb-support")]
 pub trait FromFDBCompactList {
     /// Build a `Qube` from a JSON request map by performing an internal
     /// compact FDB list.
@@ -22,6 +23,7 @@ pub trait FromFDBCompactList {
 
 /// Run a compact FDB list for `request_map` and return the raw
 /// `fdb-list --compact` text (one MARS-request line per hypercube).
+#[cfg(feature = "rsfdb-support")]
 pub fn fdb_compact_list_text(request_map: &JsonValue) -> Result<String, String> {
     let request_str = json_to_mars_request(request_map)?;
 
@@ -51,16 +53,19 @@ pub fn fdb_compact_list_text(request_map: &JsonValue) -> Result<String, String> 
     String::from_utf8(buf).map_err(|e| format!("Compact listing is not UTF-8: {e}"))
 }
 
+#[cfg(feature = "rsfdb-support")]
 impl FromFDBCompactList for Qube {
     fn from_fdb_compact_list(request_map: &JsonValue) -> Result<Qube, String> {
         Qube::from_fdb_compact_text(&fdb_compact_list_text(request_map)?)
     }
 }
 
+#[cfg(feature = "rsfdb-support")]
 impl QubeFromCompactText for Qube {}
 
 /// Parsing of the textual `fdb-list --compact` output, independent of FDB
 /// itself (useful for tests and for feeding output of the CLI tool).
+#[cfg(feature = "rsfdb-support")]
 pub trait QubeFromCompactText {
     fn from_fdb_compact_text(text: &str) -> Result<Qube, String> {
         let mut qubes: Vec<Qube> = Vec::new();
@@ -160,6 +165,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    #[cfg(feature = "rsfdb-support")]
     fn test_json_to_mars_request() {
         let r = json_to_mars_request(&json!({"class": "od", "step": [0, 6]})).unwrap();
         assert!(r.contains("class=od"));
@@ -167,6 +173,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "rsfdb-support")]
     fn test_from_compact_text() {
         let text = "\
 class=od,expver=0001,stream=oper,date=20240101,time=0000,domain=g,type=fc,levtype=sfc,step=0/6/12,param=167/168
@@ -180,6 +187,7 @@ class=od,expver=0001,stream=oper,date=20240101,time=0000,domain=g,type=fc,levtyp
     }
 
     #[test]
+    #[cfg(feature = "rsfdb-support")]
     #[ignore = "requires a local FDB (set FDB5_CONFIG_FILE)"]
     fn test_from_fdb_compact_list() {
         let request_map = json!({
