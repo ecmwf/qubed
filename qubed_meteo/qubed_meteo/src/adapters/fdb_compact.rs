@@ -165,6 +165,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    #[cfg(feature = "rsfdb-support")]
     fn test_json_to_mars_request() {
         let r = json_to_mars_request(&json!({"class": "od", "step": [0, 6]})).unwrap();
         assert!(r.contains("class=od"));
@@ -172,6 +173,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "rsfdb-support")]
     fn test_from_compact_text() {
         let text = "\
 class=od,expver=0001,stream=oper,date=20240101,time=0000,domain=g,type=fc,levtype=sfc,step=0/6/12,param=167/168
@@ -185,6 +187,7 @@ class=od,expver=0001,stream=oper,date=20240101,time=0000,domain=g,type=fc,levtyp
     }
 
     #[test]
+    #[cfg(feature = "rsfdb-support")]
     #[ignore = "requires a local FDB (set FDB5_CONFIG_FILE)"]
     fn test_from_fdb_compact_list() {
         let request_map = json!({
