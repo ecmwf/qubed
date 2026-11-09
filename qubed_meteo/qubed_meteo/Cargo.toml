@@ -32,6 +32,9 @@ rsfdb-support = []
 fdb-support = ["dep:fdb", "dep:eckit", "dep:metkit"]
 # Enable ECMWF open-data HTTP crawling support.
 opendata-support = ["reqwest"]
+# Enable the Aviso-triggered scanner binary (watches Aviso notifications and
+# fires a scan once all expected forecast steps have been received).
+aviso-support = ["reqwest"]
 
 [lib]
 path = "src/lib.rs"
@@ -40,4 +43,9 @@ crate-type = ["rlib"]
 [[example]]
 name = "read_from_fdb_list"
 required-features = ["rsfdb-support"]
+
+[[bin]]
+name = "aviso_scanner"
+path = "bin/aviso_scanner.rs"
+required-features = ["aviso-support"]
 
