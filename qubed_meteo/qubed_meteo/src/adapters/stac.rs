@@ -4,6 +4,8 @@
 //! - A STAC ItemCollection / FeatureCollection: `{"type": "FeatureCollection", "features": [...]}`
 //! - A bare JSON array of STAC Items: `[{...}, {...}, ...]`
 //! - A single STAC Item object: `{"type": "Feature", "id": ..., "assets": {...}, ...}`
+//! - A STAC Collections response (e.g. the `GET /collections` endpoint of a STAC
+//!   API): `{"collections": [{...}, {...}, ...], "links": [...]}`
 //!
 //! Every STAC **Asset** becomes a Qube leaf. A leaf's ancestry encodes the dimensions
 //! that describe the STAC Item and its organizational context:
@@ -25,6 +27,20 @@
 //! The leaf (asset) node's metadata, under the `"asset"` key, contains the
 //! JSON-serialized original STAC Asset object verbatim, so no information from the
 //! source catalogue is lost.
+//!
+//! A STAC **Collections** response has a different, flatter shape (Collections
+//! describe a whole dataset, not a single observation, and have no `assets` or
+//! `properties.datetime`), so it is handled separately: each Collection becomes a
+//! single leaf, one level deep:
+//!
+//! ```text
+//! collection
+//! ```
+//!
+//! - `collection`: the Collection's `id`.
+//!
+//! The leaf node's metadata, under the `"collection"` key, contains the
+//! JSON-serialized original STAC Collection object verbatim.
 
 use qubed::{Coordinates, MetadataValues, NodeIdx, Qube};
 use serde_json::Value;
@@ -34,6 +50,9 @@ const UNKNOWN: &str = "unknown";
 
 /// Metadata key under which the original STAC Asset object (as a JSON string) is stored.
 const ASSET_METADATA_KEY: &str = "asset";
+
+/// Metadata key under which the original STAC Collection object (as a JSON string) is stored.
+const COLLECTION_METADATA_KEY: &str = "collection";
 
 pub trait FromStacCatalog {
     /// Build a [`Qube`] from a parsed STAC JSON document.
@@ -45,6 +64,10 @@ pub trait FromStacCatalog {
 
 impl FromStacCatalog for Qube {
     fn from_stac_catalog(stac: &Value) -> Result<Qube, String> {
+        if let Some(collections) = stac.get("collections").and_then(Value::as_array) {
+            return from_stac_collections(collections);
+        }
+
         let items = extract_items(stac)?;
 
         let mut qube = Qube::new();
@@ -57,6 +80,31 @@ impl FromStacCatalog for Qube {
         qube.compress();
         Ok(qube)
     }
+}
+
+/// Build a `Qube` from the `collections` array of a STAC Collections response
+/// (e.g. `GET /collections`). Each Collection becomes a single leaf node named
+/// after its `id`, with the original Collection JSON preserved as metadata.
+fn from_stac_collections(collections: &[Value]) -> Result<Qube, String> {
+    let mut qube = Qube::new();
+    let root = qube.root();
+
+    for collection in collections {
+        let id = string_field(collection, "id").unwrap_or(UNKNOWN);
+        let node = child_with_string(&mut qube, "collection", root, id)?;
+
+        let collection_json = serde_json::to_string(collection)
+            .map_err(|e| format!("Failed to serialize collection '{}': {}", id, e))?;
+
+        qube.set_metadata(
+            node,
+            COLLECTION_METADATA_KEY,
+            MetadataValues::from_strings(&[&collection_json]),
+        )?;
+    }
+
+    qube.compress();
+    Ok(qube)
 }
 
 /// Normalise the input into a list of STAC Item objects, regardless of whether the
@@ -220,5 +268,19 @@ mod tests {
         let stac = json!({"type": "Catalog", "links": []});
         let result = Qube::from_stac_catalog(&stac);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn builds_qube_from_collections_response() {
+        let stac = json!({
+            "links": [],
+            "collections": [
+                {"type": "Collection", "id": "sentinel-2-l1c", "title": "Sentinel 2 L1C"},
+                {"type": "Collection", "id": "sentinel-2-l2a", "title": "Sentinel 2 L2A"}
+            ]
+        });
+        let qube = Qube::from_stac_catalog(&stac).expect("should build qube");
+        let paths = qube.leaf_node_ids_paths();
+        assert_eq!(paths.len(), 2);
     }
 }

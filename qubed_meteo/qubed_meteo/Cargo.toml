@@ -40,3 +40,7 @@ crate-type = ["rlib"]
 name = "read_from_fdb_list"
 required-features = ["rsfdb-support"]
 
+[[example]]
+name = "ingest_stac_collections"
+required-features = ["opendata-support"]
+
