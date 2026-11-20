@@ -6,4 +6,5 @@ pub mod from_constraints;
 pub mod mars_list;
 #[cfg(feature = "opendata-support")]
 pub mod opendata;
+pub mod stac;
 pub mod to_constraints;
