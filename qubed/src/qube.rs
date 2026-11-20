@@ -53,6 +53,16 @@ pub struct Qube {
     key_store: Rodeo<MiniSpur>,
 }
 
+/// Two [`Qube`]s are equal iff they contain the same data: same
+/// dimensions/coordinates/tree shape, independent of node insertion order,
+/// internal slotmap indices, or which raw ids their (separate) dimension
+/// interners happen to have assigned. See [`Qube::content_signature`].
+impl PartialEq for Qube {
+    fn eq(&self, other: &Self) -> bool {
+        self.content_signature() == other.content_signature()
+    }
+}
+
 /// Read-only reference to a node
 pub struct NodeRef<'a> {
     qube: &'a Qube,
@@ -659,6 +669,53 @@ impl Qube {
         hash
     }
 
+    /// A content-derived signature of the whole tree: two [`Qube`]s built
+    /// from the same data in a *different order* (different insertion
+    /// order, different `append`/`compress` call sequence, even a
+    /// completely separate dimension-name interner) produce the same
+    /// signature iff they represent the same data.
+    ///
+    /// Unlike [`Qube::compute_structural_hash`], which hashes nodes by raw
+    /// (interner-local) [`Dimension`] id and is therefore only meaningful
+    /// *within* a single `Qube`'s own interner, this resolves each
+    /// dimension back to its string name first, so it is safe to compare
+    /// across two independently-built `Qube`s. It's also not a fixed-size
+    /// hash, so it can't have collisions.
+    ///
+    /// This is what [`PartialEq`] is built on.
+    pub fn content_signature(&self) -> String {
+        // Iterative post-order traversal with memoization: each node's
+        // signature only depends on its own (dim, coords) plus its
+        // children's already-computed signatures.
+        let mut memo: HashMap<NodeIdx, String> = HashMap::with_capacity(self.nodes.len());
+        let mut stack: Vec<(NodeIdx, bool)> = vec![(self.root_id, false)];
+        while let Some((id, children_done)) = stack.pop() {
+            if children_done {
+                let node = self.nodes.get(id).expect("valid node");
+                let dim_name = self.dimension_str(&node.dim).unwrap_or("");
+                let coords_key = format!("{:?}", node.coords);
+                let mut child_keys: Vec<&str> = node
+                    .children
+                    .values()
+                    .flat_map(|ids| ids.iter())
+                    .map(|c| memo.get(c).expect("child signature computed before parent").as_str())
+                    .collect();
+                child_keys.sort_unstable();
+                memo.insert(
+                    id,
+                    format!("{dim_name}\u{1}{coords_key}\u{1}[{}]", child_keys.join(",")),
+                );
+            } else {
+                stack.push((id, true));
+                let node = self.nodes.get(id).expect("valid node");
+                for &child in node.children.values().flatten() {
+                    stack.push((child, false));
+                }
+            }
+        }
+        memo.remove(&self.root_id).expect("root signature computed")
+    }
+
     pub fn leaf_node_ids_paths(&self) -> Vec<Vec<NodeIdx>> {
         let mut paths = Vec::new();
 
@@ -1255,6 +1312,31 @@ mod tests {
         assert_ne!(hash_root, hash_child1);
         assert_ne!(hash_root, hash_child2);
         assert_ne!(hash_child1, hash_child2);
+    }
+
+    #[test]
+    fn test_partial_eq_is_order_and_interner_independent() {
+        // Built with children in one order, and with "dim2" interned first.
+        let mut a = Qube::new();
+        let root_a = a.root();
+        a.get_or_create_child("dim2", root_a, Some(2.into())).unwrap();
+        a.get_or_create_child("dim1", root_a, Some(1.into())).unwrap();
+
+        // Same data, built with children in the opposite order, so "dim1"
+        // gets interned first instead - a completely separate Rodeo/interner.
+        let mut b = Qube::new();
+        let root_b = b.root();
+        b.get_or_create_child("dim1", root_b, Some(1.into())).unwrap();
+        b.get_or_create_child("dim2", root_b, Some(2.into())).unwrap();
+
+        assert_eq!(a, b);
+
+        // Different data must not be equal.
+        let mut c = Qube::new();
+        let root_c = c.root();
+        c.get_or_create_child("dim1", root_c, Some(1.into())).unwrap();
+        c.get_or_create_child("dim2", root_c, Some(3.into())).unwrap();
+        assert_ne!(a, c);
     }
 
     #[test]

@@ -331,6 +331,23 @@ impl PyQube {
         self.to_ascii()
     }
 
+    /// Two `Qube`s are equal iff they contain the same data (same
+    /// dimensions/coordinates/tree shape), independent of how each was
+    /// built. See `Qube.content_signature()`.
+    fn __eq__(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+
+    fn __ne__(&self, other: &Self) -> bool {
+        self.inner != other.inner
+    }
+
+    /// Content-derived signature: two Qubes built from the same data (even
+    /// in a different order) always have the same signature.
+    pub fn content_signature(&self) -> String {
+        self.inner.content_signature()
+    }
+
     // -----------------------------------------------------------------------
     //  New utility methods (mirrors of the @support_qubed_output functions
     //  in forecast-in-a-box/fiab_plugin_ecmwf/qubed_utils.py)

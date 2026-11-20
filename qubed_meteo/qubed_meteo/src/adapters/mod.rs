@@ -1,9 +1,12 @@
+pub mod catalogue;
 #[cfg(feature = "rsfdb-support")]
 pub mod fdb;
 #[cfg(feature = "fdb-support")]
 pub mod fdb_compact;
 pub mod from_constraints;
+pub mod from_records;
 pub mod mars_list;
 #[cfg(feature = "opendata-support")]
 pub mod opendata;
+pub mod stac;
 pub mod to_constraints;
